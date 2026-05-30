@@ -15,7 +15,7 @@ $(VENV):
 
 install: $(VENV)
 	$(PIP) install --upgrade pip
-	$(PIP) install $(if $(DEV),".[dev]",.)
+	$(PIP) install $(if $(DEV),"-e .[dev]",.)
 
 run:
 	$(PYTHON) -m uvicorn app.main:app $(if $(DEV),--reload,) --host $(HOST) --port $(PORT)
