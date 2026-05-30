@@ -14,7 +14,7 @@ $(VENV):
 	python3 -m venv $(VENV)
 
 install: $(VENV)
-	$(PIP) install --upgrade -pip
+	$(PIP) install --upgrade pip
 	$(PIP) install $(if $(DEV),".[dev]",.)
 
 run:
