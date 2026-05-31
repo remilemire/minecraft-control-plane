@@ -1,0 +1,9 @@
+.venv
+.env
+.env.example
+*.egg-info
+build
+__pycache__
+.git
+.gitignore
+.DS_STORE

@@ -1,28 +1,24 @@
-default: install
+FRONTEND_RUN := docker compose run --rm frontend npm run logs
 
-install:
-	npm ci
-
-run:
-	npm run dev
-
-build:
-	npm run build
+.PHONY: lint format test check clean
 
 lint:
-	npm run lint
+	$(FRONTEND_RUN) lint
 
 format:
-	npm run format
+	$(FRONTEND_RUN) format
 
 test:
-	npm run test
+	$(FRONTEND_RUN) test
 
 check:
-	npm run lint format check
+	$(FRONTEND_RUN) lint format check
+
+logs:
+	docker compose logs frontend -f
 
 clean:
-	rm dist
-
-.PHONY: default install dev build lint format test check clean
+	rm -rf dist
+	rm -rf .DS_STORE
+	
 

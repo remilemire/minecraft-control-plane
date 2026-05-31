@@ -1,20 +1,6 @@
 APPS := backend frontend
 
-default: install
-
-install line format test clean:
-	for app in $(APPS); do \
-		$(MAKE) -C $$app $@; \
-	done
-
-run:
-	$(MAKE) -C backend run & $(MAKE) -C frontend run
-
-migrate:
-	$(MAKE) -C backend migrate
-
-build:
-	$(MAKE) -C frontend build
+.PHONY: up down lint format test check reset clean logs
 
 up:
 	docker compose up -d
@@ -22,4 +8,27 @@ up:
 down:
 	docker compose down
 
-.PHONY: install run lint format test docker default build clean
+restart:
+	docker compose down
+	docker compose up -d
+
+reset:
+	docker compose down -v --remove-orphans
+	docker compose build --no-cache
+	docker compose up -d
+
+clean:
+	for app in $(APPS); do \
+		$(MAKE) -C $$app clean; \
+	done
+
+	rm -rf .DS_STORE
+
+logs:
+	docker compose logs -f
+
+lint format test check:
+	for app in $(APPS); do \
+		$(MAKE) -C $$app $@; \
+	done
+

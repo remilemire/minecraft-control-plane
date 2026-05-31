@@ -13,7 +13,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(__dirname, "../backend/static"),
+    outDir: path.resolve(__dirname, "./dist"),
     emptyOutDir: true,
   },
 });
