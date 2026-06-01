@@ -56,6 +56,13 @@
       "source.organizeImports.ruff": "explicit"
     }
   },
+  "[json]": {
+    "editor.tabSize": 2,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit",
+    },
+  },
   "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
   "python.analysis.extraPaths": ["${workspaceFolder}/backend"],
   "python.analysis.typeCheckingMode": "strict"

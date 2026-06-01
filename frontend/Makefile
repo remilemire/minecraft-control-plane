@@ -1,24 +1,27 @@
-FRONTEND_RUN := docker compose run --rm frontend npm run logs
+# frontend/Makefile
 
-.PHONY: lint format test check clean
+.PHONY: lint format test check clean install
+
+install:
+	npm ci
 
 lint:
-	$(FRONTEND_RUN) lint
+	npm run lint
 
 format:
-	$(FRONTEND_RUN) format
+	npm run format
 
 test:
-	$(FRONTEND_RUN) test
+	npm run test
 
 check:
-	$(FRONTEND_RUN) lint format check
+	npm run lint format check
 
 logs:
 	docker compose logs frontend -f
 
 clean:
 	rm -rf dist
-	rm -rf .DS_STORE
+	find . -name ".DS_Store" -delete
 	
 

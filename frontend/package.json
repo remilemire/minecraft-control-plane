@@ -1,6 +1,6 @@
 {
-  "name": "frontend",
-  "version": "1.0.0",
+  "name": "minecraft-server-frontend",
+  "version": "0.1.0",
   "scripts": {
     "build": "vite build",
     "dev": "vite dev",
@@ -36,4 +36,3 @@
     "vue-router": "^5.0.7"
   }
 }
-

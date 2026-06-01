@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import computed_field
+from pydantic import EmailStr, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     SECRET_KEY: str = ""
     COOKIE_DOMAIN: str | None = None
-    ADMIN_USERNAME: str | None = None
+    ADMIN_EMAIL: EmailStr | None = None
 
     @computed_field
     @property

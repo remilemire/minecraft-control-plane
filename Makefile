@@ -1,6 +1,8 @@
+# Makefile
+
 APPS := backend frontend
 
-.PHONY: up down lint format test check reset clean logs
+.PHONY: up down lint format test check reset clean logs install
 
 up:
 	docker compose up -d
@@ -22,12 +24,12 @@ clean:
 		$(MAKE) -C $$app clean; \
 	done
 
-	rm -rf .DS_STORE
+	find . -name ".DS_Store" -delete
 
 logs:
 	docker compose logs -f
 
-lint format test check:
+lint format test check install:
 	for app in $(APPS); do \
 		$(MAKE) -C $$app $@; \
 	done

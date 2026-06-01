@@ -12,7 +12,7 @@ from app.errors import init_error_handlers
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="minecraft-server", lifespan=lifespan, debug=settings.DEBUG)
+    app = FastAPI(lifespan=lifespan, debug=settings.DEBUG)
 
     app.add_middleware(SessionMiddleware, settings.SECRET_KEY)
     app.add_middleware(

@@ -1,33 +1,37 @@
-BACKEND_RUN := docker compose run --rm backend uv run
+# backend/Makefile
 
-.PHONY: format lint test check clean revision migrate downgrade logs
+.PHONY: format lint test check clean revision migrate downgrade logs install
+
+install:
+	uv sync
 
 format:
-	$(BACKEND_RUN) ruff format .
+	uv run ruff format .
 
 lint:
-	$(BACKEND_RUN) ruff check . --fix
+	uv run ruff check . --fix
 
 test:
-	$(BACKEND_RUN) pytest
+	uv run pytest
 
 check: format lint test
 
 migrate:
-	$(BACKEND_RUN) alembic upgrade head
+	docker compose run --rm backend uv run alembic upgrade head
 
 MESSAGE ?= migration
 revision:
-	$(BACKEND_RUN) alembic revision --autogenerate -m "$(MESSAGE)"
+	docker compose run --rm backend uv run alembic revision --autogenerate -m "$(MESSAGE)"
 
 REV ?= -1
 downgrade:
-	$(BACKEND_RUN) alembic downgrade $(REV)
+	docker compose run --rm backend uv run alembic downgrade $(REV)
 
 logs:
 	docker compose logs backend -f
 
 clean:
-	rm -rf __pycache__
-	rm -rf build *.egg-info
-	rm -rf .DS_STORE
+	find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+	find . -type d -name "*.egg-info" -prune -exec rm -rf {} +
+	rm -rf build
+	find . -name ".DS_Store" -delete
