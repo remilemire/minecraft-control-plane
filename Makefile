@@ -1,6 +1,6 @@
 # Makefile
 
-.PHONY: up down restart reset logs install test lint format check all
+.PHONY: up down restart reset logs install build dev test lint format check all
 
 all: up install check
 
@@ -33,7 +33,7 @@ install:
 	npm ci --prefix backend
 	npm ci --prefix frontend
 
-format lint test:
+build dev format lint test:
 	npm run $@ --prefix backend
 	npm run $@ --prefix frontend
 
