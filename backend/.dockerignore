@@ -1,9 +1,7 @@
-.venv
+node_modules
 .env
-.env.example
-*.egg-info
-build
-__pycache__
-.git
+.env.*
 .gitignore
 .DS_STORE
+Dockerfile
+dist

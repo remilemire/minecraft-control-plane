@@ -1,5 +1,8 @@
+node_modules
 .env
-.env.example
+.env.*
 .git
 .gitignore
 .DS_STORE
+Dockerfile
+compose.yaml

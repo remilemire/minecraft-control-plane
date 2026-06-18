@@ -4,17 +4,15 @@
 # ------------- Base -------------
 # ================================
 
-FROM python:3.13-slim AS base
-
-ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+FROM node:23-alpine AS base
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir uv
+COPY package.json package-lock.json ./
 
-RUN uv venv
+RUN npm ci
 
-COPY pyproject.toml uv.lock ./
+COPY . .
 
 # ================================
 # --------- Development ----------
@@ -22,21 +20,24 @@ COPY pyproject.toml uv.lock ./
 
 FROM base AS dev
 
-RUN uv sync --frozen --no-install-project
-COPY . .
-RUN uv sync --frozen
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# ================================
+# ----------- Builder ------------
+# ================================
 
+FROM base AS builder
+
+RUN npm run build
 
 # ================================
 # ---------- Production ----------
 # ================================
 
-FROM base AS prod
+FROM node:22-alpine AS prod
 
-RUN uv sync --frozen --no-dev --no-install-project
-COPY . .
-RUN uv sync --frozen --no-dev
+COPY --from=builder /app/dist ./dist
 
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 8000
+
+CMD ["npm", "run", "start"]

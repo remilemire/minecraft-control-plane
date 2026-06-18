@@ -18,16 +18,15 @@ COPY . .
 # --------- Development ----------
 # ================================
 
-FROM base as dev
+FROM base AS dev
 
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
-COPY . .
 
 # ================================
 # ----------- Builder ------------
 # ================================
 
-FROM base as builder
+FROM base AS builder
 
 RUN npm run build
 

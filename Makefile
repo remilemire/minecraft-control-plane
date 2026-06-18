@@ -1,8 +1,12 @@
 # Makefile
 
-APPS := backend frontend
+.PHONY: up down restart reset logs install test lint format check all
 
-.PHONY: up down lint format test check reset clean logs install
+all: up install check
+
+# ================================
+# ------------ Docker ------------
+# ================================
 
 up:
 	docker compose up -d
@@ -14,23 +18,26 @@ restart:
 	docker compose down
 	docker compose up -d
 
-reset:
+nuke:
 	docker compose down -v --remove-orphans
 	docker compose build --no-cache
-	docker compose up -d
-
-clean:
-	for app in $(APPS); do \
-		$(MAKE) -C $$app clean; \
-	done
-
-	find . -name ".DS_Store" -delete
 
 logs:
 	docker compose logs -f
 
-lint format test check install:
-	for app in $(APPS); do \
-		$(MAKE) -C $$app $@; \
-	done
+# ================================
+# ------------- Node -------------
+# ================================
 
+install: 
+	npm ci --prefix backend
+	npm ci --prefix frontend
+
+format lint test:
+	npm run $@ --prefix backend
+	npm run $@ --prefix frontend
+
+check:
+	$(MAKE) format
+	$(MAKE) lint
+	$(MAKE) test
