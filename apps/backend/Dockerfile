@@ -1,0 +1,40 @@
+# backend/Dockerfile
+
+# ================================
+# ------------- Base -------------
+# ================================
+
+FROM node:23-alpine AS base
+
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/backend/package.json ./apps/backend/
+COPY packages/shared/package.json ./packages/shared/
+
+RUN corepack enable && pnpm install --frozen-lockfile
+
+# ================================
+# --------- Development ----------
+# ================================
+
+FROM base AS dev
+WORKDIR /app/apps/backend
+CMD ["npm", "run", "dev"]
+
+# ================================
+# ----------- Builder ------------
+# ================================
+
+FROM base AS builder
+COPY . .
+RUN npm run build
+
+# ================================
+# ---------- Production ----------
+# ================================
+
+FROM node:22-alpine AS prod
+WORKDIR /app
+COPY --from=builder /app/apps/backend/dist ./dist
+CMD ["npm", "run", "start"]
