@@ -1,7 +1,7 @@
 // apps/backend/src/features/auth/auth.helpers.ts
 
-import type { User } from "@/db/schema/users.js";
-import { UnauthorizedError } from "@/errors/http-errors.js";
+import type { User } from "@/db/schema/index.js";
+import { UnauthorizedError } from "@/errors/index.js";
 import type { Request } from "express";
 
 export function getAuthenticatedUser(req: Request): User {

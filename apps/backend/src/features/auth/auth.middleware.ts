@@ -1,8 +1,8 @@
 // apps/backend/src/features/auth/auth.middleware.ts
 
-import { ForbiddenError, UnauthorizedError } from "@/errors/http-errors.js";
+import { ForbiddenError, UnauthorizedError } from "@/errors/index.js";
+import { getSessionCookie } from "@/features/sessions/sessions.cookies.js";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
-import { getSessionCookie } from "../sessions/sessions.cookies.js";
 import type { AuthService } from "./auth.service.js";
 
 export function createRequireAuth(authService: AuthService): RequestHandler {

@@ -2,7 +2,7 @@
 
 import { env } from "@/config/env.js";
 import type { Invitation } from "@/db/schema/invitations.js";
-import { NotFoundError } from "@/errors/http-errors.js";
+import { NotFoundError } from "@/errors/index.js";
 import type { InvitationRepository } from "./invitations.repository.js";
 import type { AcceptInvitationData, CreateInvitationData } from "./invitations.types.js";
 

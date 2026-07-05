@@ -2,7 +2,7 @@
 
 import { type Db } from "@/db/client.js";
 import { DbError, withDbErrors } from "@/db/errors.js";
-import { users, type NewUser, type User } from "@/db/schema/users.js";
+import { users, type NewUser, type User } from "@/db/schema/index.js";
 import { eq } from "drizzle-orm";
 
 export class UserRepository {

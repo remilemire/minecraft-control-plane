@@ -1,12 +1,12 @@
 // apps/backend/src/features/invitations/invitations.controller.ts
 
+import { getAuthenticatedUser } from "@/features/auth/auth.helpers.js";
 import {
   createInvitationSchema,
   invitationResponseSchema,
   type InvitationResponse,
 } from "@minecraft-server/shared/schemas";
 import type { Request } from "express";
-import { getAuthenticatedUser } from "../auth/auth.helpers.js";
 import { invitationIdParamsSchema } from "./invitations.schemas.js";
 import type { InvitationService } from "./invitations.service.js";
 

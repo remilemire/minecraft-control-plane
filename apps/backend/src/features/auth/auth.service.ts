@@ -1,7 +1,7 @@
 // apps/backend/src/features/auth/auth.service.ts
 
 import { env } from "@/config/env.js";
-import type { User } from "@/db/schema/users.js";
+import type { User } from "@/db/schema/index.js";
 import { ForbiddenError, UnauthorizedError } from "@/errors/index.js";
 import type { InvitationService } from "@/features/invitations/invitations.service.js";
 import type { SessionService } from "@/features/sessions/sessions.service.js";

@@ -2,7 +2,7 @@
 
 import { type Db } from "@/db/client.js";
 import { DbError, withDbErrors } from "@/db/errors.js";
-import { invitations, type Invitation, type NewInvitation } from "@/db/schema/invitations.js";
+import { invitations, type Invitation, type NewInvitation } from "@/db/schema/index.js";
 import { eq } from "drizzle-orm";
 
 export class InvitationRepository {
