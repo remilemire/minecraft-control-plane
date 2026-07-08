@@ -1,4 +1,4 @@
-# frontend/Dockerfile
+# apps/frontend/Dockerfile
 
 # ================================
 # ------------- Base -------------

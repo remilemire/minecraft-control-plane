@@ -1,4 +1,4 @@
-// frontend/src/main.tsx
+// apps/frontend/src/main.tsx
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -11,5 +11,4 @@ createRoot(document.getElementById("root")!).render(
       <App />
     </BrowserRouter>
   </StrictMode>,
-  
 );

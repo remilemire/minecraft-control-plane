@@ -1,1 +1,1 @@
-// frontend/src/lib/apiClient.ts
+// apps/frontend/src/lib/apiClient.ts

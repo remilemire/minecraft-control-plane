@@ -1,1 +1,1 @@
-// frontend/src/app/providers/AuthProvider.tsx
+// apps/frontend/src/app/providers/AuthProvider.tsx

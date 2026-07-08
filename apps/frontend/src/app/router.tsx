@@ -1,1 +1,1 @@
-// frontend/src/app/router.tsx
+// apps/frontend/src/app/router.tsx

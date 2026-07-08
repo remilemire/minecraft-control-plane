@@ -1,4 +1,4 @@
-// frontend/vite.config.ts
+// apps/frontend/vite.config.ts
 
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";

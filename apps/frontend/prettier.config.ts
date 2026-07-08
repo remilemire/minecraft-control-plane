@@ -1,4 +1,4 @@
-// frontend/prettier.config.ts
+// apps/frontend/prettier.config.ts
 
 import baseConfig from "../../prettier.config.js";
 

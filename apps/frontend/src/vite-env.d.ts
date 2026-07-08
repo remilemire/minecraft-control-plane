@@ -1,3 +1,3 @@
-// frontend/src/vite-end.d.ts
+// apps/frontend/src/vite-end.d.ts
 
 /// <reference types="vite/client" />
