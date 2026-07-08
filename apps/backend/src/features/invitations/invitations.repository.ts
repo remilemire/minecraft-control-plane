@@ -12,12 +12,13 @@ export class InvitationRepository {
     const [invitation] = await withDbErrors(() =>
       this.db.select().from(invitations).where(eq(invitations.email, email)),
     );
+
     return invitation ?? null;
   }
 
-  public async findById(invitationId: string): Promise<Invitation | null> {
+  public async findById(id: string): Promise<Invitation | null> {
     const [invitation] = await withDbErrors(() =>
-      this.db.select().from(invitations).where(eq(invitations.id, invitationId)),
+      this.db.select().from(invitations).where(eq(invitations.id, id)),
     );
     return invitation ?? null;
   }
@@ -34,10 +35,19 @@ export class InvitationRepository {
     return invitation;
   }
 
-  public async deleteById(invitationId: string): Promise<Invitation | null> {
+  public async updateById(id: string, input: Partial<NewInvitation>): Promise<Invitation | null> {
     const [invitation] = await withDbErrors(() =>
-      this.db.delete(invitations).where(eq(invitations.id, invitationId)).returning(),
+      this.db.update(invitations).set(input).where(eq(invitations.id, id)).returning(),
     );
+
+    return invitation ?? null;
+  }
+
+  public async deleteById(id: string): Promise<Invitation | null> {
+    const [invitation] = await withDbErrors(() =>
+      this.db.delete(invitations).where(eq(invitations.id, id)).returning(),
+    );
+
     return invitation ?? null;
   }
 }

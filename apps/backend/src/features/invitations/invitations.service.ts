@@ -3,8 +3,9 @@
 import { env } from "@/config/env.js";
 import type { Invitation } from "@/db/schema/invitations.js";
 import { NotFoundError } from "@/errors/index.js";
+import type { AcceptInvitationInput } from "@minecraft-server/shared/schemas";
 import type { InvitationRepository } from "./invitations.repository.js";
-import type { AcceptInvitationData, CreateInvitationData } from "./invitations.types.js";
+import type { CreateInvitationData } from "./invitations.types.js";
 
 export class InvitationService {
   public constructor(readonly invitations: InvitationRepository) {}
@@ -20,18 +21,18 @@ export class InvitationService {
     return invitation;
   }
 
-  public async markAccepted({
-    invitationId,
-    acceptedByUserId,
-  }: AcceptInvitationData): Promise<Invitation> {
-    const invitation = await this.invitations.findById(invitationId);
+  public async markAccepted(
+    id: string,
+    { acceptedByUserId }: AcceptInvitationInput,
+  ): Promise<Invitation> {
+    const invitation = await this.invitations.updateById(id, {
+      acceptedByUserId,
+      acceptedAt: new Date(),
+    });
 
     if (invitation === null) {
       throw new NotFoundError("Invitation not found.");
     }
-
-    invitation.acceptedAt = new Date();
-    invitation.acceptedByUserId = acceptedByUserId;
 
     return invitation;
   }
@@ -43,8 +44,8 @@ export class InvitationService {
     );
   }
 
-  public async delete(invitationId: string): Promise<Invitation> {
-    const invitation = await this.invitations.deleteById(invitationId);
+  public async delete(id: string): Promise<Invitation> {
+    const invitation = await this.invitations.deleteById(id);
 
     if (invitation === null) {
       throw new NotFoundError("Invitation not found.");

@@ -6,7 +6,7 @@ import {
   setSessionCookie,
 } from "@/features/sessions/sessions.cookies.js";
 import { generateRandomSecret } from "@/lib/crypto.js";
-import { clearCsrfCookie, setCsrfCookie } from "@/security/csrf.cookies.js";
+import { clearCsrfCookie, setCsrfCookie } from "@/security/csrf.js";
 import {
   type UserResponse,
   googleLoginSchema,

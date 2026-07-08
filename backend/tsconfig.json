@@ -1,9 +1,0 @@
-// backend/tsconfig.json
-
-{
-  "extends": ["../tsconfig.base.json", "@tsconfig/node22/tsconfig.json"],
-  "compilerOptions": {
-    "paths": { "@/*": ["./src/*"] }
-  },
-  "include": ["src", "*.config.ts"]
-}

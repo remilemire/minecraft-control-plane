@@ -7,8 +7,8 @@ export {
   ForbiddenError,
   InUseError,
   NotFoundError,
+  ServerError,
   UnauthorizedError,
-  UnknownError,
   ValidationError,
 } from "./http-errors.js";
 export { translateError } from "./translation/index.js";

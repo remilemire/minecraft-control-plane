@@ -1,0 +1,19 @@
+{
+  "name": "@minecraft-server/shared",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./schemas": {
+      "types": "./dist/schemas/index.d.ts",
+      "import": "./dist/schemas/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint . --fix",
+    "format": "prettier . --write"
+  },
+  "peerDependencies": {
+    "zod": "^4.4.3"
+  }
+}

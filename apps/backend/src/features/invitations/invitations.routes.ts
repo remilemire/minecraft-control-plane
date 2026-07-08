@@ -1,7 +1,7 @@
 // apps/backend/src/features/invitations/invitations.routes.ts
 
 import { requireAdmin } from "@/features/auth/auth.middleware.js";
-import { requireCsrf } from "@/security/csrf.middleware.js";
+import { requireCsrf } from "@/security/csrf.js";
 import { Router, type RequestHandler } from "express";
 import type { InvitationController } from "./invitations.controller.js";
 

@@ -10,8 +10,8 @@ import type { CreateSessionData, SessionWithToken, SessionWithUser } from "./ses
 export class SessionService {
   public constructor(private readonly sessions: SessionRepository) {}
 
-  public async findValidWithUser(sessionToken: string): Promise<SessionWithUser | null> {
-    const result = await this.sessions.findByTokenHashWithUser(hashSecret(sessionToken));
+  public async findValidWithUser(token: string): Promise<SessionWithUser | null> {
+    const result = await this.sessions.findByTokenHashWithUser(hashSecret(token));
 
     if (result === null || result.session.expiresAt < new Date()) {
       return null;
@@ -33,8 +33,8 @@ export class SessionService {
     return { session, sessionToken };
   }
 
-  public async delete(sessionToken: string): Promise<Session> {
-    const session = await this.sessions.deleteByTokenHash(hashSecret(sessionToken));
+  public async delete(token: string): Promise<Session> {
+    const session = await this.sessions.deleteByTokenHash(hashSecret(token));
 
     if (session === null) {
       throw new NotFoundError("Session not found.");

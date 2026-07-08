@@ -47,8 +47,8 @@ export class ValidationError extends ApiError {
   }
 }
 
-export class UnknownError extends ApiError {
+export class ServerError extends ApiError {
   public constructor(message?: string, options: SimpleApiErrorOptions = {}) {
-    super("UNKNOWN", message, options);
+    super("SERVER", message, options);
   }
 }

@@ -1,8 +1,7 @@
 // apps/backend/src/errors/api-error.ts
 
-import { ERROR_CATALOG, type ErrorCode } from "./error-catalog.js";
+import { ERROR_CATALOG, type ErrorCode, type ErrorStatus } from "./error-catalog.js";
 import type { ErrorResponse } from "./error-response.js";
-import type { ErrorStatus } from "./types.js";
 import {
   createValidationIssue,
   type ValidationIssue,
@@ -26,7 +25,7 @@ export abstract class ApiError extends Error {
   ) {
     super(message ?? ERROR_CATALOG[code].message, { cause: cause });
 
-    this.name = this.constructor.name;
+    this.name = new.target.name;
     this.code = code;
     this.status = ERROR_CATALOG[code].status;
 

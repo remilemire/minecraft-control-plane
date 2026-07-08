@@ -1,0 +1,9 @@
+// frontend/tsconfig.json
+
+{
+  "extends": ["../../tsconfig.base.json", "@tsconfig/vite-react/tsconfig.json"],
+  "compilerOptions": {
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": ["src", "*.config.ts"]
+}

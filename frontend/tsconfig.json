@@ -1,9 +1,0 @@
-// frontend/tsconfig.json
-
-{
-  "extends": ["../tsconfig.base.json", "@vue/tsconfig/tsconfig.dom.json"],
-  "compilerOptions": {
-    "paths": { "@/*": ["./src/*"] }
-  },
-  "include": ["src", "*.config.ts"]
-}

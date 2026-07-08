@@ -1,5 +1,8 @@
-.env
-.env.*
+# .gitignore
+
+.env*
 !.env.example
 .DS_STORE
 node_modules
+*.tsbuildinfo
+dist

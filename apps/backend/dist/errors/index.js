@@ -1,5 +1,5 @@
 // apps/backend/src/errors/index.ts
-export * from "./app-errors.js";
-export * from "./error-types.js";
-export * from "./http-errors.js";
+export { ApiError } from "./api-error.js";
+export { AlreadyExistsError, BadRequestError, ForbiddenError, InUseError, NotFoundError, ServerError, UnauthorizedError, ValidationError, } from "./http-errors.js";
+export { translateError } from "./translation/index.js";
 //# sourceMappingURL=index.js.map

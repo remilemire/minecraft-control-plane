@@ -14,8 +14,8 @@ export function getSessionCookie(req: Request): string | undefined {
   return getCookie(req, SESSION_COOKIE);
 }
 
-export function setSessionCookie(res: Response, sessionToken: string): void {
-  setCookie(res, SESSION_COOKIE, sessionToken, sessionCookieOptions);
+export function setSessionCookie(res: Response, token: string): void {
+  setCookie(res, SESSION_COOKIE, token, sessionCookieOptions);
 }
 
 export function clearSessionCookie(res: Response): void {

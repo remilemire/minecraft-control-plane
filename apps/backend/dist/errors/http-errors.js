@@ -1,32 +1,43 @@
 // apps/backend/src/errors/http-errors.ts
-import { DetailedAppError, SimpleAppError } from "./app-errors.js";
-import { CONFLICT_DETAIL_MESSAGES, UNPROCESSABLE_DETAIL_MESSAGES, } from "./error-messages.js";
-import { ErrorStatus } from "./error-types.js";
-export class BadRequestError extends SimpleAppError {
-    status = ErrorStatus.BadRequest;
-}
-export class UnauthorizedError extends SimpleAppError {
-    status = ErrorStatus.Unauthorized;
-}
-export class ForbiddenError extends SimpleAppError {
-    status = ErrorStatus.Forbidden;
-}
-export class NotFoundError extends SimpleAppError {
-    status = ErrorStatus.NotFound;
-}
-export class ConflictError extends DetailedAppError {
-    status = ErrorStatus.Conflict;
-    getDefaultDetailMessage(code) {
-        return CONFLICT_DETAIL_MESSAGES[code];
+import { ApiError } from "./api-error.js";
+export class BadRequestError extends ApiError {
+    constructor(message, options = {}) {
+        super("BAD_REQUEST", message, options);
     }
 }
-export class UnprocessableError extends DetailedAppError {
-    status = ErrorStatus.Unprocessable;
-    getDefaultDetailMessage(code) {
-        return UNPROCESSABLE_DETAIL_MESSAGES[code];
+export class UnauthorizedError extends ApiError {
+    constructor(message, options = {}) {
+        super("UNAUTHORIZED", message, options);
     }
 }
-export class ServerError extends SimpleAppError {
-    status = ErrorStatus.ServerError;
+export class ForbiddenError extends ApiError {
+    constructor(message, options = {}) {
+        super("FORBIDDEN", message, options);
+    }
+}
+export class NotFoundError extends ApiError {
+    constructor(message, options = {}) {
+        super("NOT_FOUND", message, options);
+    }
+}
+export class AlreadyExistsError extends ApiError {
+    constructor(message, options = {}) {
+        super("ALREADY_EXISTS", message, options);
+    }
+}
+export class InUseError extends ApiError {
+    constructor(message, options = {}) {
+        super("IN_USE", message, options);
+    }
+}
+export class ValidationError extends ApiError {
+    constructor(message, options = {}) {
+        super("VALIDATION", message, options);
+    }
+}
+export class ServerError extends ApiError {
+    constructor(message, options = {}) {
+        super("SERVER", message, options);
+    }
 }
 //# sourceMappingURL=http-errors.js.map

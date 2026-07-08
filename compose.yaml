@@ -17,36 +17,62 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: ./apps/backend/Dockerfile
       target: dev
 
     env_file: 
       - ./.env
-      - ./backend/.env
+      - ./apps/backend/.env
 
     ports:
       - "${BACKEND_PORT}:8000"
 
     volumes:
-      - ./backend:/app
-      - /app/node_modules # anonymous volume
+      - .:/app
+      - /app/node_modules
+      - /app/apps/backend/node_modules
     
+    working_dir: /app/apps/backend
+
     depends_on:
       - db
+      - minecraft
+
+  minecraft:
+    image: itzg/minecraft-server
+
+    expose:
+      - "25565"
+      
+    volumes:
+      - ./data/minecraft:/data
+
+    env_file: 
+      - ./.env
+
+    environment:
+      EULA: "TRUE"
+      ENABLE_RCON: "true"
+      RCON_PASSWORD: "${MINECRAFT_RCON_PASSWORD}"
 
   frontend:
     build:
-      context: ./frontend
+      context: .
+      dockerfile: ./apps/frontend/Dockerfile
       target: dev
 
-    env_file: ./frontend/.env
+    env_file: 
+      - ./.env
+      - ./apps/frontend/.env
 
     ports:
       - "${FRONTEND_PORT}:5173"
 
     volumes:
-      - ./frontend:/app
-      - /app/node_modules # anonymous volume
+      - .:/app
+      - /app/node_modules
+      - /app/apps/frontend/node_modules
 
 volumes:
   postgres-data:

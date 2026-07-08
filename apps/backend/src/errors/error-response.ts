@@ -1,7 +1,6 @@
 // apps/backend/src/errors/error-response.ts
 
-import type { ErrorCode } from "./error-catalog.js";
-import type { ErrorStatus } from "./types.js";
+import type { ErrorCode, ErrorStatus } from "./error-catalog.js";
 import type { ValidationIssue } from "./validation-catalog.js";
 
 export type ErrorResponse = {

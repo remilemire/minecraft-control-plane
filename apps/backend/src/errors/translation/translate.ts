@@ -1,8 +1,7 @@
 // apps/backend/src/errors/translation/translate.ts
 
-import { DbError } from "@/db/db-errors.js";
-import { ApiError } from "@/errors/api-error.js";
-import { UnknownError } from "@/errors/http-errors.js";
+import { DbError } from "@/db/errors.js";
+import { ApiError, ServerError } from "@/errors/index.js";
 import { translateDbError } from "./violation.js";
 
 export function translateError(error: unknown): ApiError {
@@ -14,5 +13,5 @@ export function translateError(error: unknown): ApiError {
     return translateDbError(error);
   }
 
-  return new UnknownError();
+  return new ServerError();
 }

@@ -1,28 +1,25 @@
 // apps/backend/src/features/auth/auth.controller.ts
-import { clearSessionCookie, setSessionCookie, } from "@/features/sessions/session.cookies.js";
+import { clearSessionCookie, getSessionCookie, setSessionCookie, } from "@/features/sessions/sessions.cookies.js";
 import { generateRandomSecret } from "@/lib/crypto.js";
-import { clearCsrfCookie, setCsrfCookie } from "@/security/csrf.cookies.js";
-import { loginSchema, registerSchema } from "./auth.schemas.js";
+import { clearCsrfCookie, setCsrfCookie } from "@/security/csrf.js";
+import { googleLoginSchema, userResponseSchema, } from "@minecraft-server/shared/schemas";
 export class AuthController {
     authService;
     constructor(authService) {
         this.authService = authService;
     }
-    async login(req, res) {
-        const input = loginSchema.parse(req.body);
-        const { user, sessionToken } = await this.authService.login(input);
+    async googleLogin(req, res) {
+        const { credential } = googleLoginSchema.parse(req.body);
+        const { user, sessionToken } = await this.authService.authenticateFromGoogle(credential);
         setSessionCookie(res, sessionToken);
         setCsrfCookie(res, generateRandomSecret());
-        return user;
+        return userResponseSchema.parse(user);
     }
-    async register(req, res) {
-        const input = registerSchema.parse(req.body);
-        const { user, sessionToken } = await this.authService.register(input);
-        setSessionCookie(res, sessionToken);
-        setCsrfCookie(res, generateRandomSecret());
-        return user;
-    }
-    logout(res) {
+    async logout(req, res) {
+        const sessionToken = getSessionCookie(req);
+        if (sessionToken !== undefined) {
+            await this.authService.logout(sessionToken);
+        }
         clearCsrfCookie(res);
         clearSessionCookie(res);
     }

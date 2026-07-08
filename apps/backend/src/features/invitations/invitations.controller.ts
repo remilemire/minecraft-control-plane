@@ -7,7 +7,7 @@ import {
   type InvitationResponse,
 } from "@minecraft-server/shared/schemas";
 import type { Request } from "express";
-import { invitationIdParamsSchema } from "./invitations.schemas.js";
+import { invitationIdSchema } from "./invitations.schemas.js";
 import type { InvitationService } from "./invitations.service.js";
 
 export class InvitationController {
@@ -26,7 +26,7 @@ export class InvitationController {
   }
 
   public async delete(req: Request): Promise<InvitationResponse> {
-    const { invitationId } = invitationIdParamsSchema.parse(req.params);
+    const invitationId = invitationIdSchema.parse(req.params);
     const invitation = await this.invitationService.delete(invitationId);
 
     return invitationResponseSchema.parse(invitation);

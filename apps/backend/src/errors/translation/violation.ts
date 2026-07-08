@@ -1,11 +1,11 @@
 // apps/backend/src/errors/translation/violation.ts
 
-import { DbViolationError, type DbError } from "@/db/db-errors.js";
+import { DbViolationError, type DbError } from "@/db/errors.js";
 import type { ApiError } from "@/errors/api-error.js";
 import {
   AlreadyExistsError,
   InUseError,
-  UnknownError,
+  ServerError,
   ValidationError,
 } from "@/errors/http-errors.js";
 
@@ -46,5 +46,5 @@ export function translateDbError(error: DbError): ApiError {
     }
   }
 
-  return new UnknownError();
+  return new ServerError();
 }

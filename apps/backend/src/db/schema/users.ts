@@ -9,11 +9,13 @@ export const users = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
 
     googleId: text("google_id").notNull().unique(),
-    minecraftUsername: text("minecraft_username").unique(),
-
     email: text("email").notNull().unique(),
+
     firstName: text("first_name"),
     lastName: text("last_name"),
+
+    minecraftUsername: text("minecraft_username"),
+    minecraftUuid: text("minecraft_uuid"),
 
     isAdmin: boolean("is_admin").notNull().default(false),
 

@@ -1,6 +1,13 @@
 // apps/backend/src/errors/error-catalog.ts
 
-import type { ErrorCatalog } from "./types.js";
+export type ErrorStatus = 400 | 401 | 403 | 404 | 409 | 422 | 500;
+
+export type ErrorCatalog = {
+  readonly [code: string]: {
+    readonly status: ErrorStatus;
+    readonly message: string;
+  };
+};
 
 export const ERROR_CATALOG = {
   BAD_REQUEST: {
@@ -31,7 +38,7 @@ export const ERROR_CATALOG = {
     status: 422,
     message: "There was a problem with the submission.",
   },
-  UNKNOWN: {
+  SERVER: {
     status: 500,
     message: "Something went wrong.",
   },

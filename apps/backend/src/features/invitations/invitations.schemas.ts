@@ -2,6 +2,4 @@
 
 import z from "zod";
 
-export const invitationIdParamsSchema = z.object({
-  invitationId: z.uuid(),
-});
+export const invitationIdSchema = z.uuid();

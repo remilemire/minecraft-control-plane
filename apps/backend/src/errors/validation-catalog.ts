@@ -1,7 +1,14 @@
 // apps/backend/src/errors/validation-catalog.ts
 
 import type { PrimitiveScalar } from "@/lib/types.js";
-import type { MessageFactory, ValidationCatalog } from "./types.js";
+
+export type ValidationCatalog = {
+  readonly [rule: string]: { readonly createMessage: (ctx?: ErrorContext) => string };
+};
+
+type MessageFactory = (ctx?: ErrorContext) => string;
+
+type ErrorContext = Partial<Record<string, PrimitiveScalar | PrimitiveScalar[]>>;
 
 export const VALIDATION_CATALOG = {
   EXTRA_FIELD: { createMessage: () => "This field isn't allowed." },

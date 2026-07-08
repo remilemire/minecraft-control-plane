@@ -9,14 +9,14 @@ all: up install check
 # ================================
 
 up:
-	docker compose up -d
+	docker compose up --build -d
 
 down:
 	docker compose down
 
 restart:
-	docker compose down
-	docker compose up -d
+	$(MAKE) down
+	$(MAKE) up
 
 nuke:
 	docker compose down -v --remove-orphans
@@ -25,17 +25,27 @@ nuke:
 logs:
 	docker compose logs -f
 
+logs-db:
+	docker compose logs db -f
+
+logs-backend:
+	docker compose logs backend -f
+
+logs-frontend:
+	docker compose logs frontend -f
+
+logs-minecraft:
+	docker compose logs minecraft -f
+
 # ================================
 # ------------- Node -------------
 # ================================
 
 install: 
-	npm ci --prefix backend
-	npm ci --prefix frontend
+	pnpm install --frozen-lockfile
 
-build dev format lint test:
-	npm run $@ --prefix backend
-	npm run $@ --prefix frontend
+build dev test format lint:
+	npm run $@ --workspaces --if-present
 
 check:
 	$(MAKE) format
