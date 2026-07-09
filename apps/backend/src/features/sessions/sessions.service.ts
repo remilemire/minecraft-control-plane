@@ -2,8 +2,8 @@
 
 import { env } from "@/config/env.js";
 import type { Session } from "@/db/schema/index.js";
-import { NotFoundError } from "@/errors/index.js";
 import { generateRandomSecret, hashSecret } from "@/lib/crypto.js";
+import { SessionNotFoundError } from "./sessions.errors.js";
 import type { SessionRepository } from "./sessions.repository.js";
 import type { CreateSessionData, SessionWithToken, SessionWithUser } from "./sessions.types.js";
 
@@ -37,7 +37,7 @@ export class SessionService {
     const session = await this.sessions.deleteByTokenHash(hashSecret(token));
 
     if (session === null) {
-      throw new NotFoundError("Session not found.");
+      throw new SessionNotFoundError();
     }
 
     return session;

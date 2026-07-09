@@ -1,12 +1,19 @@
 // apps/backend/src/features/minecraft/minecraft.errors.ts
 
-export abstract class MinecraftClientError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
+import { DomainError, InfrastructureError } from "@/errors/base-errors.js";
+
+export class MinecraftProfileNotFoundError extends DomainError {
+  public constructor(message = "Minecraft profile not found.", options?: ErrorOptions) {
     super(message, options);
-    this.name = new.target.name;
   }
 }
 
-export class MojangClientError extends MinecraftClientError {}
+export class MojangProfileNotFoundError extends DomainError {
+  public constructor(message = "Mojang profile not found.", options?: ErrorOptions) {
+    super(message, options);
+  }
+}
 
-export class RconClientError extends MinecraftClientError {}
+export class MojangClientError extends InfrastructureError {}
+
+export class RconClientError extends InfrastructureError {}

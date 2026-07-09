@@ -1,5 +1,6 @@
 // apps/backend/src/db/errors.ts
 
+import { InfrastructureError } from "@/errors/base-errors.js";
 import { DatabaseError } from "pg";
 
 export type ViolationCode = "INTEGRITY" | "NOT_NULL" | "FOREIGN_KEY" | "UNIQUE" | "CHECK";
@@ -12,12 +13,7 @@ export interface DbViolation {
   readonly columns?: readonly string[];
 }
 
-export class DbError extends Error {
-  public constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = new.target.name;
-  }
-}
+export class DbError extends InfrastructureError {}
 
 export type DbViolationErrorOptions = DbViolation & ErrorOptions;
 

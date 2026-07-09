@@ -1,36 +1,48 @@
 // apps/backend/src/errors/api-error.ts
 
-import { ERROR_CATALOG, type ErrorCode, type ErrorStatus } from "./error-catalog.js";
-import type { ErrorResponse } from "./error-response.js";
-import {
-  createValidationIssue,
-  type ValidationIssue,
-  type ValidationIssueInput,
-} from "./validation-catalog.js";
+export type ApiErrorStatus = 401 | 403 | 404 | 409 | 422 | 500 | 502;
+
+export type ValidationIssue = {
+  readonly code: string;
+  readonly message: string;
+  readonly path: readonly (string | number)[];
+};
+
+export type ErrorResponse = {
+  readonly status: ApiErrorStatus;
+  readonly body: {
+    readonly code: string;
+    readonly message: string;
+    readonly issues?: readonly ValidationIssue[];
+  };
+};
 
 export interface ApiErrorOptions {
-  readonly issues?: ValidationIssueInput[];
-  readonly cause?: Error;
+  readonly status: ApiErrorStatus;
+  readonly code: string;
+  readonly message: string;
+  readonly issues?: readonly ValidationIssue[];
+  readonly cause?: unknown;
 }
 
-export abstract class ApiError extends Error {
-  public readonly code: ErrorCode;
-  public readonly status: ErrorStatus;
+/**
+ * The only error that reaches the HTTP layer. Never thrown by features:
+ * translators (`errors/translators/`) build it from domain/infrastructure
+ * errors, and the error-handler middleware serializes it via `toResponse()`.
+ */
+export class ApiError extends Error {
+  public readonly status: ApiErrorStatus;
+  public readonly code: string;
   public readonly issues?: readonly ValidationIssue[];
 
-  protected constructor(
-    code: ErrorCode, // Can't be abstract, must be available before call to super
-    message?: string,
-    { issues, cause }: ApiErrorOptions = {},
-  ) {
-    super(message ?? ERROR_CATALOG[code].message, { cause: cause });
-
+  public constructor({ status, code, message, issues, cause }: ApiErrorOptions) {
+    super(message, { cause });
     this.name = new.target.name;
+    this.status = status;
     this.code = code;
-    this.status = ERROR_CATALOG[code].status;
 
     if (issues !== undefined) {
-      this.issues = issues.map(createValidationIssue);
+      this.issues = issues;
     }
   }
 
@@ -38,10 +50,9 @@ export abstract class ApiError extends Error {
     return {
       status: this.status,
       body: {
-        error: this.name,
-        message: this.message,
         code: this.code,
-        ...(this.issues !== undefined ? { errors: this.issues } : {}),
+        message: this.message,
+        ...(this.issues !== undefined ? { issues: this.issues } : {}),
       },
     };
   }

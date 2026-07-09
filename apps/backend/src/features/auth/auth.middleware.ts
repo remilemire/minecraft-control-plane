@@ -1,8 +1,8 @@
 // apps/backend/src/features/auth/auth.middleware.ts
 
-import { ForbiddenError, UnauthorizedError } from "@/errors/index.js";
 import { getSessionCookie } from "@/features/sessions/sessions.cookies.js";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
+import { AdminRequiredError, UnauthenticatedError } from "./auth.errors.js";
 import type { AuthService } from "./auth.service.js";
 
 export function createRequireAuth(authService: AuthService): RequestHandler {
@@ -10,7 +10,7 @@ export function createRequireAuth(authService: AuthService): RequestHandler {
     const sessionToken = getSessionCookie(req);
 
     if (sessionToken === undefined) {
-      throw new UnauthorizedError("Invalid session.");
+      throw new UnauthenticatedError();
     }
 
     const { user, session } = await authService.authenticateFromSession(sessionToken);
@@ -23,7 +23,7 @@ export function createRequireAuth(authService: AuthService): RequestHandler {
 
 export function requireAdmin(req: Request, _res: Response, next: NextFunction): void {
   if (!req.user?.isAdmin) {
-    throw new ForbiddenError();
+    throw new AdminRequiredError();
   }
   next();
 }

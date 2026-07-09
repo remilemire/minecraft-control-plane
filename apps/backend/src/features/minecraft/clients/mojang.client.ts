@@ -1,6 +1,6 @@
 // apps/backend/src/features/minecraft/clients/mojang.client.ts
 
-import { ServerError } from "@/errors/http-errors.js";
+import { MojangClientError } from "@/features/minecraft/minecraft.errors.js";
 import { minecraftUsernameSchema } from "@minecraft-server/shared/schemas";
 import z from "zod";
 
@@ -28,11 +28,19 @@ export class MojangClient {
       return null;
     }
     if (!response.ok) {
-      throw new ServerError(`Mojang returned status ${response.status}.`);
+      throw new MojangClientError(`Mojang returned status ${response.status}.`);
     }
 
     const data = await response.json();
-    const { id, name } = mojangAccountSchema.parse(data);
+    const result = mojangAccountSchema.safeParse(data);
+
+    if (!result.success) {
+      throw new MojangClientError("Mojang returned an unexpected response.", {
+        cause: result.error,
+      });
+    }
+
+    const { id, name } = result.data;
     return { uuid: id, username: name };
   }
 }

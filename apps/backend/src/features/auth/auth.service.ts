@@ -2,11 +2,15 @@
 
 import { env } from "@/config/env.js";
 import type { User } from "@/db/schema/index.js";
-import { ForbiddenError, UnauthorizedError } from "@/errors/index.js";
 import type { InvitationService } from "@/features/invitations/invitations.service.js";
 import type { SessionService } from "@/features/sessions/sessions.service.js";
 import type { UserService } from "@/features/users/users.service.js";
 import type { OAuth2Client } from "google-auth-library";
+import {
+  InvalidGoogleCredentialError,
+  InvalidSessionError,
+  NotInvitedError,
+} from "./auth.errors.js";
 import type { AuthContext, GoogleIdentity, UserWithSessionToken } from "./auth.types.js";
 
 export class AuthService {
@@ -35,7 +39,7 @@ export class AuthService {
     const result = await this.sessionService.findValidWithUser(sessionToken);
 
     if (result === null) {
-      throw new UnauthorizedError("Invalid or expired session.");
+      throw new InvalidSessionError();
     }
 
     const { user, session } = result;
@@ -48,7 +52,7 @@ export class AuthService {
 
   private async registerInvited({ email, ...rest }: GoogleIdentity): Promise<User> {
     if (!this.invitationService.isInvited(email)) {
-      throw new ForbiddenError("Invite only.");
+      throw new NotInvitedError();
     }
     return await this.userService.create({
       email,
@@ -64,10 +68,10 @@ export class AuthService {
     const payload = ticket.getPayload();
 
     if (payload === undefined) {
-      throw new UnauthorizedError("The Google credential is invalid or expired.");
+      throw new InvalidGoogleCredentialError();
     }
     if (payload.email === undefined || !payload.email_verified) {
-      throw new UnauthorizedError("Google did not provide a verified identity.");
+      throw new InvalidGoogleCredentialError("Google did not provide a verified identity.");
     }
 
     return {

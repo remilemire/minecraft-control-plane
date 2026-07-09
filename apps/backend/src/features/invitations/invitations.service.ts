@@ -2,8 +2,8 @@
 
 import { env } from "@/config/env.js";
 import type { Invitation } from "@/db/schema/invitations.js";
-import { NotFoundError } from "@/errors/index.js";
 import type { AcceptInvitationInput } from "@minecraft-server/shared/schemas";
+import { InvitationNotFoundError } from "./invitations.errors.js";
 import type { InvitationRepository } from "./invitations.repository.js";
 import type { CreateInvitationData } from "./invitations.types.js";
 
@@ -31,7 +31,7 @@ export class InvitationService {
     });
 
     if (invitation === null) {
-      throw new NotFoundError("Invitation not found.");
+      throw new InvitationNotFoundError();
     }
 
     return invitation;
@@ -48,7 +48,7 @@ export class InvitationService {
     const invitation = await this.invitations.deleteById(id);
 
     if (invitation === null) {
-      throw new NotFoundError("Invitation not found.");
+      throw new InvitationNotFoundError();
     }
 
     return invitation;

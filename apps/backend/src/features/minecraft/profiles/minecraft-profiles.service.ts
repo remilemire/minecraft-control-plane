@@ -1,8 +1,11 @@
 // apps/backend/src/features/minecraft/profiles/minecraft-profiles.service.ts
 
 import type { MinecraftProfile } from "@/db/schema/minecraft-profile.js";
-import { NotFoundError } from "@/errors/http-errors.js";
 import type { MojangClient, MojangProfile } from "@/features/minecraft/clients/mojang.client.js";
+import {
+  MinecraftProfileNotFoundError,
+  MojangProfileNotFoundError,
+} from "@/features/minecraft/minecraft.errors.js";
 import type { UpdateMinecraftProfileInput } from "@minecraft-server/shared/schemas";
 import { MinecraftProfileRepository } from "./minecraft-profiles.repository.js";
 import type { CreateMinecraftProfileData } from "./minecraft-profiles.types.js";
@@ -17,7 +20,7 @@ export class MinecraftProfileService {
     const minecraftProfile = await this.minecraftProfiles.findByUserId(userId);
 
     if (minecraftProfile === null) {
-      throw new NotFoundError("Minecraft profile not found.");
+      throw new MinecraftProfileNotFoundError();
     }
 
     return minecraftProfile;
@@ -40,7 +43,7 @@ export class MinecraftProfileService {
     const minecraftProfile = await this.minecraftProfiles.updateByUserId(userId, mojangProfile);
 
     if (minecraftProfile === null) {
-      throw new NotFoundError("Minecraft profile not found.");
+      throw new MinecraftProfileNotFoundError();
     }
 
     return minecraftProfile;
@@ -50,7 +53,7 @@ export class MinecraftProfileService {
     const minecraftProfile = await this.minecraftProfiles.deleteByUserId(userId);
 
     if (minecraftProfile === null) {
-      throw new NotFoundError("Minecraft profile not found.");
+      throw new MinecraftProfileNotFoundError();
     }
 
     return minecraftProfile;
@@ -60,7 +63,7 @@ export class MinecraftProfileService {
     const profile = await this.mojangClient.findByUsername(username);
 
     if (profile === null) {
-      throw new NotFoundError("Mojang profile not found.");
+      throw new MojangProfileNotFoundError();
     }
 
     return profile;

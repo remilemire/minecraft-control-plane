@@ -1,7 +1,7 @@
 // apps/backend/src/security/csrf.ts
 
 import { env } from "@/config/env.js";
-import { ForbiddenError } from "@/errors/http-errors.js";
+import { InvalidCsrfTokenError } from "@/security/csrf.errors.js";
 import { clearCookie, getCookie, setCookie } from "@/security/cookies.js";
 import type { NextFunction, Request, Response } from "express";
 
@@ -31,8 +31,8 @@ export function requireCsrf(req: Request, _res: Response, next: NextFunction): v
   const cookieToken = getCsrfCookie(req);
   const headerToken = getCsrfHeader(req);
 
-  if (!!cookieToken && !!headerToken && cookieToken === headerToken) {
-    throw new ForbiddenError("Invalid CSRF-token.");
+  if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+    throw new InvalidCsrfTokenError();
   }
 
   next();
