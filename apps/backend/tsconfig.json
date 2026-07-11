@@ -3,7 +3,7 @@
 {
   "extends": ["../../tsconfig.base.json", "@tsconfig/node22/tsconfig.json"],
   "compilerOptions": {
-    "paths": { "@/*": ["./src/*"] }
+    "paths": { "@/*": ["./src/*"], "@test/*": ["./test/*"] }
   },
-  "include": ["src", "*.config.ts"]
+  "include": ["src", "test", "*.config.ts"]
 }

@@ -1,6 +1,6 @@
 // apps/backend/src/features/auth/auth.routes.ts
 
-import { requireCsrf } from "@/security/csrf.js";
+import { requireCsrf } from "@/http/csrf/csrf.middleware.js";
 import type { RequestHandler } from "express";
 import { Router } from "express";
 import type { AuthController } from "./auth.controller.js";
@@ -12,7 +12,7 @@ export function createAuthRoutes(
   const router = Router();
 
   router.post("/google", authController.googleLogin);
-  router.post("/logout", requireCsrf, requireAuth, authController.logout);
+  router.post("/logout", requireAuth, requireCsrf, authController.logout);
 
   return router;
 }

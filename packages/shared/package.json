@@ -3,15 +3,44 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./schemas": {
-      "types": "./dist/schemas/index.d.ts",
-      "import": "./dist/schemas/index.js"
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.js"
+    },
+    "./common": {
+      "types": "./dist/common/index.d.ts",
+      "import": "./dist/common/index.js"
+    },
+    "./auth": {
+      "types": "./dist/features/auth/index.d.ts",
+      "import": "./dist/features/auth/index.js"
+    },
+    "./invitations": {
+      "types": "./dist/features/invitations/index.d.ts",
+      "import": "./dist/features/invitations/index.js"
+    },
+    "./minecraft": {
+      "types": "./dist/features/minecraft/index.d.ts",
+      "import": "./dist/features/minecraft/index.js"
+    },
+    "./sessions": {
+      "types": "./dist/features/sessions/index.d.ts",
+      "import": "./dist/features/sessions/index.js"
+    },
+    "./users": {
+      "types": "./dist/features/users/index.d.ts",
+      "import": "./dist/features/users/index.js"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint . --fix",
-    "format": "prettier . --write"
+    "format": "prettier . --write",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.9"
   },
   "peerDependencies": {
     "zod": "^4.4.3"

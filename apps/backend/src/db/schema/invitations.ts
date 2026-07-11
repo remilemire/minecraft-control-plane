@@ -20,7 +20,7 @@ export const invitations = pgTable(
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    acceptedAt: timestamp("created_at", { withTimezone: true }),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
   },
   (table) => [
     check("invitations_email_length_check", sql`char_length(${table.email}) BETWEEN 1 AND 254`),

@@ -1,12 +1,20 @@
 // apps/backend/src/app.ts
+// Must stay the first import: zod v4 copies base methods onto schemas at
+// construction, so .openapi() has to exist before any schema module (notably
+// @minecraft-server/shared via the controllers) is evaluated.
+import "./openapi/zod-extend.js";
+import cookieParser from "cookie-parser";
 import express from "express";
-import { router } from "./routes/index.js";
+import { createRouter } from "./routes/index.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { env } from "./config/env.js";
-export function createApp() {
+import { createOpenApiRoutes } from "./openapi/openapi.routes.js";
+export function createApp(deps) {
     const app = express();
     app.use(express.json());
-    app.use("/api", router);
+    app.use(cookieParser());
+    app.use(createOpenApiRoutes());
+    app.use("/api", createRouter(deps));
     app.use(errorHandler);
     app.set("trust proxy", env.DEBUG ? false : 1);
     return app;

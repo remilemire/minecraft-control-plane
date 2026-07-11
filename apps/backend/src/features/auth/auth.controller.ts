@@ -1,35 +1,33 @@
 // apps/backend/src/features/auth/auth.controller.ts
 
+import { clearCsrfCookie, setCsrfCookie } from "@/http/csrf/csrf.cookies.js";
 import {
   clearSessionCookie,
   getSessionCookie,
   setSessionCookie,
-} from "@/features/sessions/sessions.cookies.js";
-import { generateRandomSecret } from "@/lib/crypto.js";
-import { clearCsrfCookie, setCsrfCookie } from "@/security/csrf.js";
-import {
-  type UserResponse,
-  googleLoginSchema,
-  userResponseSchema,
-} from "@minecraft-server/shared/schemas";
+} from "@/http/session/session.cookies.js";
+import { generateRandomSecret } from "@/lib/tokens.js";
+import { parseOrThrow } from "@/validation/parse.js";
+import { googleLoginSchema } from "@minecraft-server/shared/auth";
+import { userResponseSchema } from "@minecraft-server/shared/users";
 import type { Request, Response } from "express";
 import type { AuthService } from "./auth.service.js";
 
 export class AuthController {
   public constructor(private readonly authService: AuthService) {}
 
-  public async googleLogin(req: Request, res: Response): Promise<UserResponse> {
-    const { credential } = googleLoginSchema.parse(req.body);
+  public googleLogin = async (req: Request, res: Response): Promise<void> => {
+    const { credential } = parseOrThrow(googleLoginSchema, req.body);
 
     const { user, sessionToken } = await this.authService.authenticateFromGoogle(credential);
 
     setSessionCookie(res, sessionToken);
     setCsrfCookie(res, generateRandomSecret());
 
-    return userResponseSchema.parse(user);
-  }
+    res.status(200).json(userResponseSchema.parse(user));
+  };
 
-  public async logout(req: Request, res: Response): Promise<void> {
+  public logout = async (req: Request, res: Response): Promise<void> => {
     const sessionToken = getSessionCookie(req);
     if (sessionToken !== undefined) {
       await this.authService.logout(sessionToken);
@@ -37,5 +35,7 @@ export class AuthController {
 
     clearCsrfCookie(res);
     clearSessionCookie(res);
-  }
+
+    res.status(204).send();
+  };
 }

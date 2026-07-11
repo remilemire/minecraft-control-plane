@@ -1,6 +1,5 @@
 // apps/backend/src/features/auth/auth.service.ts
-import { env } from "@/config/env.js";
-import { ForbiddenError, UnauthorizedError } from "@/errors/index.js";
+import { AppError } from "@/errors/app-error.js";
 export class AuthService {
     userService;
     sessionService;
@@ -13,8 +12,8 @@ export class AuthService {
         this.googleOauthClient = googleOauthClient;
     }
     async authenticateFromGoogle(googleToken) {
-        const profile = await this.verifyGoogleToken(googleToken);
-        const user = (await this.userService.findByGoogleId(profile.email)) ??
+        const profile = await this.googleOauthClient.verifyCredential(googleToken);
+        const user = (await this.userService.findByGoogleId(profile.googleId)) ??
             (await this.registerInvited(profile));
         const { sessionToken } = await this.sessionService.create({
             userId: user.id,
@@ -24,7 +23,7 @@ export class AuthService {
     async authenticateFromSession(sessionToken) {
         const result = await this.sessionService.findValidWithUser(sessionToken);
         if (result === null) {
-            throw new UnauthorizedError("Invalid or expired session.");
+            throw new AppError("INVALID_SESSION");
         }
         const { user, session } = result;
         return { user, session };
@@ -33,32 +32,13 @@ export class AuthService {
         await this.sessionService.delete(sessionToken);
     }
     async registerInvited({ email, ...rest }) {
-        if (!this.invitationService.isInvited(email)) {
-            throw new ForbiddenError("Invite only.");
+        if (!(await this.invitationService.isInvited(email))) {
+            throw new AppError("NOT_INVITED");
         }
         return await this.userService.create({
             email,
             ...rest,
         });
-    }
-    async verifyGoogleToken(googleToken) {
-        const ticket = await this.googleOauthClient.verifyIdToken({
-            idToken: googleToken,
-            audience: env.GOOGLE_CLIENT_ID,
-        });
-        const payload = ticket.getPayload();
-        if (payload === undefined) {
-            throw new UnauthorizedError("The Google credential is invalid or expired.");
-        }
-        if (payload.email === undefined || !payload.email_verified) {
-            throw new UnauthorizedError("Google did not provide a verified identity.");
-        }
-        return {
-            email: payload.email,
-            googleId: payload.sub,
-            ...(payload.given_name !== undefined ? { firstName: payload.given_name } : {}),
-            ...(payload.family_name !== undefined ? { lastName: payload.family_name } : {}),
-        };
     }
 }
 //# sourceMappingURL=auth.service.js.map

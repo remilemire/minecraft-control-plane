@@ -1,0 +1,52 @@
+// apps/backend/test/fakes/fake-google-oauth.client.ts
+
+import { AppError } from "@/errors/app-error.js";
+import type {
+  GoogleIdentity,
+  GoogleOauthApi,
+  GoogleTokenPayload,
+} from "@/features/auth/auth.types.js";
+import { generateRandomSecret } from "@/lib/tokens.js";
+
+let sequence = 0;
+
+// In-memory stand-in for GoogleOauthClient. issueToken() registers a Google
+// payload and returns the credential that resolves to it; verifyCredential()
+// mirrors the real client's contract, rejecting unknown credentials and
+// unverified identities with INVALID_GOOGLE_CREDENTIAL.
+export class FakeGoogleOauthClient implements GoogleOauthApi {
+  private readonly payloads = new Map<string, GoogleTokenPayload>();
+
+  public issueToken(payload: { readonly email: string } & Partial<GoogleTokenPayload>): string {
+    const credential = generateRandomSecret();
+
+    this.payloads.set(credential, {
+      sub: `google-sub-${++sequence}`,
+      email_verified: true,
+      ...payload,
+    });
+
+    return credential;
+  }
+
+  public async verifyCredential(credential: string): Promise<GoogleIdentity> {
+    const payload = this.payloads.get(credential);
+
+    // Unknown credential, like the real library rejecting a bad token.
+    if (payload === undefined) {
+      throw new AppError("INVALID_GOOGLE_CREDENTIAL");
+    }
+    if (payload.email === undefined || !payload.email_verified) {
+      throw new AppError("INVALID_GOOGLE_CREDENTIAL", {
+        message: "Google did not provide a verified identity.",
+      });
+    }
+
+    return {
+      email: payload.email,
+      googleId: payload.sub,
+      ...(payload.given_name !== undefined ? { firstName: payload.given_name } : {}),
+      ...(payload.family_name !== undefined ? { lastName: payload.family_name } : {}),
+    };
+  }
+}

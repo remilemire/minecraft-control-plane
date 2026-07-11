@@ -1,12 +1,12 @@
 // apps/backend/src/features/auth/auth.helpers.ts
 
 import type { User } from "@/db/schema/index.js";
+import { AppError } from "@/errors/app-error.js";
 import type { Request } from "express";
-import { UnauthenticatedError } from "./auth.errors.js";
 
 export function getAuthenticatedUser(req: Request): User {
   if (req.user === undefined) {
-    throw new UnauthenticatedError();
+    throw new AppError("UNAUTHENTICATED");
   }
 
   return req.user;

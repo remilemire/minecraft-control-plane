@@ -1,9 +1,9 @@
 // apps/backend/src/features/minecraft/server/minecraft-server.routes.ts
 
+import { requireAdmin } from "@/features/auth/auth.middleware.js";
+import { requireCsrf } from "@/http/csrf/csrf.middleware.js";
 import { Router, type RequestHandler } from "express";
 import type { MinecraftServerController } from "./minecraft-server.controller.js";
-import { requireCsrf } from "@/security/csrf.js";
-import { requireAdmin } from "@/features/auth/auth.middleware.js";
 
 export function createMinecraftServerRoutes(
   minecraftServerController: MinecraftServerController,
@@ -11,34 +11,40 @@ export function createMinecraftServerRoutes(
 ): Router {
   const router = Router();
 
-  router.get(
-    "/server-status",
+  router.get("/status", requireAuth, requireAdmin, minecraftServerController.getServerStatus);
+  router.get("/players", requireAuth, requireAdmin, minecraftServerController.listPlayers);
+  router.put(
+    "/whitelist/:userId",
     requireAuth,
-    requireAdmin,
-    minecraftServerController.getServerStatus,
-  );
-  router.get("/list-players", requireAuth, requireAdmin, minecraftServerController.listPlayers);
-
-  router.post(
-    "/add-whitelist",
     requireCsrf,
-    requireAuth,
     requireAdmin,
     minecraftServerController.addToWhitelist,
   );
-  router.post(
-    "/remove-whitelist",
-    requireCsrf,
+  router.delete(
+    "/whitelist/:userId",
     requireAuth,
+    requireCsrf,
     requireAdmin,
     minecraftServerController.removeFromWhitelist,
   );
-  router.post("/save-world", requireAuth, requireAdmin, minecraftServerController.saveWorld);
-  router.post("/start-server", requireAuth, requireAdmin, minecraftServerController.startServer);
-  router.post("/stop-server", requireAuth, requireAdmin, minecraftServerController.stopServer);
   router.post(
-    "/restart-server",
+    "/start",
     requireAuth,
+    requireCsrf,
+    requireAdmin,
+    minecraftServerController.startServer,
+  );
+  router.post(
+    "/stop",
+    requireAuth,
+    requireCsrf,
+    requireAdmin,
+    minecraftServerController.stopServer,
+  );
+  router.post(
+    "/restart",
+    requireAuth,
+    requireCsrf,
     requireAdmin,
     minecraftServerController.restartServer,
   );

@@ -1,8 +1,8 @@
 // apps/backend/src/features/users/users.service.ts
 
 import type { User } from "@/db/schema/users.js";
+import type { CreateUserInput } from "@minecraft-server/shared/users";
 import type { UserRepository } from "./users.repository.js";
-import type { CreateUserInput } from "@minecraft-server/shared/schemas";
 
 export class UserService {
   public constructor(private readonly users: UserRepository) {}

@@ -1,6 +1,7 @@
 // apps/backend/src/features/minecraft/clients/rcon.client.ts
 
-import { RconClientError } from "@/features/minecraft/minecraft.errors.js";
+import { AppError } from "@/errors/app-error.js";
+import type { RconApi } from "@/features/minecraft/minecraft.types.js";
 import { RCONClient } from "@minecraft-js/rcon";
 
 const DEFAULT_RCON_TIMEOUT_MS = 5_000;
@@ -13,7 +14,7 @@ export type RconClientOptions = {
   readonly timeoutMs?: number;
 };
 
-export class RconClient {
+export class RconClient implements RconApi {
   private readonly host: string;
   private readonly port: number;
   private readonly password: string;
@@ -55,7 +56,7 @@ export class RconClient {
 
     while (!client.authenticated) {
       if (Date.now() >= deadline) {
-        throw new RconClientError("RCON authentication timed out.");
+        throw new AppError("RCON_CLIENT_ERROR", { message: "RCON authentication timed out." });
       }
 
       await new Promise<void>((resolve) => {

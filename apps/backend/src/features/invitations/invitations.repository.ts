@@ -1,12 +1,17 @@
 // apps/backend/src/features/invitations/invitations.repository.ts
 
 import { type Db } from "@/db/client.js";
-import { DbError, withDbErrors } from "@/db/errors.js";
+import { withDbErrors } from "@/db/errors.js";
 import { invitations, type Invitation, type NewInvitation } from "@/db/schema/index.js";
+import { AppError } from "@/errors/app-error.js";
 import { eq } from "drizzle-orm";
 
 export class InvitationRepository {
   public constructor(private readonly db: Db) {}
+
+  public async findAll(): Promise<Invitation[]> {
+    return this.db.select().from(invitations);
+  }
 
   public async findByEmail(email: string): Promise<Invitation | null> {
     const [invitation] = await withDbErrors(() =>
@@ -29,7 +34,7 @@ export class InvitationRepository {
     );
 
     if (invitation === undefined) {
-      throw new DbError("Failed to create invitation.");
+      throw new AppError("INTERNAL", { message: "Failed to create invitation." });
     }
 
     return invitation;

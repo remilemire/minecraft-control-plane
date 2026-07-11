@@ -1,70 +1,89 @@
 # minecraft-server
 
-A self-hosted web app for managing access to a private Minecraft server. The intended model: a single admin issues **access keys** and shares them with players; a player redeems a key to register their current IP address as an **access grant**, which a firewall (separate, not part of this repo) would use to allow them through.
+A self-hosted admin panel for a private, **invite-only** Minecraft server, run on a
+home Linux box via Docker Compose.
 
-> **Status: early development.** This repository currently contains the backend's data and infrastructure layers (models, schemas, services, error handling, auth/session/CSRF helpers, config) and a Docker-based dev environment. There are **no HTTP API routes wired up yet**, the **frontend is an empty skeleton**, **no database migrations have been generated**, and **no tests have been written**. See [Current State](#current-state).
+There is a single **admin**. The admin invites players by email; a player signs in
+with **Google**, and the login only succeeds if their email has a valid, unaccepted
+invitation. Once in, a player links their **Minecraft profile** (username → UUID).
+The admin manages the roster and controls the server: adding/removing players from
+the Minecraft **whitelist** over RCON, and starting/stopping/restarting the Minecraft
+container.
+
+> **Status: active development.** The backend is substantially built — features,
+> layering, error handling, auth/session/CSRF, OpenAPI docs, and a three-layer test
+> suite. The **frontend is an empty skeleton**, admin promotion is **not wired yet**,
+> and production (serving the SPA from the backend) is not in place. See
+> [Current State](#current-state).
 
 ## Tech Stack
 
-**Backend**
-- Python 3.13, [uv](https://docs.astral.sh/uv/) for dependency management
-- FastAPI
-- SQLAlchemy 2.0 (async) with `psycopg` 3
-- PostgreSQL 18
-- Alembic (async migrations)
-- Pydantic / pydantic-settings
-- passlib (bcrypt) for password hashing
-- Ruff (lint + format), pytest
+Single **pnpm** workspace monorepo, TypeScript throughout (ESM, strict).
 
-**Frontend**
-- Vue 3 + Vite + TypeScript
-- Tailwind CSS v4 (via `@tailwindcss/vite`)
-- Pinia, Vue Router
+**Backend** (`apps/backend`)
+- Node + Express 5
+- Drizzle ORM + `node-postgres`, PostgreSQL 18
+- Zod 4 for validation
+- `google-auth-library` (Google ID-token verification), `@minecraft-js/rcon`
+- OpenAPI via `@asteasolutions/zod-to-openapi` + `swagger-ui-express`
+- `tsx` (dev), `drizzle-kit` (migrations), Vitest (unit / integration / api)
+
+**Frontend** (`apps/frontend`) — *skeleton*
+- React 19 + Vite
+- Tailwind CSS v4 (via `@tailwindcss/vite`; no config file — configured in CSS)
+- React Router
 - ESLint (flat config) + Prettier, Vitest
 
+**Shared** (`packages/shared`)
+- Zod schemas and a shared error catalog consumed by both apps, exposed as subpath
+  exports (`@minecraft-server/shared/auth`, `/users`, `/errors`, …)
+
 **Tooling**
-- Docker Compose (development environment)
-- GNU Make (task runner, root + per-app)
+- Docker Compose (dev stack)
+- GNU Make (root task runner over Compose + pnpm)
 
 ## Project Structure
 
 ```
 .
-├── compose.yaml            # Dev stack: db, backend, frontend
-├── Makefile                # Root tasks (compose lifecycle, fan-out to apps)
-├── .env.example            # Compose-level env (ports, Postgres, APP_ENV)
-├── backend/
-│   ├── Dockerfile          # multi-stage: base → dev / prod
-│   ├── Makefile            # lint/format/test + Alembic wrappers
-│   ├── pyproject.toml      # deps + ruff config
-│   ├── alembic.ini
-│   ├── .env.example        # app settings (secret, CORS, TTLs, admin)
-│   ├── migrations/         # Alembic env (no versions generated yet)
-│   └── app/
-│       ├── main.py         # create_app(): middleware, error handlers, router
-│       ├── api/            # APIRouter shell (/api, CSRF dep) — no routes yet
-│       ├── core/           # config, db session dependency, lifespan
-│       ├── models/         # SQLAlchemy models (Admin, Session, AccessKey, AccessGrant)
-│       ├── schemas/        # Pydantic request/response models
-│       ├── services/       # Business logic (module-level functions)
-│       ├── auth/           # passwords (bcrypt), cookies, CSRF
-│       ├── errors/         # Domain exceptions → typed JSON responses
-│       └── utils/          # casing, parsing, transaction helpers
-└── frontend/
-    ├── Dockerfile          # multi-stage: base → dev / builder → nginx (prod)
-    ├── Makefile
-    ├── vite.config.mts
-    ├── .env.example        # BACKEND_ORIGIN
-    └── src/                # Vue app (skeleton)
+├── compose.yaml              # Dev stack: db, backend, frontend, minecraft
+├── Makefile                  # Root tasks (compose lifecycle + pnpm fan-out)
+├── pnpm-workspace.yaml
+├── .env.example              # Compose-level env (ports, Postgres, RCON)
+├── apps/
+│   ├── backend/              # Express API — see apps/backend/CLAUDE.md
+│   │   ├── Dockerfile        # multi-stage: base → dev / builder → prod
+│   │   ├── drizzle.config.ts
+│   │   ├── migrations/       # drizzle-kit SQL migrations
+│   │   ├── src/
+│   │   │   ├── app.ts        # createApp(deps): middleware + routers
+│   │   │   ├── server.ts     # composition root (wires real clients)
+│   │   │   ├── config/       # env parsing, postgres, cookies
+│   │   │   ├── db/           # drizzle client, schema/, error mapping
+│   │   │   ├── errors/       # AppError, translator, error catalog glue
+│   │   │   ├── http/         # cookie / csrf / session helpers
+│   │   │   ├── middleware/   # error handler
+│   │   │   ├── openapi/       # OpenAPI document + swagger routes
+│   │   │   ├── validation/    # parseOrThrow + zod-issue normalization
+│   │   │   ├── routes/        # createRouter(deps): mounts feature routers
+│   │   │   └── features/      # auth, users, sessions, invitations, minecraft
+│   │   └── test/             # api tests, fakes, factories, db setup
+│   └── frontend/            # React SPA (skeleton) — see apps/frontend/CLAUDE.md
+│       ├── Dockerfile
+│       ├── vite.config.ts
+│       └── src/
+└── packages/
+    └── shared/              # Zod schemas + error catalog (both apps)
 ```
 
-## Local Development Setup
+## Local Development
 
 The supported way to run the project is the Docker Compose stack.
 
 ### Prerequisites
 - Docker + Docker Compose
 - GNU Make
+- Node + pnpm (for running migrations and workspace scripts from the host)
 
 ### 1. Create env files
 
@@ -72,160 +91,199 @@ All `.env` files are gitignored. Copy each example before the first run:
 
 ```bash
 cp .env.example .env
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
+cp apps/backend/.env.example apps/backend/.env
+cp apps/frontend/.env.example apps/frontend/.env
 ```
 
-Defaults in the examples work for local development as-is. See [Environment Variables](#environment-variables).
+Fill in the values that have no working default — notably `GOOGLE_CLIENT_ID`,
+`SESSION_SECRET`, and (for server control) `MINECRAFT_COMPOSE_FILE` /
+`MINECRAFT_SERVICE_NAME`. See [Environment Variables](#environment-variables).
 
 ### 2. Start the stack
 
 ```bash
-make up        # docker compose up -d
+make up        # docker compose up --build -d
 make logs      # tail all service logs
 make down      # stop
 ```
 
-This starts three services:
+This starts four services:
 
-| Service  | Default URL                                    | Notes |
-| -------- | ---------------------------------------------- | ----- |
-| backend  | http://localhost:8000 (`BACKEND_PORT`)         | uvicorn with `--reload` |
-| frontend | http://localhost:5173 (`FRONTEND_PORT`)        | Vite dev server |
-| db       | localhost:5432 (`POSTGRES_PORT`)               | PostgreSQL 18 |
+| Service   | Default URL / port                        | Notes |
+| --------- | ----------------------------------------- | ----- |
+| backend   | http://localhost:8000 (`BACKEND_PORT`)    | `tsx watch`; API under `/api`, docs at `/docs` |
+| frontend  | http://localhost:5173 (`FRONTEND_PORT`)   | Vite dev server |
+| db        | localhost:5432 (`POSTGRES_PORT`)          | PostgreSQL 18 |
+| minecraft | internal only (RCON, `expose: 25565`)     | `itzg/minecraft-server` |
 
-Source is bind-mounted into the backend and frontend containers, so changes reload live.
+The repo is bind-mounted into the backend and frontend containers, so changes reload
+live.
 
 ### 3. Initialize the database
 
-No Alembic revisions are committed yet, so the schema does not exist on first boot. Generate the initial revision from the current models, then apply it:
+Migrations run from the **host** via `drizzle-kit` (its config points at
+`localhost`, so the `db` service must be up and its port published):
 
 ```bash
-make -C backend revision MESSAGE=init   # autogenerate from models
-make -C backend migrate                 # alembic upgrade head
+pnpm --filter @minecraft-server/backend db:generate   # generate SQL from schema changes
+pnpm --filter @minecraft-server/backend db:migrate     # apply pending migrations
 ```
-
-Both commands run Alembic inside the backend container (which can reach the `db` service).
 
 ### Other useful commands
 
-```bash
-make restart                 # down + up
-make reset                   # down -v, rebuild --no-cache, up (drops the DB volume)
+Root `make` targets fan out to every workspace; scope to one with `pkg=`:
 
-make -C backend check        # ruff format, ruff lint --fix, pytest
-make -C frontend lint        # eslint --fix
-make -C frontend format      # prettier --write
-make -C frontend test        # vitest
+```bash
+make dev                     # run all dev servers in parallel
+make build                   # build all workspaces
+make test        pkg=backend # test one workspace
+make lint                    # eslint --fix across workspaces
+make format                  # prettier --write
+make check                   # format + lint + test everything
+make restart                 # down + up
+make nuke                    # down -v --remove-orphans + rebuild --no-cache
+```
+
+Backend test layers can be run individually:
+
+```bash
+pnpm --filter @minecraft-server/backend test:unit
+pnpm --filter @minecraft-server/backend test:integration
+pnpm --filter @minecraft-server/backend test:api
 ```
 
 ## Environment Variables
 
-Variables are split across three files. The backend container loads **both** the root `.env` and `backend/.env`.
+Variables are split across three files. The backend container is given **both** the
+root `.env` and `apps/backend/.env` (via `compose.yaml`'s `env_file`).
 
-### Root `.env` (compose + Postgres)
+### Root `.env` (compose + Postgres + RCON)
 
-| Variable          | Example            | Purpose |
-| ----------------- | ------------------ | ------- |
-| `APP_ENV`         | `dev`              | `dev` or `prod`. `dev` enables debug mode and required-var validation. |
-| `BACKEND_PORT`    | `8000`             | Host port mapped to the backend container. |
-| `FRONTEND_PORT`   | `5173`             | Host port mapped to the frontend container. |
-| `POSTGRES_PORT`   | `5432`             | Host port mapped to Postgres (see caveat below). |
-| `POSTGRES_USER`   | `user`             | Postgres user. |
-| `POSTGRES_PASSWORD`| `password`        | Postgres password. |
-| `POSTGRES_DB`     | `minecraft_server` | Postgres database name. |
+| Variable                  | Example                | Purpose |
+| ------------------------- | ---------------------- | ------- |
+| `APP_ENV`                 | `dev`                  | `dev` or `prod`. `dev` enables debug mode (`secure` cookies off, `trust proxy` off). |
+| `BACKEND_PORT`            | `8000`                 | Backend listen port + host mapping. |
+| `FRONTEND_PORT`           | `5173`                 | Frontend host port. |
+| `POSTGRES_PORT`           | `5432`                 | Postgres port (see caveat). |
+| `POSTGRES_USER`           | `user`                 | Postgres user. |
+| `POSTGRES_PASSWORD`       | `password`             | Postgres password. |
+| `POSTGRES_HOST`           | `db`                   | Postgres host — `db` (the compose service) inside the network. |
+| `POSTGRES_DATABASE`       | `minecraft_server`     | Database name. |
+| `MINECRAFT_RCON_HOST`     | `minecraft`            | RCON host (the compose service name). |
+| `MINECRAFT_RCON_PORT`     | `25575`                | RCON port. |
+| `MINECRAFT_RCON_PASSWORD` | `password`             | RCON password (also passed to the minecraft container). |
 
-### `backend/.env` (application settings)
+### `apps/backend/.env` (application settings)
 
-| Variable               | Example                   | Purpose |
-| ---------------------- | ------------------------- | ------- |
-| `SECRET_KEY`           | `secret`                  | Signing key for cookie middleware. |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173`   | Comma-separated allowed CORS origins. |
-| `COOKIE_DOMAIN`        | *(empty)*                 | Optional cookie domain; empty for host-only cookies. |
-| `SESSION_TTL_DAYS`     | `7`                       | Admin session lifetime (days). |
-| `ACCESS_KEY_TTL_DAYS`  | `7`                       | Access key lifetime (days). |
-| `ACCESS_GRANT_TTL_DAYS`| `30`                      | Access grant lifetime (days). |
-| `ADMIN_MINECRAFT_USERNAME` | `admin@company.com`   | The Minecraft username that is granted admin on registration. |
+| Variable                 | Example                              | Purpose |
+| ------------------------ | ------------------------------------ | ------- |
+| `SESSION_SECRET`         | `secret`                             | Secret for session-related signing. |
+| `CORS_ALLOWED_ORIGINS`   | `http://localhost:5173`              | Comma-separated allowed origins (parsed into `ALLOWED_ORIGINS`). |
+| `COOKIE_DOMAIN`          | *(empty)*                            | Optional cookie domain; empty for host-only cookies. |
+| `SESSION_TTL_DAYS`       | `7`                                  | Session lifetime (days). |
+| `CSRF_TTL_DAYS`          | `7`                                  | CSRF cookie lifetime (days). |
+| `INVITATION_TTL_DAYS`    | `7`                                  | Invitation lifetime (days). |
+| `GOOGLE_CLIENT_ID`       | `xxx.apps.googleusercontent.com`     | Google OAuth client ID used to verify sign-in credentials. |
+| `MINECRAFT_COMPOSE_FILE` | `/home/you/minecraft-server/compose.yaml` | Compose file the backend shells out to for server power control. |
+| `MINECRAFT_SERVICE_NAME` | `minecraft`                          | Compose service name of the Minecraft container. |
+| `ADMIN_EMAIL`            | `admin@domain.com`                   | Intended admin account (promotion **not wired yet** — see Current State). |
 
-### `frontend/.env`
+### `apps/frontend/.env`
 
 | Variable         | Example                 | Purpose |
 | ---------------- | ----------------------- | ------- |
-| `BACKEND_ORIGIN` | `http://localhost:8000` | Backend origin for the frontend. |
+| `BACKEND_ORIGIN` | `http://localhost:8000` | Backend origin for the frontend (not consumed yet). |
 
-> **Caveat:** the backend builds its connection string as `...@db:${POSTGRES_PORT}/...`, but inside the Compose network Postgres listens on `5432`. Keep `POSTGRES_PORT=5432`; changing it breaks the backend's DB connection even though the host mapping changes.
+> **Caveat:** keep `POSTGRES_PORT=5432`. The Postgres container always listens on
+> `5432` internally, and the backend connects to `${POSTGRES_HOST}:${POSTGRES_PORT}`
+> from inside the Compose network — changing the port breaks that connection even
+> though the host mapping changes.
 
-> When `APP_ENV=dev`, the backend validates that `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`, `SECRET_KEY`, and `ADMIN_MINECRAFT_USERNAME` are set and refuses to start otherwise.
+## Architecture (backend)
 
-## Database & Migrations
+Feature-first, class-based, with explicit dependency injection. Details live in
+[apps/backend/CLAUDE.md](apps/backend/CLAUDE.md). In short:
 
-- Models live in `backend/app/models/`. The `Entity` base provides an `id` primary key and a timezone-aware `created_at`; all datetime columns are timezone-aware.
-- Alembic is configured for async autogenerate against `models.Base.metadata`.
-- Migrations run inside the backend container via Make targets:
-
-```bash
-make -C backend revision MESSAGE="describe change"   # autogenerate a revision
-make -C backend migrate                              # upgrade head
-make -C backend downgrade REV=-1                     # roll back one revision
-```
-
-New models must be imported in `backend/app/models/__init__.py` for autogenerate to detect them.
-
-## Backend Architecture
-
-The backend follows a layered structure with deliberate conventions:
-
-- **Models → Schemas → Services → Routes.**
-- **Services** are module-level functions (not classes). They mutate the session (`db.add`, attribute updates, queries) but **never commit or flush** — the transaction boundary is the route, which calls the helpers in `utils/transactions.py` (`commit_or_raise` / `flush_or_raise`). Those helpers translate database `IntegrityError`s into typed `ConflictError`s.
-- **Schemas** use camelCase on the wire and snake_case in Python (automatic aliasing). Input schemas reject unknown fields; responses are serialized via the schema's `to_response()`.
-- **Errors**: code raises domain exceptions from `app.errors`; exception handlers in `errors/handlers.py` map them (and validation/uncaught errors) to a consistent JSON shape `{ type, message, details? }`. These response shapes are also declared in the OpenAPI schema.
+- **Layering:** `routes → controller → service → repository → db`. Each feature owns
+  a folder under `src/features/` with those files plus `*.openapi.ts` and
+  `*.error-meta.ts`.
+- **Dependency injection:** `createApp(deps)` / `createRouter(deps)` receive the
+  external boundaries (`db`, Google verifier, Mojang / RCON / process clients) as
+  interfaces. `server.ts` wires the real ones; tests substitute fakes.
+- **Validation & wire format:** Zod schemas from `packages/shared` validate input via
+  `parseOrThrow` and shape responses. The wire is camelCase.
+- **Errors:** code throws `AppError(code)` / `ValidationError(issues)`; a single
+  error-handler middleware translates them to a stable JSON shape
+  `{ kind, code, message, issues? }`. Codes come from a shared catalog that maps each
+  code to a kind and an HTTP status.
+- **OpenAPI:** each feature registers its operations as an import side effect; the
+  document is served at `/openapi.json` with Swagger UI at `/docs`.
 
 ## Authentication
 
-The following auth building blocks are **implemented as services/helpers**, but are not yet exposed through any HTTP routes:
-
-- **Single admin.** A registering user is granted admin when their Minecraft username matches `ADMIN_MINECRAFT_USERNAME`.
-- **Passwords** are hashed with bcrypt (`app/auth/passwords.py`).
-- **Sessions** are cookie-based: a random token is set in an httponly `session_token` cookie, and only its SHA-256 hash is stored in the `sessions` table. Sessions expire after `SESSION_TTL_DAYS`.
-- **CSRF** uses the double-submit pattern: a non-httponly `csrf_token` cookie must match an `X-CSRF-Token` header on unsafe requests. `verify_csrf` is registered as a dependency on the `/api` router.
-- **Access keys / grants** (services in `app/services/access.py`): keys are stored as SHA-256 hashes; redeeming a key creates a grant bound to the caller's IP address (which the route is expected to pass in from the request).
+- **Google OAuth, invite-only.** The frontend obtains a Google credential; the
+  backend verifies it with `google-auth-library`. If no user exists for that Google
+  identity, one is created **only if** the email has a valid, unaccepted invitation
+  (`NOT_INVITED` otherwise).
+- **Sessions:** a random token is set in an httponly `session_token` cookie; only its
+  SHA-256 hash is stored in the `sessions` table. Expires after `SESSION_TTL_DAYS`.
+- **CSRF:** double-submit — a non-httponly `csrf_token` cookie must match the
+  `X-CSRF-Token` header on unsafe requests (`requireCsrf`).
+- **Authorization:** `requireAuth` loads the session's user; `requireAdmin` gates
+  admin-only routes (invitations, whitelist, server power).
 
 ## API
 
-There are currently **no API endpoints**. `app/api` only defines an `/api` router with the CSRF dependency attached; route modules have not been added yet.
+All routes are mounted under `/api`. Current surface:
+
+- `POST /api/auth/google`, `POST /api/auth/logout`
+- `GET /api/users/me`
+- `GET/POST /api/invitations`, `DELETE /api/invitations/:invitationId` (admin)
+- `GET /api/minecraft/profiles` (admin), `GET/PUT /api/minecraft/profiles/me`
+- `GET /api/minecraft/server/status|players` (admin),
+  `PUT/DELETE /api/minecraft/server/whitelist/:userId` (admin),
+  `POST /api/minecraft/server/start|stop|restart` (admin)
+
+Browse the live, generated spec at `/docs`.
 
 ## Testing
 
-`pytest` (backend) and `vitest` (frontend) are configured as dev dependencies, but **no tests exist yet**.
+Vitest, three layers (backend):
 
-```bash
-make -C backend test
-make -C frontend test
-```
+- **unit** — colocated `*.test.ts`; no database, external clients faked.
+- **integration** — colocated `*.integration.test.ts`; repositories against a real
+  per-worker Postgres test database.
+- **api** — `test/api/*.api.test.ts`; black-box `supertest` against the full Express
+  app with fakes at the external boundaries.
+
+Integration and API tests require the Compose `db` service reachable on
+`localhost:5432`.
 
 ## Deployment (Planned)
 
 > Not implemented. Only the local development stack above is runnable today.
 
-The intended target is a single self-hosted Linux machine running the Compose stack, with the **backend serving the built frontend SPA itself** (same-origin), removing the need for a separate web server and cross-origin cookie configuration. The Dockerfiles already define `prod` build targets (backend: uvicorn without reload; frontend: static build served by nginx), but `compose.yaml` currently builds only the `dev` targets, and same-origin SPA serving from the backend is not yet in place.
+The intended target is a single self-hosted Linux machine running the Compose stack,
+with the **backend serving the built SPA itself** (same-origin), removing the need for
+a separate web server and cross-origin cookie configuration. A separate **firewall /
+IP-access layer** in front of the Minecraft server is a planned future addition; today,
+access is controlled through the Minecraft whitelist over RCON.
 
 ## Current State
 
 Implemented:
-- Dev environment (Docker Compose: backend, frontend, Postgres) with live reload
-- SQLAlchemy models: `Admin`, `Session`, `AccessKey`, `AccessGrant`
-- Pydantic schemas and service functions for admins, auth, sessions, and access keys/grants
-- Centralized error handling with typed JSON responses and OpenAPI integration
-- Session + CSRF + password-hashing infrastructure
-- Async Alembic setup and Make-based tooling
+- pnpm monorepo + Docker Compose dev stack (db, backend, frontend, minecraft)
+- Backend features: auth (Google OAuth), users, sessions, invitations, Minecraft
+  profiles, Minecraft server control (whitelist/RCON + power via docker compose)
+- Layered feature architecture with DI, shared Zod schemas, and a shared error catalog
+- Centralized error handling + generated OpenAPI docs (Swagger UI)
+- Drizzle schema + migrations; three-layer Vitest suite
 
 Not yet implemented:
-- HTTP API routes (the `/api` router has no endpoints)
-- Frontend application (`src/App.vue` and `src/main.ts` are empty)
-- Database migration versions
-- Tests
+- The frontend application (`App.tsx` renders nothing; router/providers are stubs)
+- **Admin promotion** — `ADMIN_EMAIL` is read from env but nothing sets `is_admin`
 - Production deployment / serving the SPA from the backend
-- The firewall integration that consumes access grants
+- The firewall / IP-access layer in front of the Minecraft server
 
 ## License
 

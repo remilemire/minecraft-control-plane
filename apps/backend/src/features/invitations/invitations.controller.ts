@@ -1,20 +1,28 @@
 // apps/backend/src/features/invitations/invitations.controller.ts
 
 import { getAuthenticatedUser } from "@/features/auth/auth.helpers.js";
+import { parseOrThrow } from "@/validation/parse.js";
 import {
   createInvitationSchema,
+  invitationIdSchema,
   invitationResponseSchema,
-  type InvitationResponse,
-} from "@minecraft-server/shared/schemas";
-import type { Request } from "express";
-import { invitationIdSchema } from "./invitations.schemas.js";
+} from "@minecraft-server/shared/invitations";
+import type { Request, Response } from "express";
 import type { InvitationService } from "./invitations.service.js";
 
 export class InvitationController {
   public constructor(private readonly invitationService: InvitationService) {}
 
-  public async invite(req: Request): Promise<InvitationResponse> {
-    const input = createInvitationSchema.parse(req.body);
+  public list = async (_req: Request, res: Response): Promise<void> => {
+    const invitations = await this.invitationService.list();
+
+    res
+      .status(200)
+      .json(invitations.map((invitation) => invitationResponseSchema.parse(invitation)));
+  };
+
+  public invite = async (req: Request, res: Response): Promise<void> => {
+    const input = parseOrThrow(createInvitationSchema, req.body);
     const user = getAuthenticatedUser(req);
 
     const invitation = await this.invitationService.create({
@@ -22,13 +30,13 @@ export class InvitationController {
       invitedByUserId: user.id,
     });
 
-    return invitationResponseSchema.parse(invitation);
-  }
+    res.status(200).json(invitationResponseSchema.parse(invitation));
+  };
 
-  public async delete(req: Request): Promise<InvitationResponse> {
-    const invitationId = invitationIdSchema.parse(req.params);
+  public delete = async (req: Request, res: Response): Promise<void> => {
+    const invitationId = parseOrThrow(invitationIdSchema, req.params.invitationId);
     const invitation = await this.invitationService.delete(invitationId);
 
-    return invitationResponseSchema.parse(invitation);
-  }
+    res.status(200).json(invitationResponseSchema.parse(invitation));
+  };
 }

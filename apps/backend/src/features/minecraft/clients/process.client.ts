@@ -1,6 +1,7 @@
 // apps/backend/src/features/minecraft/clients/process.client.ts
 
-import type { MinecraftServerStatus } from "@/features/minecraft/server/minecraft-server.types.js";
+import type { ProcessApi } from "@/features/minecraft/minecraft.types.js";
+import type { MinecraftServerStatus } from "@minecraft-server/shared/minecraft";
 import { execFile } from "child_process";
 import { promisify } from "util";
 
@@ -13,7 +14,7 @@ export interface ProcessClientOptions {
   readonly serviceName: string;
 }
 
-export class ProcessClient {
+export class ProcessClient implements ProcessApi {
   private readonly composeFile: string;
   private readonly serviceName: string;
 

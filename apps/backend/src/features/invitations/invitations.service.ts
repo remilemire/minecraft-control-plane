@@ -2,13 +2,18 @@
 
 import { env } from "@/config/env.js";
 import type { Invitation } from "@/db/schema/invitations.js";
-import type { AcceptInvitationInput } from "@minecraft-server/shared/schemas";
-import { InvitationNotFoundError } from "./invitations.errors.js";
+import type { AcceptInvitationInput } from "@minecraft-server/shared/invitations";
 import type { InvitationRepository } from "./invitations.repository.js";
 import type { CreateInvitationData } from "./invitations.types.js";
+import { AppError } from "@/errors/app-error.js";
 
 export class InvitationService {
-  public constructor(readonly invitations: InvitationRepository) {}
+  public constructor(private readonly invitations: InvitationRepository) {}
+
+  public async list(): Promise<Invitation[]> {
+    const invitations = await this.invitations.findAll();
+    return invitations;
+  }
 
   public async create(input: CreateInvitationData): Promise<Invitation> {
     const expiresAt = new Date(Date.now() + env.INVITATION_TTL_MS);
@@ -31,7 +36,7 @@ export class InvitationService {
     });
 
     if (invitation === null) {
-      throw new InvitationNotFoundError();
+      throw new AppError("INVITATION_NOT_FOUND");
     }
 
     return invitation;
@@ -48,7 +53,7 @@ export class InvitationService {
     const invitation = await this.invitations.deleteById(id);
 
     if (invitation === null) {
-      throw new InvitationNotFoundError();
+      throw new AppError("INVITATION_NOT_FOUND");
     }
 
     return invitation;

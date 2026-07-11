@@ -1,7 +1,7 @@
 // apps/backend/src/features/invitations/invitations.routes.ts
 
 import { requireAdmin } from "@/features/auth/auth.middleware.js";
-import { requireCsrf } from "@/security/csrf.js";
+import { requireCsrf } from "@/http/csrf/csrf.middleware.js";
 import { Router, type RequestHandler } from "express";
 import type { InvitationController } from "./invitations.controller.js";
 
@@ -11,8 +11,15 @@ export function createInvitationRoutes(
 ): Router {
   const router = Router();
 
-  router.post("/invite", requireCsrf, requireAuth, requireAdmin, invitationController.invite);
-  router.post("/delete", requireCsrf, requireAuth, requireAdmin, invitationController.delete);
+  router.get("/", requireAuth, requireAdmin, invitationController.list);
+  router.post("/", requireAuth, requireCsrf, requireAdmin, invitationController.invite);
+  router.delete(
+    "/:invitationId",
+    requireAuth,
+    requireCsrf,
+    requireAdmin,
+    invitationController.delete,
+  );
 
   return router;
 }

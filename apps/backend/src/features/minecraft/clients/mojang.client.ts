@@ -1,7 +1,8 @@
 // apps/backend/src/features/minecraft/clients/mojang.client.ts
 
-import { MojangClientError } from "@/features/minecraft/minecraft.errors.js";
-import { minecraftUsernameSchema } from "@minecraft-server/shared/schemas";
+import { AppError } from "@/errors/app-error.js";
+import type { MojangApi, MojangProfile } from "@/features/minecraft/minecraft.types.js";
+import { minecraftUsernameSchema } from "@minecraft-server/shared/minecraft";
 import z from "zod";
 
 const MOJANG_API_BASE = "https://api.mojang.com";
@@ -11,12 +12,7 @@ const mojangAccountSchema = z.object({
   name: minecraftUsernameSchema,
 });
 
-export type MojangProfile = {
-  readonly uuid: string;
-  readonly username: string;
-};
-
-export class MojangClient {
+export class MojangClient implements MojangApi {
   public constructor() {}
 
   public async findByUsername(username: string): Promise<MojangProfile | null> {
@@ -28,14 +24,17 @@ export class MojangClient {
       return null;
     }
     if (!response.ok) {
-      throw new MojangClientError(`Mojang returned status ${response.status}.`);
+      throw new AppError("MOJANG_CLIENT_ERROR", {
+        message: `Mojang returned status ${response.status}.`,
+      });
     }
 
     const data = await response.json();
     const result = mojangAccountSchema.safeParse(data);
 
     if (!result.success) {
-      throw new MojangClientError("Mojang returned an unexpected response.", {
+      throw new AppError("MOJANG_CLIENT_ERROR", {
+        message: "Mojang returned an unexpected response.",
         cause: result.error,
       });
     }

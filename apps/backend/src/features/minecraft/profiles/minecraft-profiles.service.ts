@@ -1,59 +1,47 @@
 // apps/backend/src/features/minecraft/profiles/minecraft-profiles.service.ts
 
 import type { MinecraftProfile } from "@/db/schema/minecraft-profile.js";
-import type { MojangClient, MojangProfile } from "@/features/minecraft/clients/mojang.client.js";
-import {
-  MinecraftProfileNotFoundError,
-  MojangProfileNotFoundError,
-} from "@/features/minecraft/minecraft.errors.js";
-import type { UpdateMinecraftProfileInput } from "@minecraft-server/shared/schemas";
+import type { MojangApi, MojangProfile } from "@/features/minecraft/minecraft.types.js";
+import { AppError } from "@/errors/app-error.js";
+import type { UpdateMinecraftProfileInput } from "@minecraft-server/shared/minecraft";
 import { MinecraftProfileRepository } from "./minecraft-profiles.repository.js";
-import type { CreateMinecraftProfileData } from "./minecraft-profiles.types.js";
 
 export class MinecraftProfileService {
   public constructor(
     private readonly minecraftProfiles: MinecraftProfileRepository,
-    private readonly mojangClient: MojangClient,
+    private readonly mojangClient: MojangApi,
   ) {}
+
+  public async list(): Promise<MinecraftProfile[]> {
+    return this.minecraftProfiles.findAll();
+  }
 
   public async getByUserId(userId: string): Promise<MinecraftProfile> {
     const minecraftProfile = await this.minecraftProfiles.findByUserId(userId);
 
     if (minecraftProfile === null) {
-      throw new MinecraftProfileNotFoundError();
+      throw new AppError("MINECRAFT_PROFILE_NOT_FOUND");
     }
 
     return minecraftProfile;
   }
 
-  public async create({
-    username,
-    ...rest
-  }: CreateMinecraftProfileData): Promise<MinecraftProfile> {
-    const mojangProfile = await this.getMojangProfile(username);
-    const minecraftProfile = await this.minecraftProfiles.create({ ...mojangProfile, ...rest });
-    return minecraftProfile;
-  }
-
-  public async changeUsernameByUserId(
+  // PUT semantics: creates the profile if the user has none, otherwise
+  // replaces it. Resolving the username against Mojang first ensures we only
+  // ever store a real account's uuid.
+  public async setByUserId(
     userId: string,
     { username }: UpdateMinecraftProfileInput,
   ): Promise<MinecraftProfile> {
     const mojangProfile = await this.getMojangProfile(username);
-    const minecraftProfile = await this.minecraftProfiles.updateByUserId(userId, mojangProfile);
-
-    if (minecraftProfile === null) {
-      throw new MinecraftProfileNotFoundError();
-    }
-
-    return minecraftProfile;
+    return this.minecraftProfiles.upsertByUserId(userId, mojangProfile);
   }
 
   public async deleteByUserId(userId: string): Promise<MinecraftProfile> {
     const minecraftProfile = await this.minecraftProfiles.deleteByUserId(userId);
 
     if (minecraftProfile === null) {
-      throw new MinecraftProfileNotFoundError();
+      throw new AppError("MINECRAFT_PROFILE_NOT_FOUND");
     }
 
     return minecraftProfile;
@@ -63,7 +51,7 @@ export class MinecraftProfileService {
     const profile = await this.mojangClient.findByUsername(username);
 
     if (profile === null) {
-      throw new MojangProfileNotFoundError();
+      throw new AppError("MOJANG_PROFILE_NOT_FOUND");
     }
 
     return profile;

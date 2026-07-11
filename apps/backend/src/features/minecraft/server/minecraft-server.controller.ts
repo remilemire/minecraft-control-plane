@@ -1,46 +1,56 @@
 // apps/backend/src/features/minecraft/server/minecraft-server.controller.ts
 
-import { minecraftUsernameSchema } from "@minecraft-server/shared/schemas";
-import type { Request } from "express";
+import { parseOrThrow } from "@/validation/parse.js";
+import { userIdSchema } from "@minecraft-server/shared/users";
+import type { Request, Response } from "express";
 import type { MinecraftServerService } from "./minecraft-server.service.js";
-import type { MinecraftServerStatus } from "./minecraft-server.types.js";
 
 export class MinecraftServerController {
   public constructor(private readonly minecraftServerService: MinecraftServerService) {}
 
-  public async listPlayers(): Promise<string> {
-    return this.minecraftServerService.listPlayers();
-  }
+  public listPlayers = async (_req: Request, res: Response): Promise<void> => {
+    const players = await this.minecraftServerService.listPlayers();
 
-  public async addToWhitelist(req: Request): Promise<void> {
-    const username = minecraftUsernameSchema.parse(req.params);
+    res.status(200).json(players);
+  };
 
-    await this.minecraftServerService.addToWhitelist(username);
-  }
+  public addToWhitelist = async (req: Request, res: Response): Promise<void> => {
+    const userId = parseOrThrow(userIdSchema, req.params.userId);
 
-  public async removeFromWhitelist(req: Request): Promise<void> {
-    const username = minecraftUsernameSchema.parse(req.params);
+    await this.minecraftServerService.addToWhitelist(userId);
 
-    await this.minecraftServerService.removeFromWhitelist(username);
-  }
+    res.status(204).send();
+  };
 
-  public async saveWorld(): Promise<void> {
-    await this.minecraftServerService.saveWorld();
-  }
+  public removeFromWhitelist = async (req: Request, res: Response): Promise<void> => {
+    const userId = parseOrThrow(userIdSchema, req.params.userId);
 
-  public async startServer(): Promise<void> {
+    await this.minecraftServerService.removeFromWhitelist(userId);
+
+    res.status(204).send();
+  };
+
+  public startServer = async (_req: Request, res: Response): Promise<void> => {
     await this.minecraftServerService.start();
-  }
 
-  public async stopServer(): Promise<void> {
+    res.status(204).send();
+  };
+
+  public stopServer = async (_req: Request, res: Response): Promise<void> => {
     await this.minecraftServerService.stop();
-  }
 
-  public async restartServer(): Promise<void> {
+    res.status(204).send();
+  };
+
+  public restartServer = async (_req: Request, res: Response): Promise<void> => {
     await this.minecraftServerService.restart();
-  }
 
-  public async getServerStatus(): Promise<MinecraftServerStatus> {
-    return await this.minecraftServerService.getStatus();
-  }
+    res.status(204).send();
+  };
+
+  public getServerStatus = async (_req: Request, res: Response): Promise<void> => {
+    const status = await this.minecraftServerService.getStatus();
+
+    res.status(200).json(status);
+  };
 }

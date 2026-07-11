@@ -1,11 +1,11 @@
 // apps/backend/src/features/auth/auth.middleware.ts
-import { ForbiddenError, UnauthorizedError } from "@/errors/index.js";
-import { getSessionCookie } from "@/features/sessions/sessions.cookies.js";
+import { AppError } from "@/errors/app-error.js";
+import { getSessionCookie } from "@/http/session/session.cookies.js";
 export function createRequireAuth(authService) {
     return async function (req, _res, next) {
         const sessionToken = getSessionCookie(req);
         if (sessionToken === undefined) {
-            throw new UnauthorizedError("Invalid session.");
+            throw new AppError("UNAUTHENTICATED");
         }
         const { user, session } = await authService.authenticateFromSession(sessionToken);
         req.session = session;
@@ -15,7 +15,7 @@ export function createRequireAuth(authService) {
 }
 export function requireAdmin(req, _res, next) {
     if (!req.user?.isAdmin) {
-        throw new ForbiddenError();
+        throw new AppError("ADMIN_REQUIRED");
     }
     next();
 }

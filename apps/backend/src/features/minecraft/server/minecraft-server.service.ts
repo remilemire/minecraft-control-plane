@@ -1,24 +1,29 @@
 // apps/backend/src/features/minecraft/server/minecraft-server.service.ts
 
-import type { ProcessClient } from "@/features/minecraft/clients/process.client.js";
-import type { RconClient } from "@/features/minecraft/clients/rcon.client.js";
-import type { MinecraftServerStatus } from "@/features/minecraft/server/minecraft-server.types.js";
+import type { ProcessApi, RconApi } from "@/features/minecraft/minecraft.types.js";
+import type { MinecraftServerStatus } from "@minecraft-server/shared/minecraft";
+import type { MinecraftProfileService } from "../profiles/minecraft-profiles.service.js";
 
 export class MinecraftServerService {
   public constructor(
-    private readonly rconClient: RconClient,
-    private readonly processClient: ProcessClient,
+    private readonly minecraftProfileService: MinecraftProfileService,
+    private readonly rconClient: RconApi,
+    private readonly processClient: ProcessApi,
   ) {}
 
   public async listPlayers(): Promise<string> {
     return this.rconClient.execute("list");
   }
 
-  public async addToWhitelist(username: string): Promise<void> {
+  public async addToWhitelist(userId: string): Promise<void> {
+    const { username } = await this.minecraftProfileService.getByUserId(userId);
+
     await this.rconClient.execute(`whitelist add ${username}`);
   }
 
-  public async removeFromWhitelist(username: string): Promise<void> {
+  public async removeFromWhitelist(userId: string): Promise<void> {
+    const { username } = await this.minecraftProfileService.getByUserId(userId);
+
     await this.rconClient.execute(`whitelist remove ${username}`);
   }
 

@@ -1,31 +1,30 @@
 // apps/backend/src/features/auth/auth.service.ts
 
-import { env } from "@/config/env.js";
 import type { User } from "@/db/schema/index.js";
+import { AppError } from "@/errors/app-error.js";
 import type { InvitationService } from "@/features/invitations/invitations.service.js";
 import type { SessionService } from "@/features/sessions/sessions.service.js";
 import type { UserService } from "@/features/users/users.service.js";
-import type { OAuth2Client } from "google-auth-library";
-import {
-  InvalidGoogleCredentialError,
-  InvalidSessionError,
-  NotInvitedError,
-} from "./auth.errors.js";
-import type { AuthContext, GoogleIdentity, UserWithSessionToken } from "./auth.types.js";
+import type {
+  AuthContext,
+  GoogleIdentity,
+  GoogleOauthApi,
+  UserWithSessionToken,
+} from "./auth.types.js";
 
 export class AuthService {
   public constructor(
     private readonly userService: UserService,
     private readonly sessionService: SessionService,
     private readonly invitationService: InvitationService,
-    private readonly googleOauthClient: OAuth2Client,
+    private readonly googleOauthClient: GoogleOauthApi,
   ) {}
 
   public async authenticateFromGoogle(googleToken: string): Promise<UserWithSessionToken> {
-    const profile = await this.verifyGoogleToken(googleToken);
+    const profile = await this.googleOauthClient.verifyCredential(googleToken);
 
     const user =
-      (await this.userService.findByGoogleId(profile.email)) ??
+      (await this.userService.findByGoogleId(profile.googleId)) ??
       (await this.registerInvited(profile));
 
     const { sessionToken } = await this.sessionService.create({
@@ -39,7 +38,7 @@ export class AuthService {
     const result = await this.sessionService.findValidWithUser(sessionToken);
 
     if (result === null) {
-      throw new InvalidSessionError();
+      throw new AppError("INVALID_SESSION");
     }
 
     const { user, session } = result;
@@ -51,34 +50,12 @@ export class AuthService {
   }
 
   private async registerInvited({ email, ...rest }: GoogleIdentity): Promise<User> {
-    if (!this.invitationService.isInvited(email)) {
-      throw new NotInvitedError();
+    if (!(await this.invitationService.isInvited(email))) {
+      throw new AppError("NOT_INVITED");
     }
     return await this.userService.create({
       email,
       ...rest,
     });
-  }
-
-  private async verifyGoogleToken(googleToken: string): Promise<GoogleIdentity> {
-    const ticket = await this.googleOauthClient.verifyIdToken({
-      idToken: googleToken,
-      audience: env.GOOGLE_CLIENT_ID,
-    });
-    const payload = ticket.getPayload();
-
-    if (payload === undefined) {
-      throw new InvalidGoogleCredentialError();
-    }
-    if (payload.email === undefined || !payload.email_verified) {
-      throw new InvalidGoogleCredentialError("Google did not provide a verified identity.");
-    }
-
-    return {
-      email: payload.email,
-      googleId: payload.sub,
-      ...(payload.given_name !== undefined ? { firstName: payload.given_name } : {}),
-      ...(payload.family_name !== undefined ? { lastName: payload.family_name } : {}),
-    };
   }
 }

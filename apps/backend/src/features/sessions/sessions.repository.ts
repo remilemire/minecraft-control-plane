@@ -1,8 +1,9 @@
 // apps/backend/src/features/sessions/sessions.repository.ts
 
 import type { Db } from "@/db/client.js";
-import { DbError, withDbErrors } from "@/db/errors.js";
+import { withDbErrors } from "@/db/errors.js";
 import { sessions, users, type NewSession, type Session } from "@/db/schema/index.js";
+import { AppError } from "@/errors/app-error.js";
 import { eq } from "drizzle-orm";
 import type { SessionWithUser } from "./sessions.types.js";
 
@@ -25,7 +26,7 @@ export class SessionRepository {
     const [session] = await withDbErrors(() => this.db.insert(sessions).values(input).returning());
 
     if (session === undefined) {
-      throw new DbError("Failed to create session.");
+      throw new AppError("INTERNAL", { message: "Failed to create session." });
     }
 
     return session;
