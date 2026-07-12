@@ -1,8 +1,31 @@
 // apps/backend/src/features/minecraft/server/minecraft-server.service.ts
 
 import type { ProcessApi, RconApi } from "@/features/minecraft/minecraft.types.js";
-import type { MinecraftServerStatus } from "@minecraft-server/shared/minecraft";
+import type {
+  MinecraftServerPlayersResponse,
+  MinecraftServerStatus,
+} from "@minecraft-server/shared/minecraft";
 import type { MinecraftProfileService } from "../profiles/minecraft-profiles.service.js";
+
+// Vanilla's `list` command replies with a fixed sentence (itzg/minecraft-server
+// runs vanilla, not Paper/Spigot, which word it differently), e.g.:
+// "There are 2 of a max of 20 players online: Steve, Alex"
+const LIST_OUTPUT_PATTERN =
+  /^There are (?<online>\d+) of a max of (?<maximum>\d+) players online:\s*(?<names>.*)$/;
+
+function parseListOutput(output: string): MinecraftServerPlayersResponse {
+  const groups = LIST_OUTPUT_PATTERN.exec(output)?.groups;
+  if (groups === undefined) {
+    throw new Error(`Unexpected RCON \`list\` output: ${output}`);
+  }
+
+  const { online, maximum, names } = groups as Record<"online" | "maximum" | "names", string>;
+  return {
+    online: Number(online),
+    maximum: Number(maximum),
+    players: names === "" ? [] : names.split(",").map((name) => name.trim()),
+  };
+}
 
 export class MinecraftServerService {
   public constructor(
@@ -11,8 +34,9 @@ export class MinecraftServerService {
     private readonly processClient: ProcessApi,
   ) {}
 
-  public async listPlayers(): Promise<string> {
-    return this.rconClient.execute("list");
+  public async listPlayers(): Promise<MinecraftServerPlayersResponse> {
+    const output = await this.rconClient.execute("list");
+    return parseListOutput(output);
   }
 
   public async addToWhitelist(userId: string): Promise<void> {

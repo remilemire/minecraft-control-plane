@@ -1,5 +1,5 @@
 // apps/backend/src/features/users/user.controller.ts
-import { UnauthorizedError } from "@/errors/http-errors.js";
+import { UnauthorizedError } from "../../errors/http-errors.js";
 export class UserController {
   userService;
   constructor(userService) {

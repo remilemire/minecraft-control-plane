@@ -1,6 +1,6 @@
 // apps/backend/src/features/sessions/session.cookies.ts
-import { env } from "@/config/env.js";
-import { clearCookie, getCookie, setCookie } from "@/lib/cookies.js";
+import { env } from "../../config/env.js";
+import { clearCookie, getCookie, setCookie } from "../../lib/cookies.js";
 export const SESSION_COOKIE = "session_token";
 const sessionCookieOptions = {
   maxAge: env.SESSION_TTL_MS,

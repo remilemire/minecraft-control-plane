@@ -24,11 +24,6 @@ const notInvitedErrorSchema = openApiRegistry.register(
   createErrorResponseSchema("FORBIDDEN", ["NOT_INVITED"]),
 );
 
-const sessionNotFoundErrorSchema = openApiRegistry.register(
-  "SessionNotFoundError",
-  createErrorResponseSchema("NOT_FOUND", ["SESSION_NOT_FOUND"]),
-);
-
 openApiRegistry.registerPath({
   method: "post",
   path: "/auth/google",
@@ -69,6 +64,5 @@ openApiRegistry.registerPath({
     204: emptyResponse("Logged out; session and CSRF cookies cleared."),
     401: unauthenticatedResponse,
     403: csrfErrorResponse,
-    404: jsonResponse("The session no longer exists.", sessionNotFoundErrorSchema),
   },
 });

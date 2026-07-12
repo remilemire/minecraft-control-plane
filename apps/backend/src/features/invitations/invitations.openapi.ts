@@ -14,6 +14,7 @@ import {
   unauthenticatedResponse,
   validationErrorResponse,
 } from "@/openapi/openapi.schemas.js";
+import { emailSchema } from "@minecraft-server/shared/common";
 import { createInvitationSchema, invitationIdSchema } from "@minecraft-server/shared/invitations";
 import { z } from "zod";
 
@@ -21,6 +22,14 @@ const invitationNotFoundErrorSchema = openApiRegistry.register(
   "InvitationNotFoundError",
   createErrorResponseSchema("NOT_FOUND", ["INVITATION_NOT_FOUND"]),
 );
+
+// zod-to-openapi renders a `.pipe()`'s *input* schema for request bodies (here,
+// `emailSchema`'s pre-normalization plain string), dropping the `email` format
+// from the output side. `.openapi()` returns a new schema rather than mutating
+// in place, so override just the field for documentation purposes.
+const openApiCreateInvitationSchema = createInvitationSchema.extend({
+  email: emailSchema.openapi({ format: "email" }),
+});
 
 openApiRegistry.registerPath({
   method: "get",
@@ -50,12 +59,12 @@ openApiRegistry.registerPath({
   request: {
     body: {
       required: true,
-      content: { "application/json": { schema: createInvitationSchema } },
+      content: { "application/json": { schema: openApiCreateInvitationSchema } },
     },
   },
   responses: {
     ...baseErrorResponses,
-    200: jsonResponse("The created invitation.", openApiInvitationSchema),
+    201: jsonResponse("The created invitation.", openApiInvitationSchema),
     401: unauthenticatedResponse,
     403: adminOrCsrfResponse,
     409: conflictErrorResponse,

@@ -1,5 +1,5 @@
 // apps/backend/src/lib/cookies.ts
-import { cookieConfig } from "@/config/cookies.js";
+import { cookieConfig } from "../config/cookies.js";
 export function getCookie(req, name) {
   return req.cookies[name];
 }

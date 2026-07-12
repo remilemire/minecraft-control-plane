@@ -1,5 +1,5 @@
 // apps/backend/src/features/sessions/session.repository.ts
-import { sessions, users } from "@/db/schema/index.js";
+import { sessions, users } from "../../db/schema/index.js";
 import { eq } from "drizzle-orm";
 export class SessionRepository {
   db;

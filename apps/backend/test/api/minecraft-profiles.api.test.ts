@@ -173,7 +173,7 @@ describe("PUT /api/minecraft/profiles/me", () => {
       .send({ username: "Steve" });
 
     expect(response.status).toBe(409);
-    expect(response.body).toMatchObject({ kind: "CONFLICT", code: "UNIQUE_VIOLATION" });
+    expect(response.body).toMatchObject({ kind: "CONFLICT", code: "MINECRAFT_USERNAME_TAKEN" });
   });
 
   it("rejects mutations without the CSRF pair", async () => {

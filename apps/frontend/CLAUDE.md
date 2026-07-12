@@ -16,6 +16,6 @@ When building it out, two durable contracts with the backend:
   than redefining request/response shapes.
 - **Auth:** sign-in posts a Google credential to `POST /api/auth/google`. The backend
   uses a cookie session + CSRF double-submit, so requests need credentials (cookies),
-  and mutations must copy the `csrf_token` cookie into an `X-CSRF-Token` header.
+  and mutations must copy the `csrf_token` cookie into an `x-csrf-token` header.
 
 Update this file as real structure and conventions land.

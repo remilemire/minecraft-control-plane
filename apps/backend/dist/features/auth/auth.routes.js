@@ -1,5 +1,5 @@
 // apps/backend/src/features/auth/auth.routes.ts
-import { requireCsrf } from "@/http/csrf/csrf.middleware.js";
+import { requireCsrf } from "../../http/csrf/csrf.middleware.js";
 import { Router } from "express";
 export function createAuthRoutes(authController, requireAuth) {
     const router = Router();

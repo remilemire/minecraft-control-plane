@@ -72,10 +72,9 @@ describe("OpenAPI document", () => {
 
   it("derives the MinecraftServerStatus enum from the shared schema", () => {
     const status = document.components?.schemas?.["MinecraftServerStatus"] as {
-      type?: string;
-      enum?: string[];
+      properties?: { status?: { enum?: string[] } };
     };
-    expect(status.enum).toEqual(["RUNNING", "STOPPED"]);
+    expect(status.properties?.status?.enum).toEqual(["RUNNING", "STOPPED"]);
   });
 
   it("registers the cookie security schemes with the real names", () => {
@@ -97,7 +96,7 @@ describe("OpenAPI document", () => {
     expect(schemes["csrfHeader"]).toMatchObject({
       type: "apiKey",
       in: "header",
-      name: "x-csrf-Token",
+      name: "x-csrf-token",
     });
   });
 
@@ -162,10 +161,16 @@ describe("OpenAPI document", () => {
     ]);
     // Kind-wide components pick up every catalog code of their kind.
     expect(schemas["ConflictError"]?.properties?.code?.enum).toEqual(
-      expect.arrayContaining(["UNIQUE_VIOLATION", "FOREIGN_KEY_VIOLATION", "INTEGRITY_VIOLATION"]),
+      expect.arrayContaining([
+        "GOOGLE_ID_TAKEN",
+        "EMAIL_TAKEN",
+        "INVITATION_ALREADY_EXISTS",
+        "MINECRAFT_USERNAME_TAKEN",
+        "MINECRAFT_ACCOUNT_TAKEN",
+      ]),
     );
     expect(schemas["ValidationError"]?.properties?.code?.enum).toEqual(
-      expect.arrayContaining(["VALIDATION_FAILED", "NOT_NULL_VIOLATION", "CHECK_VIOLATION"]),
+      expect.arrayContaining(["VALIDATION_FAILED"]),
     );
   });
 });

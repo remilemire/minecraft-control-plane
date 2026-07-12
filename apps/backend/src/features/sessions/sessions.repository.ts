@@ -26,7 +26,7 @@ export class SessionRepository {
     const [session] = await withDbErrors(() => this.db.insert(sessions).values(input).returning());
 
     if (session === undefined) {
-      throw new AppError("INTERNAL", { message: "Failed to create session." });
+      throw new AppError("SERVICE_UNAVAILABLE", { message: "Failed to create session." });
     }
 
     return session;

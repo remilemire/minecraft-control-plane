@@ -63,7 +63,7 @@ describe("POST /api/invitations", () => {
       .set(csrf.headerName, csrf.headerValue)
       .send({ email: "newplayer@example.com" });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     expect(response.body).toMatchObject({ email: "newplayer@example.com", acceptedAt: null });
     expect(response.body.id).toBeDefined();
     expect(response.body.expiresAt).toBeDefined();

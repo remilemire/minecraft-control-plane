@@ -5,15 +5,19 @@ import z from "zod";
 
 export const invitationIdSchema = z.uuid();
 
-export const createInvitationSchema = z.object({
-  email: emailSchema,
-});
+export const createInvitationSchema = z
+  .object({
+    email: emailSchema,
+  })
+  .strict();
 
 export type CreateInvitationInput = z.infer<typeof createInvitationSchema>;
 
-export const acceptInvitationSchema = z.object({
-  acceptedByUserId: z.uuid(),
-});
+export const acceptInvitationSchema = z
+  .object({
+    acceptedByUserId: z.uuid(),
+  })
+  .strict();
 
 export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>;
 

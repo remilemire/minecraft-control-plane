@@ -1,6 +1,6 @@
 // apps/backend/src/security/csrf.cookies.ts
-import { env } from "@/config/env.js";
-import { clearCookie, getCookie, setCookie } from "@/security/cookies.js";
+import { env } from "../config/env.js";
+import { clearCookie, getCookie, setCookie } from "../security/cookies.js";
 export const CSRF_COOKIE = "csrf_token";
 export const CSRF_HEADER = "x-csrf-Token";
 export function getCsrfCookie(req) {

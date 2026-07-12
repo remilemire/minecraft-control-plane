@@ -1,5 +1,5 @@
 // apps/backend/src/features/users/user.repository.ts
-import { users } from "@/db/schema/users.js";
+import { users } from "../../db/schema/users.js";
 import { eq } from "drizzle-orm";
 export class UserRepository {
   db;

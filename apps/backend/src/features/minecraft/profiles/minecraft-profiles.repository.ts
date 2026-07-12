@@ -1,6 +1,7 @@
 // apps/backend/src/features/minecraft/profiles/minecraft-profiles.repository.ts
 
 import type { Db } from "@/db/client.js";
+import { MINECRAFT_PROFILES_CONSTRAINTS } from "@/db/constraints.js";
 import { withDbErrors } from "@/db/errors.js";
 import {
   minecraftProfiles,
@@ -32,16 +33,21 @@ export class MinecraftProfileRepository {
     userId: string,
     input: Pick<NewMinecraftProfile, "username" | "uuid">,
   ): Promise<MinecraftProfile> {
-    const [minecraftProfile] = await withDbErrors(() =>
-      this.db
-        .insert(minecraftProfiles)
-        .values({ userId, ...input })
-        .onConflictDoUpdate({ target: minecraftProfiles.userId, set: input })
-        .returning(),
+    const [minecraftProfile] = await withDbErrors(
+      () =>
+        this.db
+          .insert(minecraftProfiles)
+          .values({ userId, ...input })
+          .onConflictDoUpdate({ target: minecraftProfiles.userId, set: input })
+          .returning(),
+      {
+        [MINECRAFT_PROFILES_CONSTRAINTS.USERNAME_UNIQUE]: "MINECRAFT_USERNAME_TAKEN",
+        [MINECRAFT_PROFILES_CONSTRAINTS.UUID_UNIQUE]: "MINECRAFT_ACCOUNT_TAKEN",
+      },
     );
 
     if (minecraftProfile === undefined) {
-      throw new AppError("INTERNAL", { message: "Failed to upsert Minecraft profile." });
+      throw new AppError("SERVICE_UNAVAILABLE", { message: "Failed to upsert Minecraft profile." });
     }
 
     return minecraftProfile;

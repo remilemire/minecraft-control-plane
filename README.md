@@ -228,7 +228,7 @@ Feature-first, class-based, with explicit dependency injection. Details live in
 - **Sessions:** a random token is set in an httponly `session_token` cookie; only its
   SHA-256 hash is stored in the `sessions` table. Expires after `SESSION_TTL_DAYS`.
 - **CSRF:** double-submit — a non-httponly `csrf_token` cookie must match the
-  `X-CSRF-Token` header on unsafe requests (`requireCsrf`).
+  `x-csrf-token` header on unsafe requests (`requireCsrf`).
 - **Authorization:** `requireAuth` loads the session's user; `requireAdmin` gates
   admin-only routes (invitations, whitelist, server power).
 

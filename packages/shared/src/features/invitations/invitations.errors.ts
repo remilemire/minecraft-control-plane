@@ -4,6 +4,7 @@ import type { ErrorCatalog } from "../../common/errors.js";
 
 export const invitationErrorCatalog = {
   INVITATION_NOT_FOUND: { kind: "NOT_FOUND" },
+  INVITATION_ALREADY_EXISTS: { kind: "CONFLICT" },
 } as const satisfies ErrorCatalog;
 
 export type InvitationErrorCode = keyof typeof invitationErrorCatalog;

@@ -1,5 +1,5 @@
 // apps/backend/src/features/auth/auth.service.ts
-import { AppError } from "@/errors/app-error.js";
+import { AppError } from "../../errors/app-error.js";
 export class AuthService {
     userService;
     sessionService;

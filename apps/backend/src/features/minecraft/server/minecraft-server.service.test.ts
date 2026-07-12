@@ -108,7 +108,23 @@ describe("MinecraftServerService", () => {
       new FakeProcessClient(),
     );
 
-    expect(await service.listPlayers()).toBe("There are 0 of a max of 20 players online:");
+    expect(await service.listPlayers()).toEqual({ online: 0, maximum: 20, players: [] });
     expect(rcon.executed).toEqual(["list"]);
+  });
+
+  it("parses the player names from a non-empty rcon list response", async () => {
+    const rcon = new FakeRconClient();
+    rcon.respondTo("list", "There are 2 of a max of 20 players online: Steve, Alex");
+    const service = new MinecraftServerService(
+      profileServiceStub({}),
+      rcon,
+      new FakeProcessClient(),
+    );
+
+    expect(await service.listPlayers()).toEqual({
+      online: 2,
+      maximum: 20,
+      players: ["Steve", "Alex"],
+    });
   });
 });

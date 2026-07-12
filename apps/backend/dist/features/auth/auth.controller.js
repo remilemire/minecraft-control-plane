@@ -1,8 +1,8 @@
 // apps/backend/src/features/auth/auth.controller.ts
-import { clearCsrfCookie, setCsrfCookie } from "@/http/csrf/csrf.cookies.js";
-import { clearSessionCookie, getSessionCookie, setSessionCookie, } from "@/http/session/session.cookies.js";
-import { generateRandomSecret } from "@/lib/tokens.js";
-import { parseOrThrow } from "@/validation/parse.js";
+import { clearCsrfCookie, setCsrfCookie } from "../../http/csrf/csrf.cookies.js";
+import { clearSessionCookie, getSessionCookie, setSessionCookie, } from "../../http/session/session.cookies.js";
+import { generateRandomSecret } from "../../lib/tokens.js";
+import { parseOrThrow } from "../../validation/parse.js";
 import { googleLoginSchema } from "@minecraft-server/shared/auth";
 import { userResponseSchema } from "@minecraft-server/shared/users";
 export class AuthController {

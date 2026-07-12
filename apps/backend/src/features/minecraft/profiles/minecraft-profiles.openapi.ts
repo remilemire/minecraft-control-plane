@@ -95,6 +95,6 @@ openApiRegistry.registerPath({
     ),
     409: conflictErrorResponse,
     422: validationErrorResponse,
-    502: mojangUnavailableResponse,
+    503: mojangUnavailableResponse,
   },
 });

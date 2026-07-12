@@ -37,22 +37,22 @@ describe("MinecraftProfileRepository", () => {
       expect(updated.uuid).toBe(newUuid);
     });
 
-    it("maps a username taken by another user to UNIQUE_VIOLATION", async () => {
+    it("maps a username taken by another user to MINECRAFT_USERNAME_TAKEN", async () => {
       await createMinecraftProfile({ username: "Steve" });
       const other = await createUser();
 
       await expect(
         repository.upsertByUserId(other.id, { username: "Steve", uuid: randomUUID() }),
-      ).rejects.toMatchObject({ code: "UNIQUE_VIOLATION" });
+      ).rejects.toMatchObject({ code: "MINECRAFT_USERNAME_TAKEN" });
     });
 
-    it("maps a uuid taken by another user to UNIQUE_VIOLATION", async () => {
+    it("maps a uuid taken by another user to MINECRAFT_ACCOUNT_TAKEN", async () => {
       const existing = await createMinecraftProfile({ username: "Steve" });
       const other = await createUser();
 
       await expect(
         repository.upsertByUserId(other.id, { username: "Alex", uuid: existing.uuid }),
-      ).rejects.toMatchObject({ code: "UNIQUE_VIOLATION" });
+      ).rejects.toMatchObject({ code: "MINECRAFT_ACCOUNT_TAKEN" });
     });
   });
 

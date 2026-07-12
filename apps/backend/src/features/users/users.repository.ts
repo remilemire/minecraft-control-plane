@@ -1,6 +1,7 @@
 // apps/backend/src/features/users/users.repository.ts
 
 import { type Db } from "@/db/client.js";
+import { USERS_CONSTRAINTS } from "@/db/constraints.js";
 import { withDbErrors } from "@/db/errors.js";
 import { users, type NewUser, type User } from "@/db/schema/index.js";
 import { AppError } from "@/errors/app-error.js";
@@ -24,10 +25,13 @@ export class UserRepository {
   }
 
   public async create(input: NewUser): Promise<User> {
-    const [user] = await withDbErrors(() => this.db.insert(users).values(input).returning());
+    const [user] = await withDbErrors(() => this.db.insert(users).values(input).returning(), {
+      [USERS_CONSTRAINTS.GOOGLE_ID_UNIQUE]: "GOOGLE_ID_TAKEN",
+      [USERS_CONSTRAINTS.EMAIL_UNIQUE]: "EMAIL_TAKEN",
+    });
 
     if (user === undefined) {
-      throw new AppError("INTERNAL", { message: "Failed to create user." });
+      throw new AppError("SERVICE_UNAVAILABLE", { message: "Failed to create user." });
     }
 
     return user;

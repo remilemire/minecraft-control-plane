@@ -25,7 +25,7 @@ describe("GET /api/minecraft/server/status", () => {
       .set("Cookie", [admin.cookie]);
 
     expect(response.status).toBe(200);
-    expect(response.body).toBe("STOPPED");
+    expect(response.body).toEqual({ status: "STOPPED" });
   });
 
   it("requires an admin session", async () => {
@@ -52,7 +52,7 @@ describe("GET /api/minecraft/server/players", () => {
       .set("Cookie", [admin.cookie]);
 
     expect(response.status).toBe(200);
-    expect(response.body).toBe("There are 2 of a max of 20 players online: Steve, Alex");
+    expect(response.body).toEqual({ online: 2, maximum: 20, players: ["Steve", "Alex"] });
     expect(rconClient.executed).toEqual(["list"]);
   });
 });

@@ -1,6 +1,6 @@
 // apps/backend/src/features/users/user.service.ts
-import { isUniqueViolation } from "@/db/errors.js";
-import { ConflictError, NotFoundError } from "@/errors/http-errors.js";
+import { isUniqueViolation } from "../../db/errors.js";
+import { ConflictError, NotFoundError } from "../../errors/http-errors.js";
 export class UserService {
   users;
   constructor(users) {

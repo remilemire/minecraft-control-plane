@@ -1,6 +1,7 @@
 // apps/backend/src/features/invitations/invitations.repository.ts
 
 import { type Db } from "@/db/client.js";
+import { INVITATIONS_CONSTRAINTS } from "@/db/constraints.js";
 import { withDbErrors } from "@/db/errors.js";
 import { invitations, type Invitation, type NewInvitation } from "@/db/schema/index.js";
 import { AppError } from "@/errors/app-error.js";
@@ -29,12 +30,13 @@ export class InvitationRepository {
   }
 
   public async create(input: NewInvitation): Promise<Invitation> {
-    const [invitation] = await withDbErrors(() =>
-      this.db.insert(invitations).values(input).returning(),
+    const [invitation] = await withDbErrors(
+      () => this.db.insert(invitations).values(input).returning(),
+      { [INVITATIONS_CONSTRAINTS.EMAIL_UNIQUE]: "INVITATION_ALREADY_EXISTS" },
     );
 
     if (invitation === undefined) {
-      throw new AppError("INTERNAL", { message: "Failed to create invitation." });
+      throw new AppError("SERVICE_UNAVAILABLE", { message: "Failed to create invitation." });
     }
 
     return invitation;

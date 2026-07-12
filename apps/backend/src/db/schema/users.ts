@@ -1,5 +1,6 @@
 // apps/backend/src/db/schema/users.ts
 
+import { USERS_CONSTRAINTS } from "@/db/constraints.js";
 import { sql } from "drizzle-orm";
 import { boolean, check, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
@@ -8,8 +9,8 @@ export const users = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    googleId: text("google_id").notNull().unique(),
-    email: text("email").notNull().unique(),
+    googleId: text("google_id").notNull().unique(USERS_CONSTRAINTS.GOOGLE_ID_UNIQUE),
+    email: text("email").notNull().unique(USERS_CONSTRAINTS.EMAIL_UNIQUE),
 
     firstName: text("first_name"),
     lastName: text("last_name"),

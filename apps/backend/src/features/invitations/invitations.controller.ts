@@ -30,7 +30,7 @@ export class InvitationController {
       invitedByUserId: user.id,
     });
 
-    res.status(200).json(invitationResponseSchema.parse(invitation));
+    res.status(201).json(invitationResponseSchema.parse(invitation));
   };
 
   public delete = async (req: Request, res: Response): Promise<void> => {

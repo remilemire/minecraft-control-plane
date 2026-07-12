@@ -7,3 +7,4 @@ node_modules
 *.tsbuildinfo
 dist
 data/minecraft/
+.claude/settings.local.json

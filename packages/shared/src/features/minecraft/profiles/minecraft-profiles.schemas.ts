@@ -4,17 +4,25 @@ import z from "zod";
 
 export const minecraftProfileIdSchema = z.uuid();
 
-export const minecraftUsernameSchema = z.string().regex(/^[A-Za-z0-9_]+$/);
+export const minecraftUsernameSchema = z
+  .string()
+  .min(3)
+  .max(16)
+  .regex(/^[A-Za-z0-9_]+$/);
 
-export const createMinecraftProfileSchema = z.object({
-  username: minecraftUsernameSchema,
-});
+export const createMinecraftProfileSchema = z
+  .object({
+    username: minecraftUsernameSchema,
+  })
+  .strict();
 
 export type CreateMinecraftProfileInput = z.infer<typeof createMinecraftProfileSchema>;
 
-export const updateMinecraftProfileSchema = z.object({
-  username: minecraftUsernameSchema,
-});
+export const updateMinecraftProfileSchema = z
+  .object({
+    username: minecraftUsernameSchema,
+  })
+  .strict();
 
 export type UpdateMinecraftProfileInput = z.infer<typeof updateMinecraftProfileSchema>;
 

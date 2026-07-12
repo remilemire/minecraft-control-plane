@@ -9,15 +9,15 @@ internals. Keep it high-signal and update it when conventions change.
 Everything domain-specific lives under `src/features/<feature>/`. A feature is a set
 of files by role (not all features have every file):
 
-| File | Role |
-| --- | --- |
-| `*.routes.ts` | Builds an Express `Router`; applies `requireAuth` / `requireAdmin` / `requireCsrf`. |
-| `*.controller.ts` | Class of request handlers: parse input, call the service, serialize the response. |
-| `*.service.ts` | Class holding business logic; throws `AppError` on domain failures. |
-| `*.repository.ts` | Class of Drizzle queries; wraps them in `withDbErrors`. |
-| `*.types.ts` | Internal TS types + boundary interfaces (e.g. `MojangApi`). |
-| `*.openapi.ts` | Registers the feature's operations on the OpenAPI registry (import side effect). |
-| `*.error-meta.ts` | Human-readable messages for this feature's error codes. |
+| File              | Role                                                                                |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| `*.routes.ts`     | Builds an Express `Router`; applies `requireAuth` / `requireAdmin` / `requireCsrf`. |
+| `*.controller.ts` | Class of request handlers: parse input, call the service, serialize the response.   |
+| `*.service.ts`    | Class holding business logic; throws `AppError` on domain failures.                 |
+| `*.repository.ts` | Class of Drizzle queries; wraps them in `withDbErrors`.                             |
+| `*.types.ts`      | Internal TS types + boundary interfaces (e.g. `MojangApi`).                         |
+| `*.openapi.ts`    | Registers the feature's operations on the OpenAPI registry (import side effect).    |
+| `*.error-meta.ts` | Human-readable messages for this feature's error codes.                             |
 
 Features: `auth`, `users`, `sessions`, `invitations`, `minecraft` (with
 `minecraft/profiles`, `minecraft/server`, and `minecraft/clients/`). Cross-cutting
@@ -40,7 +40,7 @@ Composition is explicit DI:
   controller and mounts the feature routers. **This is where wiring lives** — add new
   features here.
 - `AppDeps` are the external boundaries: `{ db, googleTokenVerifier, mojangClient,
-  rconClient, processClient }`, each an **interface**. `server.ts` (the production
+rconClient, processClient }`, each an **interface**. `server.ts` (the production
   composition root) injects the real clients; tests inject fakes.
 
 To add a dependency on an outside system, define an interface (a "seam"), implement it
@@ -51,11 +51,17 @@ as a client (real in `server.ts`, fake in `test/fakes/`), and thread it through
 
 1. Controller calls `parseOrThrow(schema, input)` (`validation/parse.ts`) with a Zod
    schema — usually from `@minecraft-server/shared/<feature>`. On failure it throws a
-   `ValidationError` carrying normalized issues.
+   `ValidationError` carrying normalized issues. Request-body schemas are `.strict()`
+   (unknown fields are a validation error, not silently dropped); response schemas
+   are not.
 2. Service does the work; failures are `throw new AppError("CODE")`.
-3. Repository runs Drizzle queries inside `withDbErrors(() => ...)` (`db/errors.ts`),
-   which unwraps Drizzle's `DrizzleQueryError`, inspects the pg SQLSTATE, and rethrows
-   the matching `AppError` (`UNIQUE_VIOLATION`, `FOREIGN_KEY_VIOLATION`, etc.).
+3. Repository runs Drizzle queries inside `withDbErrors(() => ..., constraintErrors)`
+   (`db/errors.ts`), which unwraps Drizzle's `DrizzleQueryError`/pg `DatabaseError` and,
+   if the violated constraint's name is a key in the `constraintErrors` map, rethrows
+   the mapped `AppError`; otherwise it rethrows `INTERNAL`. Constraint names are never
+   left to Drizzle's auto-generated defaults — every unique/foreign key constraint is
+   named explicitly via the constants in `db/constraints.ts`, which schema modules and
+   repositories both import, so a rename can't silently desync the two.
 4. Controller serializes with the response schema (`schema.parse(entity)`) and sets
    status.
 
@@ -75,6 +81,7 @@ One shape out the door: `{ kind, code, message, issues? }`.
   in `errors/meta.ts`.
 
 To add an error code, update three places that must stay in sync:
+
 1. the feature's catalog in `packages/shared` (adds `code` + `kind`),
 2. the feature's `*.error-meta.ts` (message),
 3. optionally its `*.openapi.ts` if a route should advertise the new status.
@@ -88,7 +95,7 @@ To add an error code, update three places that must stay in sync:
   **sha256 hash** (`lib/tokens.ts`) is stored in the `sessions` table. Cookie helpers
   in `http/session/`, base cookie options in `config/cookies.ts`.
 - **CSRF:** double-submit. `requireCsrf` (`http/csrf/`) checks the non-httponly
-  `csrf_token` cookie against the `X-CSRF-Token` header; applied to mutating routes.
+  `csrf_token` cookie against the `x-csrf-token` header; applied to mutating routes.
 - **Authorization:** `createRequireAuth(authService)` loads `req.user`/`req.session`
   from the session cookie; `requireAdmin` checks `req.user.isAdmin`. Admin-gated:
   invitations, whitelist, server power. Note: nothing sets `isAdmin=true` yet
@@ -119,6 +126,11 @@ To add an error code, update three places that must stay in sync:
   any schema module is evaluated. Test setup has the same requirement.
 - zod-to-openapi treats `.exactOptional()` as required — use `.optional()` in
   openapi-facing schemas.
+- **`.openapi()` doesn't mutate** — it returns a new schema instance (so a shared
+  schema like `emailSchema` can't be annotated in place and reused by reference).
+  To fix a lost format/type on one route's request body, build a one-off variant
+  with `baseSchema.extend({ field: innerSchema.openapi({...}) })` at the call site
+  (see `invitations.openapi.ts`) rather than annotating the shared schema.
 
 ## Testing (Vitest, three projects)
 
@@ -144,9 +156,7 @@ before any `src` import (hence the `setup-env.ts` / `zod-extend.ts` ordering).
 
 - **Admin promotion** is unwired: `ADMIN_EMAIL` is validated in `config/env.ts` but
   no code sets `is_admin`.
-- **CORS** isn't applied — `ALLOWED_ORIGINS` is computed in `config/env.ts` but no
-  cors middleware is mounted in `app.ts`.
-- **`argon2`** is a dependency but unused (leftover from removed password auth); token
-  hashing is sha256 in `lib/tokens.ts`.
-- **Prod build:** `tsc` emits `@/` path aliases verbatim, so `node dist/server.js`
-  can't resolve them yet (dev uses `tsx`, which handles the paths).
+- **`invitations.invitedByUserId`** is `NOT NULL` but its FK is `ON DELETE SET NULL`
+  — deleting the inviting user will violate the not-null constraint instead of
+  cleanly nulling it out. Needs a decision (nullable column vs. restrict/no-op the
+  delete) rather than a one-line fix, since there's only ever one admin today.

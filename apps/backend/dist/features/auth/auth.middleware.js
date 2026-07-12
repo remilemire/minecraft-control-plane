@@ -1,6 +1,6 @@
 // apps/backend/src/features/auth/auth.middleware.ts
-import { AppError } from "@/errors/app-error.js";
-import { getSessionCookie } from "@/http/session/session.cookies.js";
+import { AppError } from "../../errors/app-error.js";
+import { getSessionCookie } from "../../http/session/session.cookies.js";
 export function createRequireAuth(authService) {
     return async function (req, _res, next) {
         const sessionToken = getSessionCookie(req);

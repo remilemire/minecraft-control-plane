@@ -7,7 +7,7 @@ export const ERROR_KIND_TO_HTTP_STATUS = {
   FORBIDDEN: 403,
   INTERNAL: 500,
   NOT_FOUND: 404,
-  SERVICE_UNAVAILABLE: 502,
+  SERVICE_UNAVAILABLE: 503,
   UNAUTHORIZED: 401,
   VALIDATION: 422,
 } as const satisfies Record<ErrorKind, number>;

@@ -9,6 +9,7 @@ import {
   createErrorResponseSchema,
   emptyResponse,
   jsonResponse,
+  openApiMinecraftServerPlayersSchema,
   openApiMinecraftServerStatusSchema,
   SESSION_AND_CSRF_SECURITY,
   SESSION_SECURITY,
@@ -59,10 +60,13 @@ openApiRegistry.registerPath({
   security: SESSION_SECURITY,
   responses: {
     ...baseErrorResponses,
-    200: jsonResponse("Raw output of the RCON `list` command.", z.string()),
+    200: jsonResponse(
+      "Online player count and roster, parsed from the RCON `list` command.",
+      openApiMinecraftServerPlayersSchema,
+    ),
     401: unauthenticatedResponse,
     403: adminRequiredResponse,
-    502: minecraftServerUnavailableResponse,
+    503: minecraftServerUnavailableResponse,
   },
 });
 
@@ -82,7 +86,7 @@ openApiRegistry.registerPath({
     403: adminOrCsrfResponse,
     404: jsonResponse("The user has no Minecraft profile.", minecraftProfileNotFoundErrorSchema),
     422: validationErrorResponse,
-    502: minecraftServerUnavailableResponse,
+    503: minecraftServerUnavailableResponse,
   },
 });
 
@@ -102,7 +106,7 @@ openApiRegistry.registerPath({
     403: adminOrCsrfResponse,
     404: jsonResponse("The user has no Minecraft profile.", minecraftProfileNotFoundErrorSchema),
     422: validationErrorResponse,
-    502: minecraftServerUnavailableResponse,
+    503: minecraftServerUnavailableResponse,
   },
 });
 

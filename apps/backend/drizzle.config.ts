@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import { defineConfig } from "drizzle-kit";
 import { buildPostgresUrl, postgresEnvSchema } from "./src/config/postgres.js";
 
-dotenv.config({ path: "../.env" });
+dotenv.config({ path: "../../.env" });
 
 const postgres = postgresEnvSchema.parse(process.env);
 const postgresUrl = buildPostgresUrl({ ...postgres, host: "localhost" });

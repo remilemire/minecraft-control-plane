@@ -1,6 +1,6 @@
 // apps/backend/src/features/sessions/session.service.ts
-import { env } from "@/config/env.js";
-import { generateRandomSecret, hashSecret } from "@/lib/crypto.js";
+import { env } from "../../config/env.js";
+import { generateRandomSecret, hashSecret } from "../../lib/crypto.js";
 function generateSessionToken() {
   return generateRandomSecret();
 }

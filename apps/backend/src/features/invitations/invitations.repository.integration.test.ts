@@ -24,7 +24,7 @@ describe("InvitationRepository", () => {
     expect(await repository.findByEmail("steve@example.com")).toEqual(created);
   });
 
-  it("maps a duplicate email to UNIQUE_VIOLATION", async () => {
+  it("maps a duplicate email to INVITATION_ALREADY_EXISTS", async () => {
     const existing = await createInvitation({ email: "dup@example.com" });
 
     await expect(
@@ -33,7 +33,7 @@ describe("InvitationRepository", () => {
         invitedByUserId: existing.invitedByUserId,
         expiresAt: new Date(Date.now() + ONE_DAY_MS),
       }),
-    ).rejects.toMatchObject({ code: "UNIQUE_VIOLATION" });
+    ).rejects.toMatchObject({ code: "INVITATION_ALREADY_EXISTS" });
   });
 
   it("returns null when updating a missing invitation", async () => {

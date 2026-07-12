@@ -6,6 +6,7 @@
 import "./openapi/zod-extend.js";
 
 import cookieParser from "cookie-parser";
+import cors from "cors";
 import express from "express";
 
 import { createRouter, type AppDeps } from "./routes/index.js";
@@ -17,6 +18,7 @@ import { createOpenApiRoutes } from "./openapi/openapi.routes.js";
 export function createApp(deps: AppDeps) {
   const app = express();
 
+  app.use(cors({ origin: env.ALLOWED_ORIGINS, credentials: true }));
   app.use(express.json());
   app.use(cookieParser());
   app.use(createOpenApiRoutes());

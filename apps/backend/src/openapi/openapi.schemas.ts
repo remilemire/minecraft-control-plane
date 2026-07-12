@@ -13,7 +13,8 @@ import {
 import { invitationResponseSchema } from "@minecraft-server/shared/invitations";
 import {
   minecraftProfileResponseSchema,
-  minecraftServerStatusSchema,
+  minecraftServerPlayersResponseSchema,
+  minecraftServerStatusResponseSchema,
 } from "@minecraft-server/shared/minecraft";
 import { userResponseSchema } from "@minecraft-server/shared/users";
 import { z, type ZodType } from "zod";
@@ -175,11 +176,11 @@ export const conflictErrorResponse = jsonResponse(
 );
 
 // Failure modes every route shares: unexpected errors (500) and an
-// unreachable database or other dependency (502). Spread into each path's
-// `responses`; routes with a more specific 502 override it after the spread.
+// unreachable database or other dependency (503). Spread into each path's
+// `responses`; routes with a more specific 503 override it after the spread.
 export const baseErrorResponses = {
   500: jsonResponse("Unexpected server error.", internalErrorSchema),
-  502: jsonResponse(
+  503: jsonResponse(
     "A dependency (e.g. the database) could not be reached.",
     serviceUnavailableErrorSchema,
   ),
@@ -201,5 +202,10 @@ export const openApiMinecraftProfileSchema = openApiRegistry.register(
 
 export const openApiMinecraftServerStatusSchema = openApiRegistry.register(
   "MinecraftServerStatus",
-  minecraftServerStatusSchema,
+  minecraftServerStatusResponseSchema,
+);
+
+export const openApiMinecraftServerPlayersSchema = openApiRegistry.register(
+  "MinecraftServerPlayers",
+  minecraftServerPlayersResponseSchema,
 );
