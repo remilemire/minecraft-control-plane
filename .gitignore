@@ -6,6 +6,6 @@
 node_modules
 *.tsbuildinfo
 dist
-data/minecraft/
+data/minecraft
 .claude/settings.local.json
 .pnpm-store
