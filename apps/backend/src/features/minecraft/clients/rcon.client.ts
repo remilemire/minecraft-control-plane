@@ -5,7 +5,6 @@ import type { RconApi } from "@/features/minecraft/minecraft.types.js";
 import { RCONClient } from "@minecraft-js/rcon";
 
 const DEFAULT_RCON_TIMEOUT_MS = 5_000;
-const AUTH_POLL_INTERVAL_MS = 25;
 
 export type RconClientOptions = {
   readonly host: string;
@@ -33,35 +32,72 @@ export class RconClient implements RconApi {
   }
 
   public async execute(command: string): Promise<string> {
-    const client = await this.getConnectedClient();
-    return client.executeCommandAsync(command, this.timeoutMs);
-  }
-
-  private async getConnectedClient(): Promise<RCONClient> {
     const client = new RCONClient(this.host, this.password, this.port);
 
-    try {
-      client.connect();
-      await this.waitUntilAuthenticated(client);
-    } catch (error) {
-      client.disconnect();
-      throw error;
-    }
+    // The library reports failures by emitting on the client, and both of
+    // these events are fatal to the whole process when nothing listens
+    // ('error' by EventEmitter semantics, 'authentication_failed' by a throw
+    // inside the socket callback). Keep listeners attached for the client's
+    // entire lifetime so failures arriving after this call settles are
+    // swallowed rather than crashing the server.
+    let failure: Error | undefined;
+    client.on("error", (error) => {
+      failure ??= error;
+    });
+    client.on("authentication_failed", () => {
+      failure ??= new Error("RCON authentication failed.");
+    });
 
-    return client;
+    try {
+      await this.connectAndAuthenticate(client);
+      return await client.executeCommandAsync(command, this.timeoutMs);
+    } catch (error) {
+      throw error instanceof AppError
+        ? error
+        : new AppError("RCON_CLIENT_ERROR", { cause: failure ?? error });
+    } finally {
+      // Connections are per-command. On socket error the library has already
+      // torn the connection down itself (and disconnecting a never-connected
+      // client would crash on its missing socket), hence the guard.
+      if (client.connected) {
+        client.disconnect();
+      }
+    }
   }
 
-  private async waitUntilAuthenticated(client: RCONClient): Promise<void> {
-    const deadline = Date.now() + this.timeoutMs;
+  /** Resolves once RCON login succeeds; rejects on socket/auth failure or timeout. */
+  private connectAndAuthenticate(client: RCONClient): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new AppError("RCON_CLIENT_ERROR", { message: "RCON authentication timed out." }));
+      }, this.timeoutMs);
 
-    while (!client.authenticated) {
-      if (Date.now() >= deadline) {
-        throw new AppError("RCON_CLIENT_ERROR", { message: "RCON authentication timed out." });
-      }
+      const settle = (outcome: () => void) => {
+        clearTimeout(timer);
+        outcome();
+      };
 
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, AUTH_POLL_INTERVAL_MS);
+      client.once("authenticated", () => {
+        settle(resolve);
       });
-    }
+      client.once("authentication_failed", () => {
+        settle(() => {
+          reject(new AppError("RCON_CLIENT_ERROR", { message: "RCON authentication failed." }));
+        });
+      });
+      client.once("error", (error) => {
+        settle(() => {
+          reject(error);
+        });
+      });
+
+      try {
+        client.connect();
+      } catch (error) {
+        settle(() => {
+          reject(error instanceof Error ? error : new Error(String(error)));
+        });
+      }
+    });
   }
 }

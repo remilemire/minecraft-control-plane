@@ -1,5 +1,6 @@
 // apps/backend/src/features/auth/auth.service.test.ts
 
+import { env } from "@/config/env.js";
 import type { Session, User } from "@/db/schema/index.js";
 import { FakeGoogleOauthClient } from "@test/fakes/fake-google-oauth.client.js";
 import { describe, expect, it } from "vitest";
@@ -127,6 +128,69 @@ describe("AuthService", () => {
         firstName: "In",
         lastName: "Vited",
       });
+    });
+
+    it("bootstraps the configured ADMIN_EMAIL as an admin, bypassing the invite check", async () => {
+      const googleOauthClient = new FakeGoogleOauthClient();
+      const credential = googleOauthClient.issueToken({
+        email: env.ADMIN_EMAIL,
+        sub: "google-admin",
+      });
+      const created = user({ email: env.ADMIN_EMAIL, isAdmin: true });
+
+      let bootstrapInput: unknown;
+      const service = new AuthService(
+        userServiceStub({
+          findByGoogleId: async () => null,
+          bootstrapAdmin: async (input: unknown) => {
+            bootstrapInput = input;
+            return created;
+          },
+          create: async () => {
+            throw new Error("the admin email must not go through the normal create path");
+          },
+        }),
+        sessionServiceStub({ create: async () => issuedSession }),
+        // isInvited throwing proves the admin bootstrap path skips the
+        // invitation check entirely, rather than happening to pass it.
+        invitationServiceStub({
+          isInvited: async () => {
+            throw new Error("the admin email must not be checked against invitations");
+          },
+        }),
+        googleOauthClient,
+      );
+
+      const result = await service.authenticateFromGoogle(credential);
+
+      expect(result).toEqual({ user: created, sessionToken: "session-token" });
+      expect(bootstrapInput).toEqual({ email: env.ADMIN_EMAIL, googleId: "google-admin" });
+    });
+
+    it("does not bootstrap admin for a non-admin invited email", async () => {
+      const googleOauthClient = new FakeGoogleOauthClient();
+      const credential = googleOauthClient.issueToken({
+        email: "invited@example.com",
+        sub: "google-invited",
+      });
+      const created = user({ email: "invited@example.com" });
+
+      const service = new AuthService(
+        userServiceStub({
+          findByGoogleId: async () => null,
+          create: async () => created,
+          bootstrapAdmin: async () => {
+            throw new Error("non-admin emails must not be bootstrapped as admin");
+          },
+        }),
+        sessionServiceStub({ create: async () => issuedSession }),
+        invitationServiceStub({ isInvited: async () => true }),
+        googleOauthClient,
+      );
+
+      const result = await service.authenticateFromGoogle(credential);
+
+      expect(result).toEqual({ user: created, sessionToken: "session-token" });
     });
 
     it("rejects an uninvited email with NOT_INVITED", async () => {

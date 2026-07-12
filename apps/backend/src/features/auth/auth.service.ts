@@ -1,5 +1,6 @@
 // apps/backend/src/features/auth/auth.service.ts
 
+import { env } from "@/config/env.js";
 import type { User } from "@/db/schema/index.js";
 import { AppError } from "@/errors/app-error.js";
 import type { InvitationService } from "@/features/invitations/invitations.service.js";
@@ -50,9 +51,14 @@ export class AuthService {
   }
 
   private async registerInvited({ email, ...rest }: GoogleIdentity): Promise<User> {
+    if (email === env.ADMIN_EMAIL) {
+      return await this.userService.bootstrapAdmin({ email, ...rest });
+    }
+
     if (!(await this.invitationService.isInvited(email))) {
       throw new AppError("NOT_INVITED");
     }
+
     return await this.userService.create({
       email,
       ...rest,

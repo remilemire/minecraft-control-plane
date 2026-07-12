@@ -18,4 +18,8 @@ export class UserService {
   public async create(input: CreateUserInput): Promise<User> {
     return await this.users.create(input);
   }
+
+  public async bootstrapAdmin(input: CreateUserInput): Promise<User> {
+    return await this.users.create({ ...input, isAdmin: true });
+  }
 }
