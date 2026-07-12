@@ -7,14 +7,10 @@ export type MojangProfile = {
   readonly username: string;
 };
 
-// Seam for tests: services depend on this interface so a fake can stand in
-// for the real HTTP client.
 export interface MojangApi {
   findByUsername(username: string): Promise<MojangProfile | null>;
 }
 
-// Seam for tests: services depend on this interface so a fake can stand in
-// for the real docker compose process control.
 export interface ProcessApi {
   start(): Promise<void>;
   stop(): Promise<void>;
@@ -22,8 +18,6 @@ export interface ProcessApi {
   getStatus(): Promise<MinecraftServerStatus>;
 }
 
-// Seam for tests: services depend on this interface so a fake can stand in
-// for the real RCON connection.
 export interface RconApi {
   execute(command: string): Promise<string>;
 }

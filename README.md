@@ -5,10 +5,10 @@ home Linux box via Docker Compose.
 
 There is a single **admin**. The admin invites players by email; a player signs in
 with **Google**, and the login only succeeds if their email has a valid, unaccepted
-invitation. Once in, a player links their **Minecraft profile** (username → UUID).
-The admin manages the roster and controls the server: adding/removing players from
-the Minecraft **whitelist** over RCON, and starting/stopping/restarting the Minecraft
-container.
+invitation. Once in, a player links their own **Minecraft player** (username → UUID),
+which self-service adds/removes them from the Minecraft **whitelist** over RCON. The
+admin can view the roster (linked players + online status) and controls the server:
+starting/stopping/restarting the Minecraft container.
 
 > **Status: active development.** The backend is substantially built — features,
 > layering, error handling, auth/session/CSRF, OpenAPI docs, and a three-layer test
@@ -230,7 +230,9 @@ Feature-first, class-based, with explicit dependency injection. Details live in
 - **CSRF:** double-submit — a non-httponly `csrf_token` cookie must match the
   `x-csrf-token` header on unsafe requests (`requireCsrf`).
 - **Authorization:** `requireAuth` loads the session's user; `requireAdmin` gates
-  admin-only routes (invitations, whitelist, server power).
+  admin-only routes (invitations, the players roster, unlinking a player, server
+  power). Linking your own Minecraft player is self-service; unlinking (yours or
+  anyone else's) is admin-only.
 
 ## API
 
@@ -239,10 +241,14 @@ All routes are mounted under `/api`. Current surface:
 - `POST /api/auth/google`, `POST /api/auth/logout`
 - `GET /api/users/me`
 - `GET/POST /api/invitations`, `DELETE /api/invitations/:invitationId` (admin)
-- `GET /api/minecraft/profiles` (admin), `GET/PUT /api/minecraft/profiles/me`
-- `GET /api/minecraft/server/status|players` (admin),
-  `PUT/DELETE /api/minecraft/server/whitelist/:userId` (admin),
+- `GET /api/minecraft/players` (admin), `GET/PUT /api/minecraft/players/me`,
+  `DELETE /api/minecraft/players/:userId` (admin)
+- `GET /api/minecraft/server/status` (admin),
   `POST /api/minecraft/server/start|stop|restart` (admin)
+
+A player object's `id` is the `minecraft_profiles` row's internal surrogate primary
+key — it's returned for reference but never accepted as a request parameter; routes
+address a player by the owning `userId` instead.
 
 Browse the live, generated spec at `/docs`.
 
@@ -274,7 +280,8 @@ access is controlled through the Minecraft whitelist over RCON.
 Implemented:
 - pnpm monorepo + Docker Compose dev stack (db, backend, frontend, minecraft)
 - Backend features: auth (Google OAuth), users, sessions, invitations, Minecraft
-  profiles, Minecraft server control (whitelist/RCON + power via docker compose)
+  players (profile + whitelist over RCON), Minecraft server control (power via
+  docker compose)
 - Layered feature architecture with DI, shared Zod schemas, and a shared error catalog
 - Centralized error handling + generated OpenAPI docs (Swagger UI)
 - Drizzle schema + migrations; three-layer Vitest suite

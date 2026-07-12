@@ -12,21 +12,6 @@ export function createMinecraftServerRoutes(
   const router = Router();
 
   router.get("/status", requireAuth, requireAdmin, minecraftServerController.getServerStatus);
-  router.get("/players", requireAuth, requireAdmin, minecraftServerController.listPlayers);
-  router.put(
-    "/whitelist/:userId",
-    requireAuth,
-    requireCsrf,
-    requireAdmin,
-    minecraftServerController.addToWhitelist,
-  );
-  router.delete(
-    "/whitelist/:userId",
-    requireAuth,
-    requireCsrf,
-    requireAdmin,
-    minecraftServerController.removeFromWhitelist,
-  );
   router.post(
     "/start",
     requireAuth,

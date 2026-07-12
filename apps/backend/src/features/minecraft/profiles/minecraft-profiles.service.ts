@@ -1,9 +1,9 @@
 // apps/backend/src/features/minecraft/profiles/minecraft-profiles.service.ts
 
 import type { MinecraftProfile } from "@/db/schema/minecraft-profile.js";
-import type { MojangApi, MojangProfile } from "@/features/minecraft/minecraft.types.js";
 import { AppError } from "@/errors/app-error.js";
-import type { UpdateMinecraftProfileInput } from "@minecraft-server/shared/minecraft";
+import type { MojangApi, MojangProfile } from "@/features/minecraft/minecraft.types.js";
+import type { SetMinecraftPlayerInput } from "@minecraft-server/shared/minecraft";
 import { MinecraftProfileRepository } from "./minecraft-profiles.repository.js";
 
 export class MinecraftProfileService {
@@ -31,7 +31,7 @@ export class MinecraftProfileService {
   // ever store a real account's uuid.
   public async setByUserId(
     userId: string,
-    { username }: UpdateMinecraftProfileInput,
+    { username }: SetMinecraftPlayerInput,
   ): Promise<MinecraftProfile> {
     const mojangProfile = await this.getMojangProfile(username);
     return this.minecraftProfiles.upsertByUserId(userId, mojangProfile);

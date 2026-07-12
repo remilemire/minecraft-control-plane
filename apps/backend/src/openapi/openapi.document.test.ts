@@ -9,11 +9,10 @@ const EXPECTED_PATHS = [
   "/auth/logout",
   "/invitations",
   "/invitations/{invitationId}",
-  "/minecraft/profiles",
-  "/minecraft/profiles/me",
+  "/minecraft/players",
+  "/minecraft/players/me",
+  "/minecraft/players/{userId}",
   "/minecraft/server/status",
-  "/minecraft/server/players",
-  "/minecraft/server/whitelist/{userId}",
   "/minecraft/server/start",
   "/minecraft/server/stop",
   "/minecraft/server/restart",
@@ -41,7 +40,7 @@ describe("OpenAPI document", () => {
     for (const name of [
       "User",
       "Invitation",
-      "MinecraftProfile",
+      "MinecraftPlayer",
       "MinecraftServerStatus",
       "ValidationIssue",
       "ValidationError",
@@ -111,12 +110,10 @@ describe("OpenAPI document", () => {
     expect(me?.security).toEqual([{ sessionCookie: [] }]);
   });
 
-  it("documents the admin list and profile set endpoints", () => {
+  it("documents the admin list and player set endpoints", () => {
     expect(document.paths?.["/invitations"]?.get?.operationId).toBe("listInvitations");
-    expect(document.paths?.["/minecraft/profiles"]?.get?.operationId).toBe("listMinecraftProfiles");
-    expect(document.paths?.["/minecraft/profiles/me"]?.put?.operationId).toBe(
-      "setMinecraftProfile",
-    );
+    expect(document.paths?.["/minecraft/players"]?.get?.operationId).toBe("listMinecraftPlayers");
+    expect(document.paths?.["/minecraft/players/me"]?.put?.operationId).toBe("setMinecraftPlayer");
   });
 
   it("documents empty-body mutations with 204 and no 200", () => {
@@ -136,9 +133,9 @@ describe("OpenAPI document", () => {
     expect(del?.requestBody).toBeUndefined();
   });
 
-  it("declares the userId path parameter on whitelist routes", () => {
-    const put = document.paths?.["/minecraft/server/whitelist/{userId}"]?.put;
-    const params = (put?.parameters ?? []) as { name: string; in: string }[];
+  it("declares the userId path parameter on the player delete route", () => {
+    const del = document.paths?.["/minecraft/players/{userId}"]?.delete;
+    const params = (del?.parameters ?? []) as { name: string; in: string }[];
     expect(params).toContainEqual(expect.objectContaining({ name: "userId", in: "path" }));
   });
 

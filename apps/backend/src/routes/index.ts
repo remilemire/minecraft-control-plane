@@ -12,7 +12,8 @@ import { createInvitationRoutes } from "@/features/invitations/invitations.route
 import { InvitationService } from "@/features/invitations/invitations.service.js";
 import { createMinecraftRoutes } from "@/features/minecraft/minecraft.routes.js";
 import type { MojangApi, ProcessApi, RconApi } from "@/features/minecraft/minecraft.types.js";
-import { MinecraftProfileController } from "@/features/minecraft/profiles/minecraft-profiles.controller.js";
+import { MinecraftPlayerController } from "@/features/minecraft/players/minecraft-players.controller.js";
+import { MinecraftPlayerService } from "@/features/minecraft/players/minecraft-players.service.js";
 import { MinecraftProfileRepository } from "@/features/minecraft/profiles/minecraft-profiles.repository.js";
 import { MinecraftProfileService } from "@/features/minecraft/profiles/minecraft-profiles.service.js";
 import { MinecraftServerController } from "@/features/minecraft/server/minecraft-server.controller.js";
@@ -55,16 +56,16 @@ export function createRouter(deps: AppDeps): Router {
   );
 
   const minecraftProfileService = new MinecraftProfileService(minecraftProfiles, deps.mojangClient);
-  const minecraftServerService = new MinecraftServerService(
+  const minecraftServerService = new MinecraftServerService(deps.rconClient, deps.processClient);
+  const minecraftPlayerService = new MinecraftPlayerService(
     minecraftProfileService,
-    deps.rconClient,
-    deps.processClient,
+    minecraftServerService,
   );
 
   const userController = new UserController(userService);
   const invitationController = new InvitationController(invitationService);
   const authController = new AuthController(authService);
-  const minecraftProfileController = new MinecraftProfileController(minecraftProfileService);
+  const minecraftPlayerController = new MinecraftPlayerController(minecraftPlayerService);
   const minecraftServerController = new MinecraftServerController(minecraftServerService);
 
   const requireAuth = createRequireAuth(authService);
@@ -74,7 +75,7 @@ export function createRouter(deps: AppDeps): Router {
   router.use("/auth", createAuthRoutes(authController, requireAuth));
   router.use(
     "/minecraft",
-    createMinecraftRoutes(minecraftProfileController, minecraftServerController, requireAuth),
+    createMinecraftRoutes(minecraftPlayerController, minecraftServerController, requireAuth),
   );
 
   return router;

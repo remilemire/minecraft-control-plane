@@ -1,5 +1,5 @@
 {
-  "id": "e8289496-b0de-4b55-86f7-ec3302a2da7f",
+  "id": "76cc3087-21da-4ef8-94ec-51f0ee429d73",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -261,18 +261,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "minecraft_username": {
-          "name": "minecraft_username",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "minecraft_uuid": {
-          "name": "minecraft_uuid",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "is_admin": {
           "name": "is_admin",
           "type": "boolean",
@@ -305,10 +293,6 @@
       },
       "policies": {},
       "checkConstraints": {
-        "users_minecraft_username_length_check": {
-          "name": "users_minecraft_username_length_check",
-          "value": "char_length(\"users\".\"minecraft_username\") BETWEEN 3 AND 16"
-        },
         "users_email_length_check": {
           "name": "users_email_length_check",
           "value": "char_length(\"users\".\"email\") BETWEEN 1 AND 254"

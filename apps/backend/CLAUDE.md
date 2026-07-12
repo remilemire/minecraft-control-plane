@@ -20,9 +20,16 @@ of files by role (not all features have every file):
 | `*.error-meta.ts` | Human-readable messages for this feature's error codes.                             |
 
 Features: `auth`, `users`, `sessions`, `invitations`, `minecraft` (with
-`minecraft/profiles`, `minecraft/server`, and `minecraft/clients/`). Cross-cutting
-code sits outside `features/`: `config/`, `db/`, `errors/`, `http/`, `validation/`,
-`openapi/`, `middleware/`, `lib/`, `routes/`.
+`minecraft/players`, `minecraft/server`, `minecraft/profiles`, and
+`minecraft/clients/`). Cross-cutting code sits outside `features/`: `config/`, `db/`,
+`errors/`, `http/`, `validation/`, `openapi/`, `middleware/`, `lib/`, `routes/`.
+
+`minecraft/profiles` is a partial exception to the layout above: it's now
+internal-only (`*.service.ts` + `*.repository.ts` + `*.error-meta.ts`, no
+`*.routes.ts`/`*.controller.ts`/`*.openapi.ts`). It owns the `minecraft_profiles`
+table (a user's linked username/uuid); `minecraft/players` is the HTTP-facing
+feature that composes `MinecraftProfileService` with `MinecraftServerService` to
+merge profile data with live online status and drive the whitelist.
 
 Path alias: `@/*` → `src/*` (and `@test/*` → `test/*`). Use `.js` extensions on
 relative/alias imports (ESM).
@@ -98,8 +105,11 @@ To add an error code, update three places that must stay in sync:
   `csrf_token` cookie against the `x-csrf-token` header; applied to mutating routes.
 - **Authorization:** `createRequireAuth(authService)` loads `req.user`/`req.session`
   from the session cookie; `requireAdmin` checks `req.user.isAdmin`. Admin-gated:
-  invitations, whitelist, server power. Note: nothing sets `isAdmin=true` yet
-  (`ADMIN_EMAIL` is unwired) — see root guide.
+  invitations, the players roster (`GET /minecraft/players`), unlinking a player
+  (`DELETE /minecraft/players/:userId`), server power. Linking your own Minecraft
+  player (`PUT /minecraft/players/me`) is self-service; unlinking someone (yourself
+  included) is admin-only — there's no self-service delete. Note: nothing sets
+  `isAdmin=true` yet (`ADMIN_EMAIL` is unwired) — see root guide.
 
 ## Database & migrations (Drizzle)
 

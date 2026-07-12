@@ -1,53 +1,38 @@
 // apps/backend/src/features/minecraft/server/minecraft-server.service.ts
 
 import type { ProcessApi, RconApi } from "@/features/minecraft/minecraft.types.js";
-import type {
-  MinecraftServerPlayersResponse,
-  MinecraftServerStatus,
-} from "@minecraft-server/shared/minecraft";
-import type { MinecraftProfileService } from "../profiles/minecraft-profiles.service.js";
+import type { MinecraftServerStatus } from "@minecraft-server/shared/minecraft";
 
 // Vanilla's `list` command replies with a fixed sentence (itzg/minecraft-server
 // runs vanilla, not Paper/Spigot, which word it differently), e.g.:
 // "There are 2 of a max of 20 players online: Steve, Alex"
-const LIST_OUTPUT_PATTERN =
-  /^There are (?<online>\d+) of a max of (?<maximum>\d+) players online:\s*(?<names>.*)$/;
+const LIST_OUTPUT_PATTERN = /^There are \d+ of a max of \d+ players online:\s*(?<names>.*)$/;
 
-function parseListOutput(output: string): MinecraftServerPlayersResponse {
-  const groups = LIST_OUTPUT_PATTERN.exec(output)?.groups;
-  if (groups === undefined) {
+function parseOnlineUsernames(output: string): string[] {
+  const names = LIST_OUTPUT_PATTERN.exec(output)?.groups?.names;
+  if (names === undefined) {
     throw new Error(`Unexpected RCON \`list\` output: ${output}`);
   }
 
-  const { online, maximum, names } = groups as Record<"online" | "maximum" | "names", string>;
-  return {
-    online: Number(online),
-    maximum: Number(maximum),
-    players: names === "" ? [] : names.split(",").map((name) => name.trim()),
-  };
+  return names === "" ? [] : names.split(",").map((name) => name.trim());
 }
 
 export class MinecraftServerService {
   public constructor(
-    private readonly minecraftProfileService: MinecraftProfileService,
     private readonly rconClient: RconApi,
     private readonly processClient: ProcessApi,
   ) {}
 
-  public async listPlayers(): Promise<MinecraftServerPlayersResponse> {
+  public async listOnlineUsernames(): Promise<string[]> {
     const output = await this.rconClient.execute("list");
-    return parseListOutput(output);
+    return parseOnlineUsernames(output);
   }
 
-  public async addToWhitelist(userId: string): Promise<void> {
-    const { username } = await this.minecraftProfileService.getByUserId(userId);
-
+  public async addToWhitelist(username: string): Promise<void> {
     await this.rconClient.execute(`whitelist add ${username}`);
   }
 
-  public async removeFromWhitelist(userId: string): Promise<void> {
-    const { username } = await this.minecraftProfileService.getByUserId(userId);
-
+  public async removeFromWhitelist(username: string): Promise<void> {
     await this.rconClient.execute(`whitelist remove ${username}`);
   }
 

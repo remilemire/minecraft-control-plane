@@ -15,10 +15,11 @@ home Linux box via Docker Compose. There is a **single admin**.
 - The admin **invites** players by email. A player signs in with **Google**; login
   only succeeds if their email has a valid, unaccepted invitation (or they already
   have an account).
-- Signed-in users link a **Minecraft profile** (username → UUID, resolved via Mojang).
-- The admin manages the roster and controls the server over **RCON** (add/remove from
-  the Minecraft **whitelist**, list players) and via **docker compose**
-  (start/stop/restart the Minecraft container).
+- Signed-in users link their own **Minecraft player** (username → UUID, resolved via
+  Mojang), which self-service adds them to the **whitelist** over **RCON**; only the
+  admin can unlink a player (self or anyone else), which removes them again. The
+  admin can view the roster (linked players + online status) and controls the server
+  via **docker compose** (start/stop/restart the container).
 - A firewall / IP-access layer in front of the server is a **planned future**
   addition — it does not exist yet. Access is the Minecraft whitelist for now.
 

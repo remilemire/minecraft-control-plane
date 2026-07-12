@@ -37,13 +37,10 @@ CREATE TABLE "users" (
 	"email" text NOT NULL,
 	"first_name" text,
 	"last_name" text,
-	"minecraft_username" text,
-	"minecraft_uuid" text,
 	"is_admin" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "users_google_id_unique" UNIQUE("google_id"),
 	CONSTRAINT "users_email_unique" UNIQUE("email"),
-	CONSTRAINT "users_minecraft_username_length_check" CHECK (char_length("users"."minecraft_username") BETWEEN 3 AND 16),
 	CONSTRAINT "users_email_length_check" CHECK (char_length("users"."email") BETWEEN 1 AND 254),
 	CONSTRAINT "users_first_name_length_check" CHECK (char_length("users"."first_name") BETWEEN 1 AND 64),
 	CONSTRAINT "users_last_name_length_check" CHECK (char_length("users"."last_name") BETWEEN 1 AND 64)

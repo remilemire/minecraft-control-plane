@@ -18,8 +18,6 @@ function user(overrides: Partial<User> = {}): User {
     email: "steve@example.com",
     firstName: null,
     lastName: null,
-    minecraftUsername: null,
-    minecraftUuid: null,
     isAdmin: false,
     createdAt: new Date(),
     ...overrides,

@@ -27,8 +27,6 @@ describe("GET /api/users/me", () => {
     expect(response.body.createdAt).toBeDefined();
     // The response schema must not leak internal columns.
     expect(response.body.googleId).toBeUndefined();
-    expect(response.body.minecraftUuid).toBeUndefined();
-    expect(response.body.minecraftUsername).toBeUndefined();
   });
 
   it("returns null names when the user has none", async () => {

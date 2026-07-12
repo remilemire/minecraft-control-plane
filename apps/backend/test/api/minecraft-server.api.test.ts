@@ -1,10 +1,8 @@
 // apps/backend/test/api/minecraft-server.api.test.ts
 
-import { randomUUID } from "crypto";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestApp, type TestApp } from "../helpers/create-test-app.js";
-import { createMinecraftProfile } from "../helpers/factories/minecraft-profile.factory.js";
 import { authenticateAdmin, authenticateUser } from "../helpers/test-auth.js";
 import { csrfPair } from "../helpers/test-cookies.js";
 
@@ -35,97 +33,6 @@ describe("GET /api/minecraft/server/status", () => {
     const response = await request(app)
       .get("/api/minecraft/server/status")
       .set("Cookie", [auth.cookie]);
-
-    expect(response.status).toBe(403);
-    expect(response.body).toMatchObject({ code: "ADMIN_REQUIRED" });
-  });
-});
-
-describe("GET /api/minecraft/server/players", () => {
-  it("returns the rcon list output", async () => {
-    const { app, rconClient } = testApp;
-    rconClient.respondTo("list", "There are 2 of a max of 20 players online: Steve, Alex");
-    const admin = await authenticateAdmin();
-
-    const response = await request(app)
-      .get("/api/minecraft/server/players")
-      .set("Cookie", [admin.cookie]);
-
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({ online: 2, maximum: 20, players: ["Steve", "Alex"] });
-    expect(rconClient.executed).toEqual(["list"]);
-  });
-});
-
-describe("PUT/DELETE /api/minecraft/server/whitelist/:userId", () => {
-  it("whitelists the user's profile username via rcon", async () => {
-    const { app, rconClient } = testApp;
-    const admin = await authenticateAdmin();
-    const csrf = csrfPair();
-    const profile = await createMinecraftProfile({ username: "Notch" });
-
-    const response = await request(app)
-      .put(`/api/minecraft/server/whitelist/${profile.userId}`)
-      .set("Cookie", [admin.cookie, csrf.cookie])
-      .set(csrf.headerName, csrf.headerValue);
-
-    expect(response.status).toBe(204);
-    expect(rconClient.executed).toEqual(["whitelist add Notch"]);
-  });
-
-  it("removes the user's profile username via rcon", async () => {
-    const { app, rconClient } = testApp;
-    const admin = await authenticateAdmin();
-    const csrf = csrfPair();
-    const profile = await createMinecraftProfile({ username: "Notch" });
-
-    const response = await request(app)
-      .delete(`/api/minecraft/server/whitelist/${profile.userId}`)
-      .set("Cookie", [admin.cookie, csrf.cookie])
-      .set(csrf.headerName, csrf.headerValue);
-
-    expect(response.status).toBe(204);
-    expect(rconClient.executed).toEqual(["whitelist remove Notch"]);
-  });
-
-  it("404s when the target user has no profile", async () => {
-    const { app, rconClient } = testApp;
-    const admin = await authenticateAdmin();
-    const csrf = csrfPair();
-
-    const response = await request(app)
-      .put(`/api/minecraft/server/whitelist/${randomUUID()}`)
-      .set("Cookie", [admin.cookie, csrf.cookie])
-      .set(csrf.headerName, csrf.headerValue);
-
-    expect(response.status).toBe(404);
-    expect(response.body).toMatchObject({ code: "MINECRAFT_PROFILE_NOT_FOUND" });
-    expect(rconClient.executed).toEqual([]);
-  });
-
-  it("422s when the userId is not a uuid", async () => {
-    const { app } = testApp;
-    const admin = await authenticateAdmin();
-    const csrf = csrfPair();
-
-    const response = await request(app)
-      .put("/api/minecraft/server/whitelist/not-a-uuid")
-      .set("Cookie", [admin.cookie, csrf.cookie])
-      .set(csrf.headerName, csrf.headerValue);
-
-    expect(response.status).toBe(422);
-    expect(response.body).toMatchObject({ kind: "VALIDATION", code: "VALIDATION_FAILED" });
-  });
-
-  it("rejects a non-admin even with a valid CSRF pair", async () => {
-    const { app } = testApp;
-    const auth = await authenticateUser();
-    const csrf = csrfPair();
-
-    const response = await request(app)
-      .put(`/api/minecraft/server/whitelist/${randomUUID()}`)
-      .set("Cookie", [auth.cookie, csrf.cookie])
-      .set(csrf.headerName, csrf.headerValue);
 
     expect(response.status).toBe(403);
     expect(response.body).toMatchObject({ code: "ADMIN_REQUIRED" });
