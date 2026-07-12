@@ -2,11 +2,11 @@
 
 import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { createTestApp } from "../helpers/create-test-app.js";
-import { createSession } from "../helpers/factories/session.factory.js";
-import { createUser } from "../helpers/factories/user.factory.js";
-import { authenticateUser } from "../helpers/test-auth.js";
-import { sessionCookie } from "../helpers/test-cookies.js";
+import { createTestApp } from "@test/helpers/create-test-app.js";
+import { createSession } from "@test/helpers/factories/session.factory.js";
+import { createUser } from "@test/helpers/factories/user.factory.js";
+import { authenticateUser } from "@test/helpers/test-auth.js";
+import { sessionCookie } from "@test/helpers/test-cookies.js";
 
 const { app } = createTestApp();
 

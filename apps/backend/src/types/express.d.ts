@@ -1,6 +1,6 @@
 // apps/backend/src/types/express.d.ts
 
-import type { Session, User } from "@/db/schema/index.ts";
+import type { Session, User } from "@/db/schema/index.js";
 
 declare global {
   namespace Express {

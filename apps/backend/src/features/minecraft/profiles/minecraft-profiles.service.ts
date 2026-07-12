@@ -1,6 +1,6 @@
 // apps/backend/src/features/minecraft/profiles/minecraft-profiles.service.ts
 
-import type { MinecraftProfile } from "@/db/schema/minecraft-profile.js";
+import type { MinecraftProfile } from "@/db/schema/index.js";
 import { AppError } from "@/errors/app-error.js";
 import type { MojangApi, MojangProfile } from "@/features/minecraft/minecraft.types.js";
 import type { SetMinecraftPlayerInput } from "@minecraft-server/shared/minecraft";

@@ -2,9 +2,9 @@
 
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createTestApp, type TestApp } from "../helpers/create-test-app.js";
-import { authenticateAdmin, authenticateUser } from "../helpers/test-auth.js";
-import { csrfPair } from "../helpers/test-cookies.js";
+import { createTestApp, type TestApp } from "@test/helpers/create-test-app.js";
+import { authenticateAdmin, authenticateUser } from "@test/helpers/test-auth.js";
+import { csrfPair } from "@test/helpers/test-cookies.js";
 
 let testApp: TestApp;
 

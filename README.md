@@ -246,9 +246,9 @@ All routes are mounted under `/api`. Current surface:
 - `GET /api/minecraft/server/status` (admin),
   `POST /api/minecraft/server/start|stop|restart` (admin)
 
-A player object's `id` is the `minecraft_profiles` row's internal surrogate primary
-key — it's returned for reference but never accepted as a request parameter; routes
-address a player by the owning `userId` instead.
+A player object is addressed and returned by the owning `userId`. The
+`minecraft_profiles` row's internal surrogate primary key is never exposed in API
+responses.
 
 Browse the live, generated spec at `/docs`.
 

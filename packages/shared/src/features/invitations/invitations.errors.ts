@@ -1,6 +1,6 @@
 // packages/shared/src/features/invitations/invitations.errors.ts
 
-import type { ErrorCatalog } from "../../common/errors.js";
+import type { ErrorCatalog } from "@/common/index.js";
 
 export const invitationErrorCatalog = {
   INVITATION_NOT_FOUND: { kind: "NOT_FOUND" },

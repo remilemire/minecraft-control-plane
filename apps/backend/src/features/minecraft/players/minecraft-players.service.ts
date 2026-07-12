@@ -2,13 +2,13 @@
 
 import type { MinecraftProfile } from "@/db/schema/index.js";
 import type { SetMinecraftPlayerInput } from "@minecraft-server/shared/minecraft";
-import type { MinecraftProfileService } from "../profiles/minecraft-profiles.service.js";
-import type { MinecraftServerService } from "../server/minecraft-server.service.js";
+import type { MinecraftProfileService } from "@/features/minecraft/profiles/minecraft-profiles.service.js";
+import type { MinecraftServerService } from "@/features/minecraft/server/minecraft-server.service.js";
 import type { MinecraftPlayer } from "./minecraft-players.types.js";
 
 function toPlayer(profile: MinecraftProfile, onlineUsernames: readonly string[]): MinecraftPlayer {
   return {
-    id: profile.id,
+    userId: profile.userId,
     username: profile.username,
     uuid: profile.uuid,
     online: onlineUsernames.includes(profile.username),

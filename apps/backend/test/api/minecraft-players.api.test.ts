@@ -2,10 +2,10 @@
 
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createTestApp, type TestApp } from "../helpers/create-test-app.js";
-import { createMinecraftProfile } from "../helpers/factories/minecraft-profile.factory.js";
-import { authenticateAdmin, authenticateUser } from "../helpers/test-auth.js";
-import { csrfPair } from "../helpers/test-cookies.js";
+import { createTestApp, type TestApp } from "@test/helpers/create-test-app.js";
+import { createMinecraftProfile } from "@test/helpers/factories/minecraft-profile.factory.js";
+import { authenticateAdmin, authenticateUser } from "@test/helpers/test-auth.js";
+import { csrfPair } from "@test/helpers/test-cookies.js";
 
 let testApp: TestApp;
 
@@ -26,13 +26,13 @@ describe("GET /api/minecraft/players", () => {
     expect(response.status).toBe(200);
     expect(response.body).toHaveLength(2);
     expect(response.body).toContainEqual({
-      id: online.id,
+      userId: online.userId,
       username: "Steve",
       uuid: online.uuid,
       online: true,
     });
     expect(response.body).toContainEqual({
-      id: offline.id,
+      userId: offline.userId,
       username: "Alex",
       uuid: offline.uuid,
       online: false,
@@ -72,7 +72,7 @@ describe("GET /api/minecraft/players/me", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
-      id: profile.id,
+      userId: profile.userId,
       username: "Alex",
       uuid: profile.uuid,
       online: true,
@@ -99,7 +99,7 @@ describe("GET /api/minecraft/players/me", () => {
     const auth = await authenticateUser();
     await createMinecraftProfile({ userId: auth.user.id, username: "Mine" });
     // A different user's profile must not be visible here.
-    const other = await createMinecraftProfile({ username: "Other" });
+    await createMinecraftProfile({ username: "Other" });
 
     const response = await request(app)
       .get("/api/minecraft/players/me")
@@ -107,7 +107,7 @@ describe("GET /api/minecraft/players/me", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.username).toBe("Mine");
-    expect(response.body.id).not.toBe(other.id);
+    expect(response.body.userId).toBe(auth.user.id);
   });
 });
 

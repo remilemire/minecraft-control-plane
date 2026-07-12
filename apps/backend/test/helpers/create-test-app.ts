@@ -3,10 +3,10 @@
 import { createApp } from "@/app.js";
 import { db } from "@/db/client.js";
 import type { AppDeps } from "@/routes/index.js";
-import { FakeGoogleOauthClient } from "../fakes/fake-google-oauth.client.js";
-import { FakeMojangClient } from "../fakes/fake-mojang.client.js";
-import { FakeProcessClient } from "../fakes/fake-process.client.js";
-import { FakeRconClient } from "../fakes/fake-rcon.client.js";
+import { FakeGoogleOauthClient } from "@test/fakes/fake-google-oauth.client.js";
+import { FakeMojangClient } from "@test/fakes/fake-mojang.client.js";
+import { FakeProcessClient } from "@test/fakes/fake-process.client.js";
+import { FakeRconClient } from "@test/fakes/fake-rcon.client.js";
 
 export interface TestApp {
   readonly app: ReturnType<typeof createApp>;

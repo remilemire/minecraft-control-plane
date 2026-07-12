@@ -7,7 +7,7 @@ import {
   minecraftProfiles,
   type MinecraftProfile,
   type NewMinecraftProfile,
-} from "@/db/schema/minecraft-profile.js";
+} from "@/db/schema/index.js";
 import { AppError } from "@/errors/app-error.js";
 import { eq } from "drizzle-orm";
 

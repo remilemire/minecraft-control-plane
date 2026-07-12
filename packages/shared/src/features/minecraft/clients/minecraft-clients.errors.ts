@@ -1,6 +1,6 @@
 // packages/shared/src/features/minecraft/clients/minecraft-clients.errors.ts
 
-import type { ErrorCatalog } from "../../../common/errors.js";
+import type { ErrorCatalog } from "@/common/index.js";
 
 export const minecraftClientErrorCatalog = {
   MOJANG_CLIENT_ERROR: { kind: "SERVICE_UNAVAILABLE" },

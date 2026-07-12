@@ -1,6 +1,6 @@
 // packages/shared/src/features/users/users.schemas.ts
 
-import { emailSchema } from "../../common/schemas.js";
+import { emailSchema } from "@/common/index.js";
 import z from "zod";
 
 export const userIdSchema = z.uuid();

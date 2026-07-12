@@ -2,10 +2,10 @@
 
 import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { createTestApp } from "../helpers/create-test-app.js";
-import { createInvitation } from "../helpers/factories/invitation.factory.js";
-import { authenticateAdmin, authenticateUser } from "../helpers/test-auth.js";
-import { csrfPair } from "../helpers/test-cookies.js";
+import { createTestApp } from "@test/helpers/create-test-app.js";
+import { createInvitation } from "@test/helpers/factories/invitation.factory.js";
+import { authenticateAdmin, authenticateUser } from "@test/helpers/test-auth.js";
+import { csrfPair } from "@test/helpers/test-cookies.js";
 
 const { app } = createTestApp();
 

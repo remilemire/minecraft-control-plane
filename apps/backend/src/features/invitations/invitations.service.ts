@@ -1,7 +1,7 @@
 // apps/backend/src/features/invitations/invitations.service.ts
 
 import { env } from "@/config/env.js";
-import type { Invitation } from "@/db/schema/invitations.js";
+import type { Invitation } from "@/db/schema/index.js";
 import type { AcceptInvitationInput } from "@minecraft-server/shared/invitations";
 import type { InvitationRepository } from "./invitations.repository.js";
 import type { CreateInvitationData } from "./invitations.types.js";

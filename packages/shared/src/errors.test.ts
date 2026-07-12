@@ -1,8 +1,7 @@
 // packages/shared/src/errors.test.ts
 
 import { describe, expect, it } from "vitest";
-import { errorKindSchema } from "./common/index.js";
-import { commonErrorCatalog } from "./common/errors.js";
+import { commonErrorCatalog, errorKindSchema } from "./common/index.js";
 import { authErrorCatalog } from "./features/auth/index.js";
 import { invitationErrorCatalog } from "./features/invitations/index.js";
 import {
@@ -30,7 +29,7 @@ const featureCatalogs = {
 
 describe("errorCatalog", () => {
   it("merges every feature catalog without dropping codes to collisions", () => {
-    const codesPerFeature = Object.values(featureCatalogs).reduce(
+    const codesPerFeature = Object.values(featureCatalogs).reduce<number>(
       (total, catalog) => total + Object.keys(catalog).length,
       0,
     );

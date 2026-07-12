@@ -1,11 +1,7 @@
 // packages/shared/src/features/minecraft/players/minecraft-players.schemas.ts
 
+import { userIdSchema } from "@/features/users/index.js";
 import z from "zod";
-
-// The `minecraft_profiles` table's internal surrogate primary key. Exposed as
-// `id` on player responses for reference only — never accepted as a lookup
-// key from a client; routes address a player by `userId` instead.
-export const minecraftProfileIdSchema = z.uuid();
 
 export const minecraftUsernameSchema = z
   .string()
@@ -22,7 +18,7 @@ export const setMinecraftPlayerSchema = z
 export type SetMinecraftPlayerInput = z.infer<typeof setMinecraftPlayerSchema>;
 
 export const minecraftPlayerResponseSchema = z.object({
-  id: minecraftProfileIdSchema,
+  userId: userIdSchema,
   username: minecraftUsernameSchema,
   uuid: z.uuid(),
   online: z.boolean(),

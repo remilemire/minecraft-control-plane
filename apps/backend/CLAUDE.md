@@ -32,7 +32,9 @@ feature that composes `MinecraftProfileService` with `MinecraftServerService` to
 merge profile data with live online status and drive the whitelist.
 
 Path alias: `@/*` → `src/*` (and `@test/*` → `test/*`). Use `.js` extensions on
-relative/alias imports (ESM).
+relative/alias imports (ESM). Imports never use `../`; same-directory `./` imports
+are fine, anything else goes through the alias, preferring a barrel (`@/db/schema/index.js`)
+over reaching into a directory's internals (`@/db/schema/users.js`) when one exists.
 
 ## Layering & dependency injection
 

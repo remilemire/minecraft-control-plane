@@ -5,7 +5,7 @@
 // all tables between tests, and closes the pool when the file is done.
 
 import { afterAll, beforeEach } from "vitest";
-import { closeTestDb, ensureTestDatabase, truncateAllTables } from "../helpers/test-db.js";
+import { closeTestDb, ensureTestDatabase, truncateAllTables } from "@test/helpers/test-db.js";
 
 await ensureTestDatabase();
 

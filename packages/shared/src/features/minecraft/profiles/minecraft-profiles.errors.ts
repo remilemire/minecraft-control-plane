@@ -1,6 +1,6 @@
 // packages/shared/src/features/minecraft/profiles/minecraft-profiles.errors.ts
 
-import type { ErrorCatalog } from "../../../common/errors.js";
+import type { ErrorCatalog } from "@/common/index.js";
 
 export const minecraftProfileErrorCatalog = {
   MINECRAFT_PROFILE_NOT_FOUND: { kind: "NOT_FOUND" },

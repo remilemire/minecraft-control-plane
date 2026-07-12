@@ -14,7 +14,7 @@ import {
   minecraftProfileErrorCatalog,
   minecraftServerErrorCatalog,
 } from "./features/minecraft/index.js";
-import { sessionErrorCatalog } from "./features/sessions/sessions.errors.js";
+import { sessionErrorCatalog } from "./features/sessions/index.js";
 import { userErrorCatalog } from "./features/users/index.js";
 
 export const errorCatalog = {

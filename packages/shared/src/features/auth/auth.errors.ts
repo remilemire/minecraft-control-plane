@@ -1,6 +1,6 @@
 // packages/shared/src/features/auth/auth.errors.ts
 
-import type { ErrorCatalog } from "../../common/errors.js";
+import type { ErrorCatalog } from "@/common/index.js";
 
 export const authErrorCatalog = {
   UNAUTHENTICATED: { kind: "UNAUTHORIZED" },

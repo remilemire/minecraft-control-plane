@@ -85,9 +85,17 @@ Gotchas:
 - **Errors are a shared catalog.** `packages/shared` defines every error `code` and
   its `kind`; the backend maps kinds to HTTP status and attaches human messages. When
   you add or change an error, update the shared catalog first (see the backend guide).
-- **`packages/shared` uses relative imports only** (no `@/` alias). `tsc` emits paths
-  verbatim, so an alias would break the published `dist/`. It builds to `dist/` with
-  `composite: true`; if consumers see stale types, rebuild it
+- **Imports never traverse up (`../`); same-directory imports (`./`) are fine.**
+  Anything outside the current directory uses the `@/*` path alias (`@/*` → `src/*`
+  in both `apps/backend` and `packages/shared`; `apps/backend` additionally has
+  `@test/*` → `test/*`). Prefer a directory's barrel (`index.ts`) over reaching into
+  its internals when one exists (e.g. `@/db/schema/index.js`, not
+  `@/db/schema/users.js`; `@/features/users/index.js` in `packages/shared`, not
+  `@/features/users/users.schemas.js` from outside that feature). `tsc` emits `@/`
+  verbatim, so both packages' `build` scripts run `tsc-alias` afterward to rewrite
+  it to real relative paths in the emitted `dist/`; `packages/shared`'s
+  `vitest.config.ts` mirrors the alias so colocated tests resolve it too. It builds
+  to `dist/` with `composite: true`; if consumers see stale types, rebuild it
   (`pnpm --filter @minecraft-server/shared build`).
 - **Formatting/linting:** ESLint flat config + Prettier, extended from the root base
   configs. Run `make check` (or `lint`/`format`) before finishing.

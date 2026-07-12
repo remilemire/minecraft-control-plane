@@ -4,11 +4,11 @@ import { SESSION_COOKIE } from "@/http/session/session.constants.js";
 import { CSRF_COOKIE } from "@/http/csrf/csrf.constants.js";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createTestApp, type TestApp } from "../helpers/create-test-app.js";
-import { createInvitation } from "../helpers/factories/invitation.factory.js";
-import { createUser } from "../helpers/factories/user.factory.js";
-import { authenticateUser } from "../helpers/test-auth.js";
-import { csrfPair, findSetCookie, isClearedCookie } from "../helpers/test-cookies.js";
+import { createTestApp, type TestApp } from "@test/helpers/create-test-app.js";
+import { createInvitation } from "@test/helpers/factories/invitation.factory.js";
+import { createUser } from "@test/helpers/factories/user.factory.js";
+import { authenticateUser } from "@test/helpers/test-auth.js";
+import { csrfPair, findSetCookie, isClearedCookie } from "@test/helpers/test-cookies.js";
 
 let testApp: TestApp;
 
