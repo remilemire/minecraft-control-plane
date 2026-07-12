@@ -32,6 +32,8 @@ services:
       - .:/app
       - /app/node_modules
       - /app/apps/backend/node_modules
+      - /app/apps/frontend/node_modules
+      - /app/packages/shared/node_modules
     
     working_dir: /app/apps/backend
 
@@ -62,9 +64,14 @@ services:
       dockerfile: ./apps/frontend/Dockerfile
       target: dev
 
-    env_file: 
+    env_file:
       - ./.env
       - ./apps/frontend/.env
+
+    environment:
+      # Vite proxies /api inside the compose network; overrides the host
+      # default from apps/frontend/.env.
+      BACKEND_ORIGIN: http://backend:8000
 
     ports:
       - "${FRONTEND_PORT}:5173"
@@ -72,7 +79,9 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+      - /app/apps/backend/node_modules
       - /app/apps/frontend/node_modules
+      - /app/packages/shared/node_modules
 
 volumes:
   postgres-data:

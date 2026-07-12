@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createOpenApiDocument } from "./openapi.document.js";
 
 const EXPECTED_PATHS = [
+  "/users",
   "/users/me",
   "/auth/google",
   "/auth/logout",
@@ -111,6 +112,7 @@ describe("OpenAPI document", () => {
   });
 
   it("documents the admin list and player set endpoints", () => {
+    expect(document.paths?.["/users"]?.get?.operationId).toBe("listUsers");
     expect(document.paths?.["/invitations"]?.get?.operationId).toBe("listInvitations");
     expect(document.paths?.["/minecraft/players"]?.get?.operationId).toBe("listMinecraftPlayers");
     expect(document.paths?.["/minecraft/players/me"]?.put?.operationId).toBe("setMinecraftPlayer");

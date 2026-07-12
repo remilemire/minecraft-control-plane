@@ -1,4 +1,4 @@
-# backend/Dockerfile
+# apps/backend/Dockerfile
 
 # ================================
 # ------------- Base -------------
@@ -10,6 +10,7 @@ WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/backend/package.json ./apps/backend/
+COPY apps/frontend/package.json ./apps/frontend/
 COPY packages/shared/package.json ./packages/shared/
 
 RUN corepack enable && pnpm install --frozen-lockfile

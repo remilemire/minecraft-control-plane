@@ -2,7 +2,7 @@
 
 import { AppError } from "@/errors/app-error.js";
 import type { GoogleIdentity, GoogleOauthApi } from "@/features/auth/auth.types.js";
-import { OAuth2Client, type TokenPayload } from "google-auth-library";
+import { OAuth2Client } from "google-auth-library";
 
 export type GoogleOauthClientOptions = {
   readonly clientId: string;
@@ -19,7 +19,7 @@ export class GoogleOauthClient implements GoogleOauthApi {
 
   public async verifyCredential(credential: string): Promise<GoogleIdentity> {
     const ticket = await this.verifyIdToken(credential);
-    const payload: TokenPayload | undefined = ticket.getPayload();
+    const payload = ticket.getPayload();
 
     if (payload === undefined) {
       throw new AppError("INVALID_GOOGLE_CREDENTIAL");

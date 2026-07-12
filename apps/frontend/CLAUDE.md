@@ -1,21 +1,81 @@
 # CLAUDE.md — frontend
 
-Keep this dead simple for now: the frontend is a **skeleton**. `App.tsx` renders
-nothing; `src/app/router.tsx`, `src/app/providers/AuthProvider.tsx`, and
-`src/lib/apiClient.ts` are empty stubs. `main.tsx` mounts `<App>` inside
-`<BrowserRouter>`.
+React 19 + Vite SPA for the admin panel. Read the [root guide](../../CLAUDE.md) for
+the product model, monorepo layout, env, and commands. This file covers frontend
+internals. Keep it high-signal and update it when conventions change.
 
 Stack: **React 19 + Vite**, **Tailwind v4** (via `@tailwindcss/vite` — no
-`tailwind.config`; configure in CSS), **React Router**. TS strict; `@/*` → `src/*`.
-ESLint (flat, + react-hooks / react-refresh) + Prettier
-(`prettier-plugin-tailwindcss`). Tests use Vitest + jsdom.
+`tailwind.config`; the theme lives in `src/index.css`), **React Router** (plain
+`<Routes>`, no data router), **Vitest + jsdom + Testing Library**. TS strict.
+Aliases: `@/*` → `src/*`, `@test/*` → `test/*`. Unlike the backend, imports use
+**no `.js` extensions** (bundler resolution).
 
-When building it out, two durable contracts with the backend:
+## Layout
 
-- **Shared types/schemas:** import from `@minecraft-server/shared/<feature>` rather
-  than redefining request/response shapes.
-- **Auth:** sign-in posts a Google credential to `POST /api/auth/google`. The backend
-  uses a cookie session + CSRF double-submit, so requests need credentials (cookies),
-  and mutations must copy the `csrf_token` cookie into an `x-csrf-token` header.
+```
+src/
+  app/         router.tsx, providers/ (AuthProvider + auth-context), guards/
+               (RequireAuth / RequireAdmin / RequireGuest — Outlet-based)
+  components/  Minecraft-styled primitives: McPanel, McButton, McInput, McBadge,
+               McConfirmButton (two-click destructive confirm), ErrorText,
+               LoadingText, AppLayout (authed shell: header/nav/logout)
+  features/    feature-first, mirrors the backend: <feature>/api.ts (fetchers)
+               + components; minecraft splits into players/ and server/
+  lib/         apiClient.ts (fetch wrapper), cookies.ts, useRequest.ts, format.ts
+  pages/       route compositions: HomePage, AdminDashboardPage, NotFoundPage
+  assets/      bundled Monocraft font (OFL) + generated background.svg tile
+  index.css    the whole theme: @theme tokens + mc-raised/mc-inset utilities
+```
 
-Update this file as real structure and conventions land.
+## Contracts with the backend
+
+- **Responses are parsed through the shared schemas**
+  (`@minecraft-server/shared/<feature>`). Wire timestamps are ISO strings while the
+  shared schemas type them as `Date`, so feature `api.ts` modules extend response
+  schemas with `z.coerce.date()` (see `features/users/api.ts`).
+- **Everything goes through `apiRequest`** (`lib/apiClient.ts`): same-origin `/api`,
+  cookies sent, and every non-GET request echoes the `csrf_token` cookie into the
+  `x-csrf-token` header (double-submit). Failures throw `ApiError`
+  (`{ kind, code, message, issues? }`) — branch on `code`
+  (e.g. PlayerCard treats `MINECRAFT_PROFILE_NOT_FOUND` as "not linked yet").
+- **Request bodies are parsed through the shared input schemas before sending**, and
+  forms `safeParse` the same schemas for inline errors (with `noValidate` so the
+  browser's native validation doesn't preempt ours).
+
+## Auth
+
+- `AuthProvider` probes `GET /users/me` on mount → `loading` | `authenticated` |
+  `unauthenticated`; `login(credential)` posts to `/auth/google`. Guards redirect:
+  RequireAuth → `/login`, RequireAdmin → `/`, RequireGuest → `/`.
+- Google sign-in loads the GIS script lazily (`features/auth/googleIdentity.ts`) and
+  needs `VITE_GOOGLE_CLIENT_ID` (same OAuth client as the backend's
+  `GOOGLE_CLIENT_ID`).
+- The Vite dev server proxies `/api` to `BACKEND_ORIGIN` (compose overrides it to
+  `http://backend:8000` inside the network), so dev is same-origin — no CORS.
+
+## Minecraft GUI conventions
+
+- All colors/fonts come from the `@theme` tokens in `index.css` (slot greys
+  `#373737`/`#4C4C4C`, highlight `#FFFF55`, chat green/red, shadow `#3F3F3F`) —
+  don't hardcode colors in components.
+- `mc-raised` = light top/left + dark bottom/right bevel (buttons, panels);
+  `mc-inset` = the inverse (inventory slots, inputs). **No rounded corners
+  anywhere**; body text carries the 2px drop shadow globally.
+- The pixel font is bundled Monocraft (OFL — license alongside the .ttf files).
+
+## Data fetching
+
+`useRequest(load)` (`lib/useRequest.ts`) fetches on mount and on `reload()`. `load`
+must be identity-stable (module-level fn); previous data stays visible while a
+reload is in flight. Mutations live in component handlers and call `reload()` on
+success — there's no cache/store.
+
+## Testing
+
+- Colocated `src/**/*.test.{ts,tsx}` (jsdom, globals on, `test/setup.ts` wires
+  jest-dom). Helpers in `test/helpers/`: `renderWithAuth` / `makeUser` /
+  `makeAuthValue` inject `AuthContext` + `MemoryRouter` directly instead of mocking
+  fetch.
+- Feature components mock their sibling `./api` module with `vi.mock`; `apiClient`
+  tests stub global `fetch`. Fake-timer tests (McConfirmButton) use `fireEvent`, not
+  `userEvent` (which hangs under fake timers).

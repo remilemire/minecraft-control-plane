@@ -5,10 +5,53 @@ import { describe, expect, it } from "vitest";
 import { createTestApp } from "@test/helpers/create-test-app.js";
 import { createSession } from "@test/helpers/factories/session.factory.js";
 import { createUser } from "@test/helpers/factories/user.factory.js";
-import { authenticateUser } from "@test/helpers/test-auth.js";
+import { authenticateAdmin, authenticateUser } from "@test/helpers/test-auth.js";
 import { sessionCookie } from "@test/helpers/test-cookies.js";
 
 const { app } = createTestApp();
+
+describe("GET /api/users", () => {
+  it("returns every user's public shape for an admin", async () => {
+    const auth = await authenticateAdmin();
+    const other = await createUser({ firstName: "Alex", lastName: "Builder" });
+
+    const response = await request(app).get("/api/users").set("Cookie", [auth.cookie]);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: auth.user.id, isAdmin: true }),
+        expect.objectContaining({
+          id: other.id,
+          email: other.email,
+          firstName: "Alex",
+          lastName: "Builder",
+          isAdmin: false,
+        }),
+      ]),
+    );
+    // The response schema must not leak internal columns.
+    for (const user of response.body) {
+      expect(user.googleId).toBeUndefined();
+    }
+  });
+
+  it("rejects non-admin users", async () => {
+    const auth = await authenticateUser();
+
+    const response = await request(app).get("/api/users").set("Cookie", [auth.cookie]);
+
+    expect(response.status).toBe(403);
+    expect(response.body).toMatchObject({ kind: "FORBIDDEN", code: "ADMIN_REQUIRED" });
+  });
+
+  it("rejects requests without a session", async () => {
+    const response = await request(app).get("/api/users");
+
+    expect(response.status).toBe(401);
+    expect(response.body).toMatchObject({ kind: "UNAUTHORIZED", code: "UNAUTHENTICATED" });
+  });
+});
 
 describe("GET /api/users/me", () => {
   it("returns the authenticated user's public shape", async () => {

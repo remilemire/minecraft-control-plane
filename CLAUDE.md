@@ -18,8 +18,9 @@ home Linux box via Docker Compose. There is a **single admin**.
 - Signed-in users link their own **Minecraft player** (username → UUID, resolved via
   Mojang), which self-service adds them to the **whitelist** over **RCON**; only the
   admin can unlink a player (self or anyone else), which removes them again. The
-  admin can view the roster (linked players + online status) and controls the server
-  via **docker compose** (start/stop/restart the container).
+  admin can view the roster (linked players + online status) and all registered
+  users, and controls the server via **docker compose** (start/stop/restart the
+  container).
 - A firewall / IP-access layer in front of the server is a **planned future**
   addition — it does not exist yet. Access is the Minecraft whitelist for now.
 
@@ -29,7 +30,7 @@ A single **pnpm** workspace monorepo. TypeScript everywhere (ESM, strict).
 
 ```
 apps/backend     Express 5 + Drizzle + Postgres API   → apps/backend/CLAUDE.md
-apps/frontend    React 19 + Vite SPA (skeleton)        → apps/frontend/CLAUDE.md
+apps/frontend    React 19 + Vite SPA                   → apps/frontend/CLAUDE.md
 packages/shared  Zod schemas + error catalog (shared by both apps)
 ```
 
@@ -47,13 +48,16 @@ across workspaces; scope any workspace target to one package with `pkg=` (e.g.
 | --- | --- |
 | Start / stop / restart stack | `make up` / `make down` / `make restart` |
 | Rebuild from scratch | `make nuke` |
+| Apply DB migrations (inside the `backend` container) | `make migrate` |
 | Tail logs | `make logs` (or `logs-backend` / `logs-db` / `logs-minecraft`) |
 | Dev servers (all) | `make dev` |
 | Build / test / lint / format | `make build` / `test` / `lint` / `format` |
 | Everything (format+lint+test) | `make check` |
 | Install deps | `make install` (`pnpm install --frozen-lockfile`) |
 
-Migrations and single test layers are pnpm scripts, not Make targets — run them with
+`make migrate` runs `pnpm db:migrate` via `docker compose exec backend`, so it needs
+the stack up (`make up`) and picks up `POSTGRES_HOST=db` from the container's env.
+Other single test layers are still pnpm scripts, not Make targets — run them with
 `pnpm --filter @minecraft-server/backend <script>` (see the backend guide).
 
 ## Environment
@@ -65,7 +69,10 @@ Three gitignored `.env` files (each has a committed `.env.example`):
 - **`apps/backend/.env`** — app settings: `SESSION_SECRET`, `CORS_ALLOWED_ORIGINS`,
   `*_TTL_DAYS`, `GOOGLE_CLIENT_ID`, `MINECRAFT_COMPOSE_FILE`/`MINECRAFT_SERVICE_NAME`,
   `ADMIN_EMAIL`.
-- **`apps/frontend/.env`** — `BACKEND_ORIGIN` (not consumed yet).
+- **`apps/frontend/.env`** — `BACKEND_ORIGIN` (Vite dev-server `/api` proxy target;
+  `compose.yaml` overrides it to `http://backend:8000` inside the network) and
+  `VITE_GOOGLE_CLIENT_ID` (Google sign-in button; same client as the backend's
+  `GOOGLE_CLIENT_ID`).
 
 Gotchas:
 
@@ -100,11 +107,11 @@ Gotchas:
 - **Formatting/linting:** ESLint flat config + Prettier, extended from the root base
   configs. Run `make check` (or `lint`/`format`) before finishing.
 - **TS:** strict, ESM, `verbatimModuleSyntax` + `isolatedModules`
-  (`import type` for type-only imports; `.js` extensions on relative imports).
+  (`import type` for type-only imports; `.js` extensions on relative imports —
+  except `apps/frontend`, which uses bundler resolution and no extensions).
 
 ## Not built yet — don't assume it exists
 
-- The **frontend** app (it's a skeleton — see its guide).
 - **Admin promotion**: `ADMIN_EMAIL` is read from env but nothing yet sets a user's
   `is_admin`. Treat "who is admin" as unresolved wiring, not an implemented rule.
 - **Production**: same-origin SPA serving from the backend, and the firewall /

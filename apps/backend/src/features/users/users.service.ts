@@ -7,6 +7,10 @@ import type { UserRepository } from "./users.repository.js";
 export class UserService {
   public constructor(private readonly users: UserRepository) {}
 
+  public async list(): Promise<User[]> {
+    return await this.users.findAll();
+  }
+
   public async findByGoogleId(googleId: string): Promise<User | null> {
     return await this.users.findByGoogleId(googleId);
   }

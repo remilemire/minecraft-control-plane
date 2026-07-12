@@ -107,7 +107,8 @@ To add an error code, update three places that must stay in sync:
   `csrf_token` cookie against the `x-csrf-token` header; applied to mutating routes.
 - **Authorization:** `createRequireAuth(authService)` loads `req.user`/`req.session`
   from the session cookie; `requireAdmin` checks `req.user.isAdmin`. Admin-gated:
-  invitations, the players roster (`GET /minecraft/players`), unlinking a player
+  invitations, the user list (`GET /users`), the players roster
+  (`GET /minecraft/players`), unlinking a player
   (`DELETE /minecraft/players/:userId`), server power. Linking your own Minecraft
   player (`PUT /minecraft/players/me`) is self-service; unlinking someone (yourself
   included) is admin-only — there's no self-service delete. Note: nothing sets

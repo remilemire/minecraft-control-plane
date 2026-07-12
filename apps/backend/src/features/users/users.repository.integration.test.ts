@@ -19,6 +19,17 @@ describe("UserRepository", () => {
     expect(await repository.findByGoogleId(created.googleId)).toEqual(created);
   });
 
+  it("lists every user ordered by creation date", async () => {
+    const first = await createUser();
+    const second = await createUser();
+
+    const all = await repository.findAll();
+
+    expect(all).toEqual(expect.arrayContaining([first, second]));
+    const timestamps = all.map((user) => user.createdAt.getTime());
+    expect(timestamps).toEqual([...timestamps].sort((a, b) => a - b));
+  });
+
   it("returns null for an unknown id or google id", async () => {
     expect(await repository.findById(randomUUID())).toBeNull();
     expect(await repository.findByGoogleId("nope")).toBeNull();

@@ -10,6 +10,10 @@ import { eq } from "drizzle-orm";
 export class UserRepository {
   public constructor(private readonly db: Db) {}
 
+  public async findAll(): Promise<User[]> {
+    return await withDbErrors(() => this.db.select().from(users).orderBy(users.createdAt));
+  }
+
   public async findById(id: string): Promise<User | null> {
     const [user] = await withDbErrors(() =>
       this.db.select().from(users).where(eq(users.id, id)).limit(1),

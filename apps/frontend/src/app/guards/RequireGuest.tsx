@@ -1,0 +1,23 @@
+// apps/frontend/src/app/guards/RequireGuest.tsx
+
+import { useAuth } from "@/app/providers/auth-context";
+import { LoadingText } from "@/components/LoadingText";
+import { Navigate, Outlet } from "react-router";
+
+export function RequireGuest() {
+  const { status } = useAuth();
+
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <LoadingText />
+      </div>
+    );
+  }
+
+  if (status === "authenticated") {
+    return <Navigate to="/" replace />;
+  }
+
+  return <Outlet />;
+}

@@ -21,7 +21,7 @@ help: ## Show this help
 
 # ---- Docker -----------------------------------------------------------------
 
-.PHONY: up down restart ps logs logs-db logs-backend logs-frontend logs-minecraft nuke
+.PHONY: up down restart ps logs logs-db logs-backend logs-frontend logs-minecraft nuke migrate
 
 up: ## Build and start the stack (detached)
 	$(COMPOSE) up --build -d
@@ -52,6 +52,9 @@ logs-minecraft: ## Tail minecraft logs
 nuke: ## Stop, remove volumes/orphans, and rebuild from scratch
 	$(COMPOSE) down -v --remove-orphans
 	$(COMPOSE) build --no-cache
+
+migrate: ## Apply pending DB migrations inside the running backend container
+	$(COMPOSE) exec backend pnpm --filter @minecraft-server/backend db:migrate
 
 # ---- Node / workspaces (add `pkg=backend` to scope any of these) ------------
 

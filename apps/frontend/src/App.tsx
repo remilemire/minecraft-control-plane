@@ -1,5 +1,12 @@
 // apps/frontend/src/App.tsx
 
+import { AppRouter } from "@/app/router";
+import { AuthProvider } from "@/app/providers/AuthProvider";
+
 export default function App() {
-  return <></>;
+  return (
+    <AuthProvider>
+      <AppRouter />
+    </AuthProvider>
+  );
 }

@@ -1,6 +1,6 @@
 // apps/frontend/prettier.config.ts
 
-import baseConfig from "../../prettier.config.js";
+import baseConfig from "../../prettier.config.ts";
 
 export default {
   ...baseConfig,
