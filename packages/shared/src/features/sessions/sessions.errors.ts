@@ -1,9 +1,9 @@
 // packages/shared/src/features/sessions/sessions.errors.ts
 
-import type { ErrorCatalog } from "@/common/index.js";
+import type { ErrorMeta } from "@/common/index.js";
 
-export const sessionErrorCatalog = {
+export const sessionErrorMeta = {
   SESSION_NOT_FOUND: { kind: "NOT_FOUND" },
-} as const satisfies ErrorCatalog;
+} as const satisfies ErrorMeta;
 
-export type SessionErrorCode = keyof typeof sessionErrorCatalog;
+export type SessionErrorCode = keyof typeof sessionErrorMeta;

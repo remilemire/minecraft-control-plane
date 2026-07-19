@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 import { AppError } from "./app-error.js";
-import { errorMeta } from "./meta.js";
+import { errorCatalog } from "./catalog.js";
 import { translateError } from "./translator.js";
 import { ValidationError } from "./validation-error.js";
 
@@ -15,7 +15,7 @@ describe("translateError", () => {
       body: {
         kind: "NOT_FOUND",
         code: "MINECRAFT_PROFILE_NOT_FOUND",
-        message: errorMeta.MINECRAFT_PROFILE_NOT_FOUND.message,
+        message: errorCatalog.MINECRAFT_PROFILE_NOT_FOUND.message,
       },
     });
   });
@@ -25,7 +25,7 @@ describe("translateError", () => {
     const result = translateError(new AppError("INTERNAL", { message: "stack trace details" }));
 
     expect(result.status).toBe(500);
-    expect(result.body.message).toBe(errorMeta.INTERNAL.message);
+    expect(result.body.message).toBe(errorCatalog.INTERNAL.message);
     expect(result.body.message).not.toBe("stack trace details");
   });
 

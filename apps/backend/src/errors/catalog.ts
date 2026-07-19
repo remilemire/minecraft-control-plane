@@ -1,0 +1,24 @@
+// apps/backend/src/errors/catalog.ts
+
+import { authErrorCatalog } from "@/features/auth/auth.error-catalog.js";
+import { invitationErrorCatalog } from "@/features/invitations/invitations.error-catalog.js";
+import { minecraftErrorCatalog } from "@/features/minecraft/minecraft.error-catalog.js";
+import { sessionErrorCatalog } from "@/features/sessions/sessions.error-catalog.js";
+import { userErrorCatalog } from "@/features/users/users.error-catalog.js";
+import type { CommonErrorCode } from "@minecraft-server/shared/common";
+import type { ErrorCatalog } from "./catalog-contracts.js";
+
+const commonErrorCatalog = {
+  INTERNAL: { message: "Something went wrong." },
+  SERVICE_UNAVAILABLE: { message: "The service is temporarily unavailable." },
+  VALIDATION_FAILED: { message: "Validation failed." },
+} as const satisfies ErrorCatalog<CommonErrorCode>;
+
+export const errorCatalog = {
+  ...commonErrorCatalog,
+  ...authErrorCatalog,
+  ...invitationErrorCatalog,
+  ...minecraftErrorCatalog,
+  ...sessionErrorCatalog,
+  ...userErrorCatalog,
+} as const satisfies ErrorCatalog;

@@ -22,39 +22,28 @@ import { createUserRoutes } from "../features/users/users.routes.js";
 import { UserService } from "../features/users/users.service.js";
 import { Router } from "express";
 export function createRouter(deps) {
-  const router = Router();
-  const users = new UserRepository(deps.db);
-  const sessions = new SessionRepository(deps.db);
-  const invitations = new InvitationRepository(deps.db);
-  const minecraftProfiles = new MinecraftProfileRepository(deps.db);
-  const userService = new UserService(users);
-  const sessionService = new SessionService(sessions);
-  const invitationService = new InvitationService(invitations);
-  const authService = new AuthService(
-    userService,
-    sessionService,
-    invitationService,
-    deps.googleOauthClient,
-  );
-  const minecraftProfileService = new MinecraftProfileService(minecraftProfiles, deps.mojangClient);
-  const minecraftServerService = new MinecraftServerService(deps.rconClient, deps.processClient);
-  const minecraftPlayerService = new MinecraftPlayerService(
-    minecraftProfileService,
-    minecraftServerService,
-  );
-  const userController = new UserController(userService);
-  const invitationController = new InvitationController(invitationService);
-  const authController = new AuthController(authService);
-  const minecraftPlayerController = new MinecraftPlayerController(minecraftPlayerService);
-  const minecraftServerController = new MinecraftServerController(minecraftServerService);
-  const requireAuth = createRequireAuth(authService);
-  router.use("/users", createUserRoutes(userController, requireAuth));
-  router.use("/invitations", createInvitationRoutes(invitationController, requireAuth));
-  router.use("/auth", createAuthRoutes(authController, requireAuth));
-  router.use(
-    "/minecraft",
-    createMinecraftRoutes(minecraftPlayerController, minecraftServerController, requireAuth),
-  );
-  return router;
+    const router = Router();
+    const users = new UserRepository(deps.db);
+    const sessions = new SessionRepository(deps.db);
+    const invitations = new InvitationRepository(deps.db);
+    const minecraftProfiles = new MinecraftProfileRepository(deps.db);
+    const userService = new UserService(users);
+    const sessionService = new SessionService(sessions);
+    const invitationService = new InvitationService(invitations);
+    const authService = new AuthService(userService, sessionService, invitationService, deps.googleOauthClient);
+    const minecraftProfileService = new MinecraftProfileService(minecraftProfiles, deps.mojangClient);
+    const minecraftServerService = new MinecraftServerService(deps.rconClient, deps.processClient);
+    const minecraftPlayerService = new MinecraftPlayerService(minecraftProfileService, minecraftServerService);
+    const userController = new UserController(userService);
+    const invitationController = new InvitationController(invitationService);
+    const authController = new AuthController(authService);
+    const minecraftPlayerController = new MinecraftPlayerController(minecraftPlayerService);
+    const minecraftServerController = new MinecraftServerController(minecraftServerService);
+    const requireAuth = createRequireAuth(authService);
+    router.use("/users", createUserRoutes(userController, requireAuth));
+    router.use("/invitations", createInvitationRoutes(invitationController, requireAuth));
+    router.use("/auth", createAuthRoutes(authController, requireAuth));
+    router.use("/minecraft", createMinecraftRoutes(minecraftPlayerController, minecraftServerController, requireAuth));
+    return router;
 }
 //# sourceMappingURL=index.js.map

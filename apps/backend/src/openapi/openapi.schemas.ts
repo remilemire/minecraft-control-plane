@@ -6,7 +6,7 @@ import { SESSION_COOKIE } from "@/http/session/session.constants.js";
 import type { ResponseConfig } from "@asteasolutions/zod-to-openapi";
 import type { ErrorKind } from "@minecraft-server/shared/common";
 import {
-  errorCatalog,
+  errorMeta,
   validationIssueCodeSchema,
   type ErrorCodeForKind,
 } from "@minecraft-server/shared/errors";
@@ -59,7 +59,7 @@ type ErrorCodesOfKind<Kind extends ErrorKind> = readonly [
  * Builds the documented shape of a translated error body (`errors/translator.ts`),
  * narrowed to the codes a route can actually return. The codes must all belong
  * to the given kind (compile error otherwise), so the HTTP status a response is
- * registered under always matches what the translator derives from the catalog.
+ * registered under always matches what the translator derives from the metadata.
  */
 export function createErrorResponseSchema<const Kind extends ErrorKind>(
   kind: Kind,
@@ -74,9 +74,9 @@ export function createErrorResponseSchema<const Kind extends ErrorKind>(
     .openapi({ description: `Error response (HTTP ${ERROR_KIND_TO_HTTP_STATUS[kind]}).` });
 }
 
-/** Every catalog code of the given kind, for responses that aren't narrowed per route. */
+/** Every error code of the given kind, for responses that aren't narrowed per route. */
 export function errorCodesOfKind<Kind extends ErrorKind>(kind: Kind): ErrorCodesOfKind<Kind> {
-  const codes = Object.entries(errorCatalog)
+  const codes = Object.entries(errorMeta)
     .filter(([, meta]) => meta.kind === kind)
     .map(([code]) => code);
   return codes as unknown as ErrorCodesOfKind<Kind>;

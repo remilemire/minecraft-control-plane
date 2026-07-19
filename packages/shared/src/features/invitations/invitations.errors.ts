@@ -1,10 +1,10 @@
 // packages/shared/src/features/invitations/invitations.errors.ts
 
-import type { ErrorCatalog } from "@/common/index.js";
+import type { ErrorMeta } from "@/common/index.js";
 
-export const invitationErrorCatalog = {
+export const invitationErrorMeta = {
   INVITATION_NOT_FOUND: { kind: "NOT_FOUND" },
   INVITATION_ALREADY_EXISTS: { kind: "CONFLICT" },
-} as const satisfies ErrorCatalog;
+} as const satisfies ErrorMeta;
 
-export type InvitationErrorCode = keyof typeof invitationErrorCatalog;
+export type InvitationErrorCode = keyof typeof invitationErrorMeta;

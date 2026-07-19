@@ -1,10 +1,10 @@
 // packages/shared/src/features/minecraft/clients/minecraft-clients.errors.ts
 
-import type { ErrorCatalog } from "@/common/index.js";
+import type { ErrorMeta } from "@/common/index.js";
 
-export const minecraftClientErrorCatalog = {
+export const minecraftClientErrorMeta = {
   MOJANG_CLIENT_ERROR: { kind: "SERVICE_UNAVAILABLE" },
   RCON_CLIENT_ERROR: { kind: "SERVICE_UNAVAILABLE" },
-} as const satisfies ErrorCatalog;
+} as const satisfies ErrorMeta;
 
-export type MinecraftClientErrorCode = keyof typeof minecraftClientErrorCatalog;
+export type MinecraftClientErrorCode = keyof typeof minecraftClientErrorMeta;

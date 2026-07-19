@@ -44,16 +44,16 @@ Run from the repo root. The `Makefile` wraps Docker Compose and fans pnpm script
 across workspaces; scope any workspace target to one package with `pkg=` (e.g.
 `make test pkg=backend`).
 
-| Task | Command |
-| --- | --- |
-| Start / stop / restart stack | `make up` / `make down` / `make restart` |
-| Rebuild from scratch | `make nuke` |
-| Apply DB migrations (inside the `backend` container) | `make migrate` |
-| Tail logs | `make logs` (or `logs-backend` / `logs-db` / `logs-minecraft`) |
-| Dev servers (all) | `make dev` |
-| Build / test / lint / format | `make build` / `test` / `lint` / `format` |
-| Everything (format+lint+test) | `make check` |
-| Install deps | `make install` (`pnpm install --frozen-lockfile`) |
+| Task                                                 | Command                                                        |
+| ---------------------------------------------------- | -------------------------------------------------------------- |
+| Start / stop / restart stack                         | `make up` / `make down` / `make restart`                       |
+| Rebuild from scratch                                 | `make nuke`                                                    |
+| Apply DB migrations (inside the `backend` container) | `make migrate`                                                 |
+| Tail logs                                            | `make logs` (or `logs-backend` / `logs-db` / `logs-minecraft`) |
+| Dev servers (all)                                    | `make dev`                                                     |
+| Build / test / lint / format                         | `make build` / `test` / `lint` / `format`                      |
+| Everything (format+lint+test)                        | `make check`                                                   |
+| Install deps                                         | `make install` (`pnpm install --frozen-lockfile`)              |
 
 `make migrate` runs `pnpm db:migrate` via `docker compose exec backend`, so it needs
 the stack up (`make up`) and picks up `POSTGRES_HOST=db` from the container's env.
@@ -89,9 +89,10 @@ Gotchas:
 - **Wire format is camelCase**, defined once by the Zod schemas in `packages/shared`
   and shared by both apps. Don't hand-build request/response shapes — parse/serialize
   through the shared schemas.
-- **Errors are a shared catalog.** `packages/shared` defines every error `code` and
-  its `kind`; the backend maps kinds to HTTP status and attaches human messages. When
-  you add or change an error, update the shared catalog first (see the backend guide).
+- **Errors are a shared registry.** `packages/shared` defines every error `code` and
+  its `kind` (the shared error metadata); the backend maps kinds to HTTP status and
+  attaches the human messages (its per-feature error catalog). When you add or change an
+  error, update the shared registry first (see the backend guide).
 - **Imports never traverse up (`../`); same-directory imports (`./`) are fine.**
   Anything outside the current directory uses the `@/*` path alias (`@/*` → `src/*`
   in both `apps/backend` and `packages/shared`; `apps/backend` additionally has

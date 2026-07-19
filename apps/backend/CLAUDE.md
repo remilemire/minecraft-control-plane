@@ -9,15 +9,15 @@ internals. Keep it high-signal and update it when conventions change.
 Everything domain-specific lives under `src/features/<feature>/`. A feature is a set
 of files by role (not all features have every file):
 
-| File              | Role                                                                                |
-| ----------------- | ----------------------------------------------------------------------------------- |
-| `*.routes.ts`     | Builds an Express `Router`; applies `requireAuth` / `requireAdmin` / `requireCsrf`. |
-| `*.controller.ts` | Class of request handlers: parse input, call the service, serialize the response.   |
-| `*.service.ts`    | Class holding business logic; throws `AppError` on domain failures.                 |
-| `*.repository.ts` | Class of Drizzle queries; wraps them in `withDbErrors`.                             |
-| `*.types.ts`      | Internal TS types + boundary interfaces (e.g. `MojangApi`).                         |
-| `*.openapi.ts`    | Registers the feature's operations on the OpenAPI registry (import side effect).    |
-| `*.error-meta.ts` | Human-readable messages for this feature's error codes.                             |
+| File                 | Role                                                                                |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| `*.routes.ts`        | Builds an Express `Router`; applies `requireAuth` / `requireAdmin` / `requireCsrf`. |
+| `*.controller.ts`    | Class of request handlers: parse input, call the service, serialize the response.   |
+| `*.service.ts`       | Class holding business logic; throws `AppError` on domain failures.                 |
+| `*.repository.ts`    | Class of Drizzle queries; wraps them in `withDbErrors`.                             |
+| `*.types.ts`         | Internal TS types + boundary interfaces (e.g. `MojangApi`).                         |
+| `*.openapi.ts`       | Registers the feature's operations on the OpenAPI registry (import side effect).    |
+| `*.error-catalog.ts` | Human-readable messages for this feature's error codes.                             |
 
 Features: `auth`, `users`, `sessions`, `invitations`, `minecraft` (with
 `minecraft/players`, `minecraft/server`, `minecraft/profiles`, and
@@ -25,7 +25,7 @@ Features: `auth`, `users`, `sessions`, `invitations`, `minecraft` (with
 `errors/`, `http/`, `validation/`, `openapi/`, `middleware/`, `lib/`, `routes/`.
 
 `minecraft/profiles` is a partial exception to the layout above: it's now
-internal-only (`*.service.ts` + `*.repository.ts` + `*.error-meta.ts`, no
+internal-only (`*.service.ts` + `*.repository.ts` + `*.error-catalog.ts`, no
 `*.routes.ts`/`*.controller.ts`/`*.openapi.ts`). It owns the `minecraft_profiles`
 table (a user's linked username/uuid); `minecraft/players` is the HTTP-facing
 feature that composes `MinecraftProfileService` with `MinecraftServerService` to
@@ -83,16 +83,17 @@ One shape out the door: `{ kind, code, message, issues? }`.
 - The `errorHandler` middleware (registered last) calls `translateError`
   (`errors/translator.ts`): `ValidationError`/`AppError` → their code; anything else →
   `INTERNAL`.
-- The **catalog** (`@minecraft-server/shared/errors`, aggregated from per-feature
-  catalogs in `packages/shared/src/features/*/*.errors.ts`) maps each `code` → `kind`;
-  `errors/http-status.ts` maps `kind` → HTTP status.
-- **Human messages** live in per-feature `src/features/*/*.error-meta.ts`, aggregated
-  in `errors/meta.ts`.
+- The shared **error metadata** (`errorMeta`, `@minecraft-server/shared/errors`,
+  aggregated from per-feature maps in `packages/shared/src/features/*/*.errors.ts`) maps
+  each `code` → `kind`; `errors/http-status.ts` maps `kind` → HTTP status. It's also the
+  source that derives the `ErrorCode` types and the wire `errorResponseSchema`.
+- **Human messages** are the backend **catalog** (`errorCatalog`): per-feature
+  `src/features/*/*.error-catalog.ts`, aggregated in `errors/catalog.ts`.
 
 To add an error code, update three places that must stay in sync:
 
-1. the feature's catalog in `packages/shared` (adds `code` + `kind`),
-2. the feature's `*.error-meta.ts` (message),
+1. the feature's metadata in `packages/shared` (adds `code` + `kind`),
+2. the feature's `*.error-catalog.ts` (message),
 3. optionally its `*.openapi.ts` if a route should advertise the new status.
 
 ## Auth, sessions, CSRF, authorization

@@ -1,0 +1,7 @@
+// apps/backend/src/features/minecraft/server/minecraft-server.error-catalog.ts
+
+import type { ErrorCatalog } from "@/errors/catalog-contracts.js";
+import type { MinecraftServerErrorCode } from "@minecraft-server/shared/minecraft";
+
+export const minecraftServerErrorCatalog =
+  {} as const satisfies ErrorCatalog<MinecraftServerErrorCode>;

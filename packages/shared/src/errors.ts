@@ -2,39 +2,39 @@
 
 import z from "zod";
 import {
-  commonErrorCatalog,
+  commonErrorMeta,
   errorKindSchema,
-  type ErrorCatalog,
+  type ErrorMeta,
   type ErrorKind,
 } from "./common/index.js";
-import { authErrorCatalog } from "./features/auth/index.js";
-import { invitationErrorCatalog } from "./features/invitations/index.js";
+import { authErrorMeta } from "./features/auth/index.js";
+import { invitationErrorMeta } from "./features/invitations/index.js";
 import {
-  minecraftClientErrorCatalog,
-  minecraftProfileErrorCatalog,
-  minecraftServerErrorCatalog,
+  minecraftClientErrorMeta,
+  minecraftProfileErrorMeta,
+  minecraftServerErrorMeta,
 } from "./features/minecraft/index.js";
-import { sessionErrorCatalog } from "./features/sessions/index.js";
-import { userErrorCatalog } from "./features/users/index.js";
+import { sessionErrorMeta } from "./features/sessions/index.js";
+import { userErrorMeta } from "./features/users/index.js";
 
-export const errorCatalog = {
-  ...commonErrorCatalog,
-  ...authErrorCatalog,
-  ...invitationErrorCatalog,
-  ...minecraftProfileErrorCatalog,
-  ...minecraftServerErrorCatalog,
-  ...minecraftClientErrorCatalog,
-  ...sessionErrorCatalog,
-  ...userErrorCatalog,
-} as const satisfies ErrorCatalog;
+export const errorMeta = {
+  ...commonErrorMeta,
+  ...authErrorMeta,
+  ...invitationErrorMeta,
+  ...minecraftProfileErrorMeta,
+  ...minecraftServerErrorMeta,
+  ...minecraftClientErrorMeta,
+  ...sessionErrorMeta,
+  ...userErrorMeta,
+} as const satisfies ErrorMeta;
 
-export type ErrorCode = keyof typeof errorCatalog;
+export type ErrorCode = keyof typeof errorMeta;
 
 export type ErrorCodeForKind<K extends ErrorKind> = {
-  [C in ErrorCode]: (typeof errorCatalog)[C]["kind"] extends K ? C : never;
+  [C in ErrorCode]: (typeof errorMeta)[C]["kind"] extends K ? C : never;
 }[ErrorCode];
 
-export const errorCodeSchema = z.enum(Object.keys(errorCatalog) as [ErrorCode, ...ErrorCode[]]);
+export const errorCodeSchema = z.enum(Object.keys(errorMeta) as [ErrorCode, ...ErrorCode[]]);
 
 export const validationIssueCodeSchema = z.enum([
   "EXTRA_FIELD",

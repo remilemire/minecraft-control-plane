@@ -37,6 +37,8 @@ ps: ## Show running services
 logs: ## Tail all logs
 	$(COMPOSE) logs -f
 
+# TODO: Generalize to logs-*
+
 logs-db: ## Tail db logs
 	$(COMPOSE) logs -f db
 
@@ -48,6 +50,8 @@ logs-frontend: ## Tail frontend logs
 
 logs-minecraft: ## Tail minecraft logs
 	$(COMPOSE) logs -f minecraft
+
+# END TODO
 
 nuke: ## Stop, remove volumes/orphans, and rebuild from scratch
 	$(COMPOSE) down -v --remove-orphans
@@ -79,3 +83,5 @@ format: ## Format workspaces
 	$(RUN) format
 
 check: format lint test ## Format, lint, then test everything
+
+# TODO: add test-*, lint-*, format-*, and check-*

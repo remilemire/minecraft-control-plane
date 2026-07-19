@@ -14,14 +14,14 @@ export const errorKindSchema = z.enum([
 
 export type ErrorKind = z.infer<typeof errorKindSchema>;
 
-export type ErrorCatalog = {
+export type ErrorMeta = {
   readonly [code: string]: { readonly kind: ErrorKind };
 };
 
-export const commonErrorCatalog = {
+export const commonErrorMeta = {
   INTERNAL: { kind: "INTERNAL" },
   VALIDATION_FAILED: { kind: "VALIDATION" },
   SERVICE_UNAVAILABLE: { kind: "SERVICE_UNAVAILABLE" },
-} as const satisfies ErrorCatalog;
+} as const satisfies ErrorMeta;
 
-export type CommonErrorCode = keyof typeof commonErrorCatalog;
+export type CommonErrorCode = keyof typeof commonErrorMeta;

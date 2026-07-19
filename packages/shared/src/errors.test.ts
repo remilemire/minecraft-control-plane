@@ -1,59 +1,59 @@
 // packages/shared/src/errors.test.ts
 
 import { describe, expect, it } from "vitest";
-import { commonErrorCatalog, errorKindSchema } from "./common/index.js";
-import { authErrorCatalog } from "./features/auth/index.js";
-import { invitationErrorCatalog } from "./features/invitations/index.js";
+import { commonErrorMeta, errorKindSchema } from "./common/index.js";
+import { authErrorMeta } from "./features/auth/index.js";
+import { invitationErrorMeta } from "./features/invitations/index.js";
 import {
-  minecraftClientErrorCatalog,
-  minecraftProfileErrorCatalog,
-  minecraftServerErrorCatalog,
+  minecraftClientErrorMeta,
+  minecraftProfileErrorMeta,
+  minecraftServerErrorMeta,
 } from "./features/minecraft/index.js";
-import { sessionErrorCatalog } from "./features/sessions/index.js";
-import { userErrorCatalog } from "./features/users/index.js";
-import { errorCatalog, errorCodeSchema, errorResponseSchema } from "./errors.js";
+import { sessionErrorMeta } from "./features/sessions/index.js";
+import { userErrorMeta } from "./features/users/index.js";
+import { errorMeta, errorCodeSchema, errorResponseSchema } from "./errors.js";
 
-// The per-feature catalogs that errors.ts spreads into the aggregate. A
+// The per-feature metadata maps that errors.ts spreads into the aggregate. A
 // duplicate code across two features would be silently overwritten by the
 // spread with no type error — only a runtime check catches that.
-const featureCatalogs = {
-  common: commonErrorCatalog,
-  auth: authErrorCatalog,
-  invitation: invitationErrorCatalog,
-  minecraftProfile: minecraftProfileErrorCatalog,
-  minecraftServer: minecraftServerErrorCatalog,
-  minecraftClient: minecraftClientErrorCatalog,
-  session: sessionErrorCatalog,
-  user: userErrorCatalog,
+const featureMetas = {
+  common: commonErrorMeta,
+  auth: authErrorMeta,
+  invitation: invitationErrorMeta,
+  minecraftProfile: minecraftProfileErrorMeta,
+  minecraftServer: minecraftServerErrorMeta,
+  minecraftClient: minecraftClientErrorMeta,
+  session: sessionErrorMeta,
+  user: userErrorMeta,
 };
 
-describe("errorCatalog", () => {
-  it("merges every feature catalog without dropping codes to collisions", () => {
-    const codesPerFeature = Object.values(featureCatalogs).reduce<number>(
-      (total, catalog) => total + Object.keys(catalog).length,
+describe("errorMeta", () => {
+  it("merges every feature's metadata without dropping codes to collisions", () => {
+    const codesPerFeature = Object.values(featureMetas).reduce<number>(
+      (total, meta) => total + Object.keys(meta).length,
       0,
     );
 
     // If two features declared the same code, the spread would collapse them
     // and the aggregate would be shorter than the sum of its parts.
-    expect(Object.keys(errorCatalog)).toHaveLength(codesPerFeature);
+    expect(Object.keys(errorMeta)).toHaveLength(codesPerFeature);
   });
 
   it("has entries and gives every one a known error kind", () => {
-    expect(Object.keys(errorCatalog).length).toBeGreaterThan(0);
+    expect(Object.keys(errorMeta).length).toBeGreaterThan(0);
 
-    for (const [code, entry] of Object.entries(errorCatalog)) {
+    for (const [code, entry] of Object.entries(errorMeta)) {
       expect(errorKindSchema.safeParse(entry.kind).success, `kind for ${code}`).toBe(true);
     }
   });
 });
 
 describe("errorCodeSchema", () => {
-  it("enumerates exactly the catalog's codes", () => {
-    expect([...errorCodeSchema.options].sort()).toEqual(Object.keys(errorCatalog).sort());
+  it("enumerates exactly the metadata's codes", () => {
+    expect([...errorCodeSchema.options].sort()).toEqual(Object.keys(errorMeta).sort());
   });
 
-  it("rejects a code that isn't in the catalog", () => {
+  it("rejects a code that isn't in the metadata", () => {
     expect(errorCodeSchema.safeParse("NOT_A_REAL_CODE").success).toBe(false);
   });
 });

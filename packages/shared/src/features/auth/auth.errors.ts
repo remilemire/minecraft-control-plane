@@ -1,14 +1,14 @@
 // packages/shared/src/features/auth/auth.errors.ts
 
-import type { ErrorCatalog } from "@/common/index.js";
+import type { ErrorMeta } from "@/common/index.js";
 
-export const authErrorCatalog = {
+export const authErrorMeta = {
   UNAUTHENTICATED: { kind: "UNAUTHORIZED" },
   INVALID_SESSION: { kind: "UNAUTHORIZED" },
   INVALID_GOOGLE_CREDENTIAL: { kind: "UNAUTHORIZED" },
   NOT_INVITED: { kind: "FORBIDDEN" },
   ADMIN_REQUIRED: { kind: "FORBIDDEN" },
   INVALID_CSRF_TOKEN: { kind: "FORBIDDEN" },
-} as const satisfies ErrorCatalog;
+} as const satisfies ErrorMeta;
 
-export type AuthErrorCode = keyof typeof authErrorCatalog;
+export type AuthErrorCode = keyof typeof authErrorMeta;
