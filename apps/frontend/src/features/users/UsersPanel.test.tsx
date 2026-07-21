@@ -22,8 +22,7 @@ describe("UsersPanel", () => {
       makeUser({
         id: "22222222-2222-4222-8222-222222222222",
         email: "alex@example.com",
-        firstName: "Alex",
-        lastName: null,
+        fullName: "Alex",
       }),
     ]);
 
@@ -35,9 +34,7 @@ describe("UsersPanel", () => {
   });
 
   it("falls back to the email when the user has no name", async () => {
-    fetchUsersMock.mockResolvedValue([
-      makeUser({ email: "no-name@example.com", firstName: null, lastName: null }),
-    ]);
+    fetchUsersMock.mockResolvedValue([makeUser({ email: "no-name@example.com", fullName: null })]);
 
     render(<UsersPanel />);
 

@@ -30,8 +30,7 @@ export interface ExternalIdentity {
   readonly provider: OAuthProvider;
   readonly providerSubject: string;
   readonly email: string;
-  readonly firstName?: string;
-  readonly lastName?: string;
+  readonly fullName?: string;
 }
 
 // Seam for tests: the auth service depends on this interface so a fake can

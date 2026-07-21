@@ -9,10 +9,7 @@ let sequence = 0;
 
 // The fields of google-auth-library's TokenPayload that GoogleOauthClient
 // actually reads out of a verified credential.
-type FakeTokenPayload = Pick<
-  TokenPayload,
-  "sub" | "email" | "email_verified" | "given_name" | "family_name"
->;
+type FakeTokenPayload = Pick<TokenPayload, "sub" | "email" | "email_verified" | "name">;
 
 // In-memory stand-in for GoogleOauthClient. issueToken() registers a Google
 // payload and returns the credential that resolves to it; verifyCredential()
@@ -50,8 +47,7 @@ export class FakeGoogleOauthClient implements OAuthApi {
       provider: "google",
       email: payload.email,
       providerSubject: payload.sub,
-      ...(payload.given_name !== undefined ? { firstName: payload.given_name } : {}),
-      ...(payload.family_name !== undefined ? { lastName: payload.family_name } : {}),
+      ...(payload.name !== undefined ? { fullName: payload.name } : {}),
     };
   }
 }

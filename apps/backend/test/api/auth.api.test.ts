@@ -52,8 +52,7 @@ describe("POST /api/auth/google", () => {
     const credential = googleOauthClient.issueToken({
       email: "newplayer@example.com",
       sub: "google-newplayer",
-      given_name: "New",
-      family_name: "Player",
+      name: "New Player",
     });
 
     const response = await request(app).post("/api/auth/google").send({ credential });
@@ -61,8 +60,7 @@ describe("POST /api/auth/google", () => {
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({
       email: "newplayer@example.com",
-      firstName: "New",
-      lastName: "Player",
+      fullName: "New Player",
       isAdmin: false,
     });
     expect(response.body.id).toBeDefined();

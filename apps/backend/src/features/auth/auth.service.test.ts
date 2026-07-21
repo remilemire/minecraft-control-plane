@@ -23,8 +23,7 @@ function user(overrides: Partial<User> = {}): User {
   return {
     id: USER_ID,
     email: "steve@example.com",
-    firstName: null,
-    lastName: null,
+    fullName: null,
     isAdmin: false,
     createdAt: new Date(),
     ...overrides,
@@ -162,10 +161,9 @@ describe("AuthService", () => {
       const credential = googleOauthClient.issueToken({
         email: "invited@example.com",
         sub: "google-invited",
-        given_name: "In",
-        family_name: "Vited",
+        name: "In Vited",
       });
-      const created = user({ email: "invited@example.com", firstName: "In", lastName: "Vited" });
+      const created = user({ email: "invited@example.com", fullName: "In Vited" });
 
       const callOrder: string[] = [];
       let createInput: unknown;
@@ -198,8 +196,7 @@ describe("AuthService", () => {
       expect(result).toEqual({ user: created, sessionToken: "session-token" });
       expect(createInput).toEqual({
         email: "invited@example.com",
-        firstName: "In",
-        lastName: "Vited",
+        fullName: "In Vited",
       });
       // The identity insert must reference the just-created user's id, and
       // happen strictly after the user row exists.

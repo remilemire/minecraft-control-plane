@@ -6,12 +6,7 @@ import { McBadge } from "@/components/McBadge";
 import { McPanel } from "@/components/McPanel";
 import { formatDate } from "@/lib/format";
 import { useRequest } from "@/lib/useRequest";
-import { fetchUsers, type User } from "./api";
-
-function displayName(user: User): string | null {
-  const name = [user.firstName, user.lastName].filter((part) => part !== null).join(" ");
-  return name === "" ? null : name;
-}
+import { fetchUsers } from "./api";
 
 export function UsersPanel() {
   const { data: users, error, loading } = useRequest(fetchUsers);
@@ -27,7 +22,7 @@ export function UsersPanel() {
           {users.map((user) => (
             <li key={user.id} className="flex items-center gap-3 py-2">
               <div className="min-w-0">
-                <p className="truncate font-bold">{displayName(user) ?? user.email}</p>
+                <p className="truncate font-bold">{user.fullName ?? user.email}</p>
                 <p className="text-muted truncate text-xs">
                   {user.email} · joined {formatDate(user.createdAt)}
                 </p>

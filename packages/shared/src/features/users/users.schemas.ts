@@ -5,13 +5,14 @@ import z from "zod";
 
 export const userIdSchema = z.uuid();
 
-export const nameSchema = z.string().min(1).max(64);
+// 129 matches the DB check constraint (two former 64-char name columns joined
+// with a space).
+export const nameSchema = z.string().min(1).max(129);
 
 export const createUserSchema = z
   .object({
     email: emailSchema,
-    firstName: nameSchema.exactOptional(),
-    lastName: nameSchema.exactOptional(),
+    fullName: nameSchema.exactOptional(),
   })
   .strict();
 
@@ -20,8 +21,7 @@ export type CreateUserInput = z.infer<typeof createUserSchema>;
 export const userResponseSchema = z.object({
   id: z.uuid(),
   email: emailSchema,
-  firstName: nameSchema.nullable(),
-  lastName: nameSchema.nullable(),
+  fullName: nameSchema.nullable(),
   isAdmin: z.boolean(),
   createdAt: z.date(),
 });

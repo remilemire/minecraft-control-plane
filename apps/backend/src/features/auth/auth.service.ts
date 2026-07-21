@@ -70,8 +70,7 @@ export class AuthService {
 
     const input = {
       email,
-      ...(identity.firstName !== undefined ? { firstName: identity.firstName } : {}),
-      ...(identity.lastName !== undefined ? { lastName: identity.lastName } : {}),
+      ...(identity.fullName !== undefined ? { fullName: identity.fullName } : {}),
     };
 
     // Registering a new user and linking their first OAuth identity is a

@@ -34,8 +34,7 @@ export class GoogleOauthClient implements OAuthApi {
       provider: "google",
       email: payload.email,
       providerSubject: payload.sub,
-      ...(payload.given_name !== undefined ? { firstName: payload.given_name } : {}),
-      ...(payload.family_name !== undefined ? { lastName: payload.family_name } : {}),
+      ...(payload.name !== undefined ? { fullName: payload.name } : {}),
     };
   }
 

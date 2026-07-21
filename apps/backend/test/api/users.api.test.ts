@@ -13,7 +13,7 @@ const { app } = createTestApp();
 describe("GET /api/users", () => {
   it("returns every user's public shape for an admin", async () => {
     const auth = await authenticateAdmin();
-    const other = await createUser({ firstName: "Alex", lastName: "Builder" });
+    const other = await createUser({ fullName: "Alex Builder" });
 
     const response = await request(app).get("/api/users").set("Cookie", [auth.cookie]);
 
@@ -24,8 +24,7 @@ describe("GET /api/users", () => {
         expect.objectContaining({
           id: other.id,
           email: other.email,
-          firstName: "Alex",
-          lastName: "Builder",
+          fullName: "Alex Builder",
           isAdmin: false,
         }),
       ]),
@@ -33,7 +32,7 @@ describe("GET /api/users", () => {
     // The response schema must not leak internal columns.
     for (const user of response.body) {
       expect(Object.keys(user).sort()).toEqual(
-        ["id", "email", "firstName", "lastName", "isAdmin", "createdAt"].sort(),
+        ["id", "email", "fullName", "isAdmin", "createdAt"].sort(),
       );
     }
   });
@@ -57,7 +56,7 @@ describe("GET /api/users", () => {
 
 describe("GET /api/users/me", () => {
   it("returns the authenticated user's public shape", async () => {
-    const auth = await authenticateUser({ firstName: "Steve", lastName: "Miner", isAdmin: true });
+    const auth = await authenticateUser({ fullName: "Steve Miner", isAdmin: true });
 
     const response = await request(app).get("/api/users/me").set("Cookie", [auth.cookie]);
 
@@ -65,24 +64,23 @@ describe("GET /api/users/me", () => {
     expect(response.body).toMatchObject({
       id: auth.user.id,
       email: auth.user.email,
-      firstName: "Steve",
-      lastName: "Miner",
+      fullName: "Steve Miner",
       isAdmin: true,
     });
     expect(response.body.createdAt).toBeDefined();
     // The response schema must not leak internal columns.
     expect(Object.keys(response.body).sort()).toEqual(
-      ["id", "email", "firstName", "lastName", "isAdmin", "createdAt"].sort(),
+      ["id", "email", "fullName", "isAdmin", "createdAt"].sort(),
     );
   });
 
-  it("returns null names when the user has none", async () => {
+  it("returns a null name when the user has none", async () => {
     const auth = await authenticateUser();
 
     const response = await request(app).get("/api/users/me").set("Cookie", [auth.cookie]);
 
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ firstName: null, lastName: null });
+    expect(response.body).toMatchObject({ fullName: null });
   });
 
   it("rejects requests without a session", async () => {

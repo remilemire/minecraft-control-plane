@@ -11,8 +11,7 @@ export const users = pgTable(
 
     email: text("email").notNull().unique(USERS_CONSTRAINTS.EMAIL_UNIQUE),
 
-    firstName: text("first_name"),
-    lastName: text("last_name"),
+    fullName: text("full_name"),
 
     isAdmin: boolean("is_admin").notNull().default(false),
 
@@ -20,8 +19,8 @@ export const users = pgTable(
   },
   (table) => [
     check("users_email_length_check", sql`char_length(${table.email}) BETWEEN 1 AND 254`),
-    check("users_first_name_length_check", sql`char_length(${table.firstName}) BETWEEN 1 AND 64`),
-    check("users_last_name_length_check", sql`char_length(${table.lastName}) BETWEEN 1 AND 64`),
+    // 129 = the two former 64-char name columns joined with a space.
+    check("users_full_name_length_check", sql`char_length(${table.fullName}) BETWEEN 1 AND 129`),
   ],
 );
 

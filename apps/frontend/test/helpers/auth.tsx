@@ -11,8 +11,7 @@ export function makeUser(overrides: Partial<User> = {}): User {
   return {
     id: "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
     email: "steve@example.com",
-    firstName: "Steve",
-    lastName: "Miner",
+    fullName: "Steve Miner",
     isAdmin: false,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     ...overrides,
