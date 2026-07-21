@@ -7,7 +7,6 @@
 // silently desync the two.
 
 export const USERS_CONSTRAINTS = {
-  GOOGLE_ID_UNIQUE: "users_google_id_unique",
   EMAIL_UNIQUE: "users_email_unique",
 } as const;
 

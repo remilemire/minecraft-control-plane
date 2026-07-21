@@ -23,7 +23,6 @@ function session(overrides: Partial<Session> = {}): Session {
 function user(overrides: Partial<User> = {}): User {
   return {
     id: USER_ID,
-    googleId: "google-1",
     email: "player@example.com",
     firstName: null,
     lastName: null,

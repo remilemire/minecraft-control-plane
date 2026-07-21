@@ -9,14 +9,12 @@ import { UserRepository } from "./users.repository.js";
 describe("UserRepository", () => {
   const repository = new UserRepository(db);
 
-  it("creates a user and finds it by id and google id", async () => {
+  it("creates a user and finds it by id", async () => {
     const created = await repository.create({
-      googleId: `google-${randomUUID()}`,
       email: `${randomUUID()}@example.com`,
     });
 
     expect(await repository.findById(created.id)).toEqual(created);
-    expect(await repository.findByGoogleId(created.googleId)).toEqual(created);
   });
 
   it("lists every user ordered by creation date", async () => {
@@ -30,24 +28,15 @@ describe("UserRepository", () => {
     expect(timestamps).toEqual([...timestamps].sort((a, b) => a - b));
   });
 
-  it("returns null for an unknown id or google id", async () => {
+  it("returns null for an unknown id", async () => {
     expect(await repository.findById(randomUUID())).toBeNull();
-    expect(await repository.findByGoogleId("nope")).toBeNull();
-  });
-
-  it("maps a duplicate google id to GOOGLE_ID_TAKEN", async () => {
-    const existing = await createUser();
-
-    await expect(
-      repository.create({ googleId: existing.googleId, email: `${randomUUID()}@example.com` }),
-    ).rejects.toMatchObject({ code: "GOOGLE_ID_TAKEN" });
   });
 
   it("maps a duplicate email to EMAIL_TAKEN", async () => {
     const existing = await createUser();
 
-    await expect(
-      repository.create({ googleId: `google-${randomUUID()}`, email: existing.email }),
-    ).rejects.toMatchObject({ code: "EMAIL_TAKEN" });
+    await expect(repository.create({ email: existing.email })).rejects.toMatchObject({
+      code: "EMAIL_TAKEN",
+    });
   });
 });

@@ -10,7 +10,6 @@ export const nameSchema = z.string().min(1).max(64);
 export const createUserSchema = z
   .object({
     email: emailSchema,
-    googleId: z.string(),
     firstName: nameSchema.exactOptional(),
     lastName: nameSchema.exactOptional(),
   })

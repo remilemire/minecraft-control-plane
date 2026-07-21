@@ -98,9 +98,17 @@ To add an error code, update three places that must stay in sync:
 
 ## Auth, sessions, CSRF, authorization
 
-- **Google OAuth, invite-only.** `AuthService.authenticateFromGoogle` verifies the
-  credential via the `googleTokenVerifier` boundary, finds-or-creates the user, and
-  only creates one when `InvitationService.isInvited(email)` holds (else `NOT_INVITED`).
+- **OAuth, invite-only, provider-agnostic.** `AuthService.authenticateWithOAuth` picks
+  the caller's provider (today just `google`) from its `OAuthClients` registry, verifies
+  the credential via that client, then looks up `oauth_identities` by
+  `(provider, providerSubject)` (`OAuthIdentityRepository.findBySubjectWithUser`). Found
+  → that user. Not found → `registerInvited`: the admin check
+  (`email === env.ADMIN_EMAIL`) and, for non-admins, `InvitationService.isInvited(email)`
+  (else `NOT_INVITED`) run **before** a transaction; inside it
+  (`TransactionRunner.run`), the user is created (or `bootstrapAdmin`'d) and its first
+  `oauth_identities` row is inserted as one unit of work, via `UserRepository`/
+  `OAuthIdentityRepository.withTx(tx)`. Session creation happens after, outside the
+  transaction.
 - **Sessions:** opaque random token in an httponly `session_token` cookie; only its
   **sha256 hash** (`lib/tokens.ts`) is stored in the `sessions` table. Cookie helpers
   in `http/session/`, base cookie options in `config/cookies.ts`.

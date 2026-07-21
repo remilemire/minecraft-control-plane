@@ -1,13 +1,24 @@
 // apps/backend/src/features/auth/oauth-identities.repository.ts
 
 import type { Db } from "@/db/client.js";
+import type { Tx } from "@/db/transactions.js";
 import { withDbErrors } from "@/db/errors.js";
-import { oauthIdentities, users } from "@/db/schema/index.js";
+import {
+  oauthIdentities,
+  users,
+  type NewOAuthIdentity,
+  type OAuthIdentity,
+} from "@/db/schema/index.js";
+import { AppError } from "@/errors/app-error.js";
 import { and, eq } from "drizzle-orm";
 import type { OAuthIdentityWithUser, OAuthProvider } from "./auth.types.js";
 
 export class OAuthIdentityRepository {
-  public constructor(private readonly db: Db) {}
+  public constructor(private readonly db: Db | Tx) {}
+
+  public withTx(tx: Tx): OAuthIdentityRepository {
+    return new OAuthIdentityRepository(tx);
+  }
 
   public async findBySubjectWithUser(
     provider: OAuthProvider,
@@ -22,5 +33,21 @@ export class OAuthIdentityRepository {
         .limit(1),
     );
     return row !== undefined ? { identity: row.oauth_identities, user: row.users } : null;
+  }
+
+  // No constraint-error map: a (provider, subject) unique violation here would
+  // mean the same external identity got linked twice inside the registration
+  // transaction (a race, not a user-facing input error), so it's left to fall
+  // through `withDbErrors` to `INTERNAL` rather than a dedicated error code.
+  public async create(input: NewOAuthIdentity): Promise<OAuthIdentity> {
+    const [identity] = await withDbErrors(() =>
+      this.db.insert(oauthIdentities).values(input).returning(),
+    );
+
+    if (identity === undefined) {
+      throw new AppError("SERVICE_UNAVAILABLE", { message: "Failed to create OAuth identity." });
+    }
+
+    return identity;
   }
 }

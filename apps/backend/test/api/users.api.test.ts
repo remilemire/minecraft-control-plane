@@ -32,7 +32,9 @@ describe("GET /api/users", () => {
     );
     // The response schema must not leak internal columns.
     for (const user of response.body) {
-      expect(user.googleId).toBeUndefined();
+      expect(Object.keys(user).sort()).toEqual(
+        ["id", "email", "firstName", "lastName", "isAdmin", "createdAt"].sort(),
+      );
     }
   });
 
@@ -69,7 +71,9 @@ describe("GET /api/users/me", () => {
     });
     expect(response.body.createdAt).toBeDefined();
     // The response schema must not leak internal columns.
-    expect(response.body.googleId).toBeUndefined();
+    expect(Object.keys(response.body).sort()).toEqual(
+      ["id", "email", "firstName", "lastName", "isAdmin", "createdAt"].sort(),
+    );
   });
 
   it("returns null names when the user has none", async () => {

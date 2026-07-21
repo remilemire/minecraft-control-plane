@@ -1,8 +1,10 @@
 // apps/backend/routes/index.ts
 
 import type { Db } from "@/db/client.js";
+import { TransactionRunner } from "@/db/transactions.js";
 import { AuthController } from "@/features/auth/auth.controller.js";
 import { createRequireAuth } from "@/features/auth/auth.middleware.js";
+import { OAuthIdentityRepository } from "@/features/auth/oauth-identities.repository.js";
 import { createAuthRoutes } from "@/features/auth/auth.routes.js";
 import { AuthService } from "@/features/auth/auth.service.js";
 import type { OAuthApi } from "@/features/auth/auth.types.js";
@@ -42,15 +44,23 @@ export function createRouter(deps: AppDeps): Router {
   const users = new UserRepository(deps.db);
   const sessions = new SessionRepository(deps.db);
   const invitations = new InvitationRepository(deps.db);
+  const oauthIdentities = new OAuthIdentityRepository(deps.db);
   const minecraftProfiles = new MinecraftProfileRepository(deps.db);
 
   const userService = new UserService(users);
   const sessionService = new SessionService(sessions);
   const invitationService = new InvitationService(invitations);
 
-  const authService = new AuthService(userService, sessionService, invitationService, {
-    google: deps.googleOauthClient,
-  });
+  const transactionRunner = new TransactionRunner(deps.db);
+
+  const authService = new AuthService(
+    userService,
+    sessionService,
+    invitationService,
+    { google: deps.googleOauthClient },
+    oauthIdentities,
+    transactionRunner,
+  );
 
   const minecraftProfileService = new MinecraftProfileService(minecraftProfiles, deps.mojangClient);
   const minecraftServerService = new MinecraftServerService(deps.rconClient, deps.processClient);

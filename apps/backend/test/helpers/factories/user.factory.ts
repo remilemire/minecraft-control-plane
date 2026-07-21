@@ -11,7 +11,6 @@ export async function createUser(overrides: Partial<NewUser> = {}): Promise<User
   const [user] = await db
     .insert(users)
     .values({
-      googleId: `google-${n}`,
       email: `user${n}@example.com`,
       ...overrides,
     })

@@ -15,6 +15,13 @@
       "when": 1784647166148,
       "tag": "0001_eager_polaris",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784648941669,
+      "tag": "0002_normal_rattler",
+      "breakpoints": true
     }
   ]
 }

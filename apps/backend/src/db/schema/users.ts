@@ -9,7 +9,6 @@ export const users = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    googleId: text("google_id").notNull().unique(USERS_CONSTRAINTS.GOOGLE_ID_UNIQUE),
     email: text("email").notNull().unique(USERS_CONSTRAINTS.EMAIL_UNIQUE),
 
     firstName: text("first_name"),

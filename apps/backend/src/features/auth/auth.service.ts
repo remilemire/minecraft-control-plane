@@ -2,10 +2,12 @@
 
 import { env } from "@/config/env.js";
 import type { User } from "@/db/schema/index.js";
+import type { TransactionRunner } from "@/db/transactions.js";
 import { AppError } from "@/errors/app-error.js";
 import type { InvitationService } from "@/features/invitations/invitations.service.js";
 import type { SessionService } from "@/features/sessions/sessions.service.js";
 import type { UserService } from "@/features/users/users.service.js";
+import type { OAuthIdentityRepository } from "./oauth-identities.repository.js";
 import type {
   AuthContext,
   ExternalIdentity,
@@ -20,6 +22,8 @@ export class AuthService {
     private readonly sessionService: SessionService,
     private readonly invitationService: InvitationService,
     private readonly oauthClients: OAuthClients,
+    private readonly oauthIdentityRepository: OAuthIdentityRepository,
+    private readonly transactionRunner: TransactionRunner,
   ) {}
 
   public async authenticateWithOAuth({
@@ -28,9 +32,11 @@ export class AuthService {
   }: OAuthData): Promise<UserWithSessionToken> {
     const profile = await this.oauthClients[provider].verifyCredential(credential);
 
-    const user =
-      (await this.userService.findByGoogleId(profile.providerSubject)) ??
-      (await this.registerInvited(profile));
+    const found = await this.oauthIdentityRepository.findBySubjectWithUser(
+      provider,
+      profile.providerSubject,
+    );
+    const user = found !== null ? found.user : await this.registerInvited(profile);
 
     const { sessionToken } = await this.sessionService.create({
       userId: user.id,
@@ -55,24 +61,34 @@ export class AuthService {
   }
 
   private async registerInvited(identity: ExternalIdentity): Promise<User> {
-    const { email } = identity;
-    // The provider-agnostic identity maps onto the user record, whose column is
-    // still `googleId` (the subject id of the linked account).
+    const { email, provider, providerSubject } = identity;
+    const isAdmin = email === env.ADMIN_EMAIL;
+
+    if (!isAdmin && !(await this.invitationService.isInvited(email))) {
+      throw new AppError("NOT_INVITED");
+    }
+
     const input = {
       email,
-      googleId: identity.providerSubject,
       ...(identity.firstName !== undefined ? { firstName: identity.firstName } : {}),
       ...(identity.lastName !== undefined ? { lastName: identity.lastName } : {}),
     };
 
-    if (email === env.ADMIN_EMAIL) {
-      return await this.userService.bootstrapAdmin(input);
-    }
+    // Registering a new user and linking their first OAuth identity is a
+    // single unit of work: either both rows exist afterward or neither does.
+    return await this.transactionRunner.run(async (tx) => {
+      const userService = this.userService.withTx(tx);
+      const user = isAdmin
+        ? await userService.bootstrapAdmin(input)
+        : await userService.create(input);
 
-    if (!(await this.invitationService.isInvited(email))) {
-      throw new AppError("NOT_INVITED");
-    }
+      await this.oauthIdentityRepository.withTx(tx).create({
+        userId: user.id,
+        provider,
+        subject: providerSubject,
+      });
 
-    return await this.userService.create(input);
+      return user;
+    });
   }
 }

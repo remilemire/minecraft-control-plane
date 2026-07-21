@@ -6,6 +6,7 @@ import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestApp, type TestApp } from "@test/helpers/create-test-app.js";
 import { createInvitation } from "@test/helpers/factories/invitation.factory.js";
+import { createOAuthIdentity } from "@test/helpers/factories/oauth-identity.factory.js";
 import { createUser } from "@test/helpers/factories/user.factory.js";
 import { authenticateUser } from "@test/helpers/test-auth.js";
 import { csrfPair, findSetCookie, isClearedCookie } from "@test/helpers/test-cookies.js";
@@ -21,7 +22,12 @@ beforeEach(() => {
 describe("POST /api/auth/google", () => {
   it("logs in an existing user and sets the session and CSRF cookies", async () => {
     const { app, googleOauthClient } = testApp;
-    const user = await createUser({ googleId: "google-oauth-sub", email: "steve@example.com" });
+    const user = await createUser({ email: "steve@example.com" });
+    await createOAuthIdentity({
+      userId: user.id,
+      provider: "google",
+      subject: "google-oauth-sub",
+    });
     const credential = googleOauthClient.issueToken({
       email: "steve@example.com",
       sub: "google-oauth-sub",
@@ -40,11 +46,12 @@ describe("POST /api/auth/google", () => {
     expect(csrfCookie).not.toContain("HttpOnly");
   });
 
-  it("registers an invited user on first login", async () => {
+  it("registers an invited user on first login, and persists the identity for a later login", async () => {
     const { app, googleOauthClient } = testApp;
     await createInvitation({ email: "newplayer@example.com" });
     const credential = googleOauthClient.issueToken({
       email: "newplayer@example.com",
+      sub: "google-newplayer",
       given_name: "New",
       family_name: "Player",
     });
@@ -60,6 +67,20 @@ describe("POST /api/auth/google", () => {
     });
     expect(response.body.id).toBeDefined();
     expect(findSetCookie(response, SESSION_COOKIE)).toBeDefined();
+
+    // The first-login identity must have been persisted: a later login with
+    // the same provider subject resolves to the same user, rather than
+    // re-registering (and without needing a still-valid invitation).
+    const laterCredential = googleOauthClient.issueToken({
+      email: "newplayer@example.com",
+      sub: "google-newplayer",
+    });
+    const laterResponse = await request(app)
+      .post("/api/auth/google")
+      .send({ credential: laterCredential });
+
+    expect(laterResponse.status).toBe(200);
+    expect(laterResponse.body.id).toBe(response.body.id);
   });
 
   it("rejects an invalid Google credential", async () => {
