@@ -105,6 +105,11 @@ Gotchas:
   `vitest.config.ts` mirrors the alias so colocated tests resolve it too. It builds
   to `dist/` with `composite: true`; if consumers see stale types, rebuild it
   (`pnpm --filter @minecraft-server/shared build`).
+- **Cross-feature access goes service-to-service only.** A feature reaches another
+  feature exclusively through that feature's **service** module, and only from its own
+  **service** — services are the sole cross-feature boundary. A controller depends on
+  its own feature's service and nothing else. Never import another feature's repository
+  (or other internals); go through that feature's service.
 - **Formatting/linting:** ESLint flat config + Prettier, extended from the root base
   configs. Run `make check` (or `lint`/`format`) before finishing.
 - **TS:** strict, ESM, `verbatimModuleSyntax` + `isolatedModules`
