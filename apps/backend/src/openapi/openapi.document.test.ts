@@ -161,7 +161,6 @@ describe("OpenAPI document", () => {
     // Kind-wide components pick up every catalog code of their kind.
     expect(schemas["ConflictError"]?.properties?.code?.enum).toEqual(
       expect.arrayContaining([
-        "GOOGLE_ID_TAKEN",
         "EMAIL_TAKEN",
         "INVITATION_ALREADY_EXISTS",
         "MINECRAFT_USERNAME_TAKEN",

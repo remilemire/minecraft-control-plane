@@ -4,7 +4,6 @@ import type { ErrorMeta } from "@/common/index.js";
 
 export const userErrorMeta = {
   USER_NOT_FOUND: { kind: "NOT_FOUND" },
-  GOOGLE_ID_TAKEN: { kind: "CONFLICT" },
   EMAIL_TAKEN: { kind: "CONFLICT" },
 } as const satisfies ErrorMeta;
 
