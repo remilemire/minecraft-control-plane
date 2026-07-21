@@ -8,7 +8,7 @@ import {
 } from "@/http/session/session.cookies.js";
 import { generateRandomSecret } from "@/lib/tokens.js";
 import { parseOrThrow } from "@/validation/parse.js";
-import { googleLoginSchema } from "@minecraft-server/shared/auth";
+import { oauthLoginSchema } from "@minecraft-server/shared/auth";
 import { userResponseSchema } from "@minecraft-server/shared/users";
 import type { Request, Response } from "express";
 import type { AuthService } from "./auth.service.js";
@@ -17,9 +17,12 @@ export class AuthController {
   public constructor(private readonly authService: AuthService) {}
 
   public googleLogin = async (req: Request, res: Response): Promise<void> => {
-    const { credential } = parseOrThrow(googleLoginSchema, req.body);
+    const { credential } = parseOrThrow(oauthLoginSchema, req.body);
 
-    const { user, sessionToken } = await this.authService.authenticateFromGoogle(credential);
+    const { user, sessionToken } = await this.authService.authenticateWithOAuth({
+      credential,
+      provider: "google",
+    });
 
     setSessionCookie(res, sessionToken);
     setCsrfCookie(res, generateRandomSecret());

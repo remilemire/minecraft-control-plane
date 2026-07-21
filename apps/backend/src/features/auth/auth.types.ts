@@ -17,17 +17,35 @@ export interface AuthContext {
   readonly session: Session;
 }
 
-// The verified identity the rest of the app consumes; Google's wire fields are
-// never seen outside the google-oauth client.
-export interface GoogleIdentity {
-  readonly googleId: string;
+// The OAuth providers we support. Only Google for now, but the identity and
+// client seams below are provider-agnostic so more can be added without
+// touching the auth service.
+export type OAuthProvider = "google";
+
+// The verified identity the rest of the app consumes; a provider's wire fields
+// are never seen outside its OAuth client. `providerSubject` is the provider's
+// stable subject id for the account (Google's `sub`).
+export interface ExternalIdentity {
+  readonly provider: OAuthProvider;
+  readonly providerSubject: string;
   readonly email: string;
   readonly firstName?: string;
   readonly lastName?: string;
 }
 
 // Seam for tests: the auth service depends on this interface so a fake can
-// stand in for the real Google client (see FakeGoogleOauthClient).
-export interface GoogleOauthApi {
-  verifyCredential(credential: string): Promise<GoogleIdentity>;
+// stand in for the real OAuth client (see FakeGoogleOauthClient).
+export interface OAuthApi {
+  verifyCredential(credential: string): Promise<ExternalIdentity>;
 }
+
+// A credential to verify together with the provider that issued it. The auth
+// service uses `provider` to pick the matching client from its registry.
+export interface OAuthData {
+  readonly credential: string;
+  readonly provider: OAuthProvider;
+}
+
+// The OAuth clients the auth service dispatches to, one per provider. Wiring
+// (routes/index.ts) assembles the registry from the injected boundary clients.
+export type OAuthClients = Record<OAuthProvider, OAuthApi>;

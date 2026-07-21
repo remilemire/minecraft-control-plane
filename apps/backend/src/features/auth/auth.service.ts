@@ -8,8 +8,9 @@ import type { SessionService } from "@/features/sessions/sessions.service.js";
 import type { UserService } from "@/features/users/users.service.js";
 import type {
   AuthContext,
-  GoogleIdentity,
-  GoogleOauthApi,
+  ExternalIdentity,
+  OAuthClients,
+  OAuthData,
   UserWithSessionToken,
 } from "./auth.types.js";
 
@@ -18,14 +19,17 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly sessionService: SessionService,
     private readonly invitationService: InvitationService,
-    private readonly googleOauthClient: GoogleOauthApi,
+    private readonly oauthClients: OAuthClients,
   ) {}
 
-  public async authenticateFromGoogle(googleToken: string): Promise<UserWithSessionToken> {
-    const profile = await this.googleOauthClient.verifyCredential(googleToken);
+  public async authenticateWithOAuth({
+    credential,
+    provider,
+  }: OAuthData): Promise<UserWithSessionToken> {
+    const profile = await this.oauthClients[provider].verifyCredential(credential);
 
     const user =
-      (await this.userService.findByGoogleId(profile.googleId)) ??
+      (await this.userService.findByGoogleId(profile.providerSubject)) ??
       (await this.registerInvited(profile));
 
     const { sessionToken } = await this.sessionService.create({
@@ -50,18 +54,25 @@ export class AuthService {
     await this.sessionService.delete(sessionToken);
   }
 
-  private async registerInvited({ email, ...rest }: GoogleIdentity): Promise<User> {
+  private async registerInvited(identity: ExternalIdentity): Promise<User> {
+    const { email } = identity;
+    // The provider-agnostic identity maps onto the user record, whose column is
+    // still `googleId` (the subject id of the linked account).
+    const input = {
+      email,
+      googleId: identity.providerSubject,
+      ...(identity.firstName !== undefined ? { firstName: identity.firstName } : {}),
+      ...(identity.lastName !== undefined ? { lastName: identity.lastName } : {}),
+    };
+
     if (email === env.ADMIN_EMAIL) {
-      return await this.userService.bootstrapAdmin({ email, ...rest });
+      return await this.userService.bootstrapAdmin(input);
     }
 
     if (!(await this.invitationService.isInvited(email))) {
       throw new AppError("NOT_INVITED");
     }
 
-    return await this.userService.create({
-      email,
-      ...rest,
-    });
+    return await this.userService.create(input);
   }
 }

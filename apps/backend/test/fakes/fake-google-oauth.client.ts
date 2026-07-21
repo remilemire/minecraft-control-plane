@@ -1,7 +1,7 @@
 // apps/backend/test/fakes/fake-google-oauth.client.ts
 
 import { AppError } from "@/errors/app-error.js";
-import type { GoogleIdentity, GoogleOauthApi } from "@/features/auth/auth.types.js";
+import type { ExternalIdentity, OAuthApi } from "@/features/auth/auth.types.js";
 import { generateRandomSecret } from "@/lib/tokens.js";
 import type { TokenPayload } from "google-auth-library";
 
@@ -18,7 +18,7 @@ type FakeTokenPayload = Pick<
 // payload and returns the credential that resolves to it; verifyCredential()
 // mirrors the real client's contract, rejecting unknown credentials and
 // unverified identities with INVALID_GOOGLE_CREDENTIAL.
-export class FakeGoogleOauthClient implements GoogleOauthApi {
+export class FakeGoogleOauthClient implements OAuthApi {
   private readonly payloads = new Map<string, FakeTokenPayload>();
 
   public issueToken(payload: { readonly email: string } & Partial<FakeTokenPayload>): string {
@@ -33,7 +33,7 @@ export class FakeGoogleOauthClient implements GoogleOauthApi {
     return credential;
   }
 
-  public async verifyCredential(credential: string): Promise<GoogleIdentity> {
+  public async verifyCredential(credential: string): Promise<ExternalIdentity> {
     const payload = this.payloads.get(credential);
 
     // Unknown credential, like the real library rejecting a bad token.
@@ -47,8 +47,9 @@ export class FakeGoogleOauthClient implements GoogleOauthApi {
     }
 
     return {
+      provider: "google",
       email: payload.email,
-      googleId: payload.sub,
+      providerSubject: payload.sub,
       ...(payload.given_name !== undefined ? { firstName: payload.given_name } : {}),
       ...(payload.family_name !== undefined ? { lastName: payload.family_name } : {}),
     };

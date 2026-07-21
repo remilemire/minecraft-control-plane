@@ -1,14 +1,14 @@
 // apps/backend/src/features/auth/clients/google-oauth.client.ts
 
 import { AppError } from "@/errors/app-error.js";
-import type { GoogleIdentity, GoogleOauthApi } from "@/features/auth/auth.types.js";
+import type { ExternalIdentity, OAuthApi } from "@/features/auth/auth.types.js";
 import { OAuth2Client } from "google-auth-library";
 
 export type GoogleOauthClientOptions = {
   readonly clientId: string;
 };
 
-export class GoogleOauthClient implements GoogleOauthApi {
+export class GoogleOauthClient implements OAuthApi {
   private readonly oauthClient: OAuth2Client;
   private readonly clientId: string;
 
@@ -17,7 +17,7 @@ export class GoogleOauthClient implements GoogleOauthApi {
     this.clientId = clientId;
   }
 
-  public async verifyCredential(credential: string): Promise<GoogleIdentity> {
+  public async verifyCredential(credential: string): Promise<ExternalIdentity> {
     const ticket = await this.verifyIdToken(credential);
     const payload = ticket.getPayload();
 
@@ -31,8 +31,9 @@ export class GoogleOauthClient implements GoogleOauthApi {
     }
 
     return {
+      provider: "google",
       email: payload.email,
-      googleId: payload.sub,
+      providerSubject: payload.sub,
       ...(payload.given_name !== undefined ? { firstName: payload.given_name } : {}),
       ...(payload.family_name !== undefined ? { lastName: payload.family_name } : {}),
     };

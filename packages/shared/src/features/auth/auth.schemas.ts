@@ -2,10 +2,10 @@
 
 import z from "zod";
 
-export const googleLoginSchema = z
+export const oauthLoginSchema = z
   .object({
     credential: z.string().min(1),
   })
   .strict();
 
-export type GoogleLoginInput = z.infer<typeof googleLoginSchema>;
+export type OAuthLoginInput = z.infer<typeof oauthLoginSchema>;

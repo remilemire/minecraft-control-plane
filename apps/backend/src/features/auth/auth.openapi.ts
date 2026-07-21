@@ -12,7 +12,7 @@ import {
   unauthenticatedResponse,
   validationErrorResponse,
 } from "@/openapi/openapi.schemas.js";
-import { googleLoginSchema } from "@minecraft-server/shared/auth";
+import { oauthLoginSchema } from "@minecraft-server/shared/auth";
 
 const invalidGoogleCredentialErrorSchema = openApiRegistry.register(
   "InvalidGoogleCredentialError",
@@ -36,7 +36,7 @@ openApiRegistry.registerPath({
   request: {
     body: {
       required: true,
-      content: { "application/json": { schema: googleLoginSchema } },
+      content: { "application/json": { schema: oauthLoginSchema } },
     },
   },
   responses: {

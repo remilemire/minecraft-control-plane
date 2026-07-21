@@ -55,7 +55,7 @@ function invitationServiceStub(
 const issuedSession: SessionWithToken = { session: session(), sessionToken: "session-token" };
 
 describe("AuthService", () => {
-  describe("authenticateFromGoogle", () => {
+  describe("authenticateWithOAuth", () => {
     it("creates a session for an existing user", async () => {
       const googleOauthClient = new FakeGoogleOauthClient();
       const credential = googleOauthClient.issueToken({
@@ -84,10 +84,10 @@ describe("AuthService", () => {
           },
         }),
         invitationServiceStub({}),
-        googleOauthClient,
+        { google: googleOauthClient },
       );
 
-      const result = await service.authenticateFromGoogle(credential);
+      const result = await service.authenticateWithOAuth({ credential, provider: "google" });
 
       expect(result).toEqual({ user: existing, sessionToken: "session-token" });
       // The user is matched by their Google subject id, not their email.
@@ -116,10 +116,10 @@ describe("AuthService", () => {
         }),
         sessionServiceStub({ create: async () => issuedSession }),
         invitationServiceStub({ isInvited: async () => true }),
-        googleOauthClient,
+        { google: googleOauthClient },
       );
 
-      const result = await service.authenticateFromGoogle(credential);
+      const result = await service.authenticateWithOAuth({ credential, provider: "google" });
 
       expect(result).toEqual({ user: created, sessionToken: "session-token" });
       expect(createInput).toEqual({
@@ -158,10 +158,10 @@ describe("AuthService", () => {
             throw new Error("the admin email must not be checked against invitations");
           },
         }),
-        googleOauthClient,
+        { google: googleOauthClient },
       );
 
-      const result = await service.authenticateFromGoogle(credential);
+      const result = await service.authenticateWithOAuth({ credential, provider: "google" });
 
       expect(result).toEqual({ user: created, sessionToken: "session-token" });
       expect(bootstrapInput).toEqual({ email: env.ADMIN_EMAIL, googleId: "google-admin" });
@@ -185,10 +185,10 @@ describe("AuthService", () => {
         }),
         sessionServiceStub({ create: async () => issuedSession }),
         invitationServiceStub({ isInvited: async () => true }),
-        googleOauthClient,
+        { google: googleOauthClient },
       );
 
-      const result = await service.authenticateFromGoogle(credential);
+      const result = await service.authenticateWithOAuth({ credential, provider: "google" });
 
       expect(result).toEqual({ user: created, sessionToken: "session-token" });
     });
@@ -206,10 +206,12 @@ describe("AuthService", () => {
         }),
         sessionServiceStub({ create: async () => issuedSession }),
         invitationServiceStub({ isInvited: async () => false }),
-        googleOauthClient,
+        { google: googleOauthClient },
       );
 
-      await expect(service.authenticateFromGoogle(credential)).rejects.toMatchObject({
+      await expect(
+        service.authenticateWithOAuth({ credential, provider: "google" }),
+      ).rejects.toMatchObject({
         code: "NOT_INVITED",
       });
     });
@@ -225,10 +227,12 @@ describe("AuthService", () => {
         userServiceStub({ findByGoogleId: async () => null }),
         sessionServiceStub({}),
         invitationServiceStub({}),
-        googleOauthClient,
+        { google: googleOauthClient },
       );
 
-      await expect(service.authenticateFromGoogle(credential)).rejects.toMatchObject({
+      await expect(
+        service.authenticateWithOAuth({ credential, provider: "google" }),
+      ).rejects.toMatchObject({
         code: "INVALID_GOOGLE_CREDENTIAL",
       });
     });
@@ -248,7 +252,7 @@ describe("AuthService", () => {
           },
         }),
         invitationServiceStub({}),
-        new FakeGoogleOauthClient(),
+        { google: new FakeGoogleOauthClient() },
       );
 
       const result = await service.authenticateFromSession("raw-token");
@@ -262,7 +266,7 @@ describe("AuthService", () => {
         userServiceStub({}),
         sessionServiceStub({ findValidWithUser: async () => null }),
         invitationServiceStub({}),
-        new FakeGoogleOauthClient(),
+        { google: new FakeGoogleOauthClient() },
       );
 
       await expect(service.authenticateFromSession("nope")).rejects.toMatchObject({
@@ -283,7 +287,7 @@ describe("AuthService", () => {
           },
         }),
         invitationServiceStub({}),
-        new FakeGoogleOauthClient(),
+        { google: new FakeGoogleOauthClient() },
       );
 
       await service.logout("raw-token");
