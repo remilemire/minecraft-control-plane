@@ -28,3 +28,8 @@ export const SESSIONS_CONSTRAINTS = {
   TOKEN_HASH_UNIQUE: "sessions_token_hash_unique",
   USER_ID_FK: "sessions_user_id_users_id_fk",
 } as const;
+
+export const OAUTH_IDENTITIES_CONSTRAINTS = {
+  PROVIDER_SUBJECT_UNIQUE: "oauth_identities_provider_subject_unique",
+  USER_ID_FK: "oauth_identities_user_id_users_id_fk",
+} as const;
