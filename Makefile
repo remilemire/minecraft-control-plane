@@ -62,7 +62,7 @@ migrate: ## Apply pending DB migrations inside the running backend container
 
 # ---- Node / workspaces (add `pkg=backend` to scope any of these) ------------
 
-.PHONY: install build dev test lint format check
+.PHONY: install build dev test lint format typecheck check
 
 install: ## Install dependencies (frozen lockfile)
 	$(PNPM) install --frozen-lockfile
@@ -82,6 +82,9 @@ lint: ## Lint and auto-fix workspaces
 format: ## Format workspaces
 	$(RUN) format
 
-check: format lint test ## Format, lint, then test everything
+typecheck: ## Type-check workspaces (no emit)
+	$(RUN) typecheck
+
+check: format lint typecheck test ## Format, lint, type-check, then test everything
 
 # TODO: add test-*, lint-*, format-*, and check-*
