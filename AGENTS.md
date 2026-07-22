@@ -49,7 +49,7 @@ across workspaces; scope any workspace target to one package with `pkg=` (e.g.
 | Start / stop / restart stack                         | `make up` / `make down` / `make restart`                       |
 | Rebuild from scratch                                 | `make nuke`                                                    |
 | Apply DB migrations (inside the `backend` container) | `make migrate`                                                 |
-| Tail logs                                            | `make logs` (or `logs-backend` / `logs-db` / `logs-minecraft`) |
+| Tail logs                                            | `make logs` (or `backend-logs` / `db-logs` / `minecraft-logs`) |
 | Dev servers (all)                                    | `make dev`                                                     |
 | Build / test / lint / format                         | `make build` / `test` / `lint` / `format`                      |
 | Everything (format+lint+test)                        | `make check`                                                   |

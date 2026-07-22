@@ -21,7 +21,7 @@ help: ## Show this help
 
 # ---- Docker -----------------------------------------------------------------
 
-.PHONY: up down restart ps logs logs-db logs-backend logs-frontend logs-minecraft nuke migrate
+.PHONY: up down restart ps logs db-logs backend-logs frontend-logs minecraft-logs nuke migrate
 
 up: ## Build and start the stack (detached)
 	$(COMPOSE) up --build -d
@@ -37,18 +37,18 @@ ps: ## Show running services
 logs: ## Tail all logs
 	$(COMPOSE) logs -f
 
-# TODO: Generalize to logs-*
+# TODO: Generalize to *-logs
 
-logs-db: ## Tail db logs
+db-logs: ## Tail db logs
 	$(COMPOSE) logs -f db
 
-logs-backend: ## Tail backend logs
+backend-logs: ## Tail backend logs
 	$(COMPOSE) logs -f backend
 
-logs-frontend: ## Tail frontend logs
+frontend-logs: ## Tail frontend logs
 	$(COMPOSE) logs -f frontend
 
-logs-minecraft: ## Tail minecraft logs
+minecraft-logs: ## Tail minecraft logs
 	$(COMPOSE) logs -f minecraft
 
 # END TODO
