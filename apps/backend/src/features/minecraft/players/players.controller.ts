@@ -1,4 +1,4 @@
-// apps/backend/src/features/minecraft/players/minecraft-players.controller.ts
+// apps/backend/src/features/minecraft/players/players.controller.ts
 
 import { getAuthenticatedUser } from "@/features/auth/auth.helpers.js";
 import { parseOrThrow } from "@/validation/parse.js";
@@ -8,7 +8,7 @@ import {
 } from "@minecraft-server/shared/minecraft";
 import { userIdSchema } from "@minecraft-server/shared/users";
 import type { Request, Response } from "express";
-import type { MinecraftPlayerService } from "./minecraft-players.service.js";
+import type { MinecraftPlayerService } from "./players.service.js";
 
 export class MinecraftPlayerController {
   public constructor(private readonly minecraftPlayerService: MinecraftPlayerService) {}

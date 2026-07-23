@@ -1,4 +1,4 @@
-// apps/backend/src/features/minecraft/profiles/minecraft-profiles.repository.ts
+// apps/backend/src/features/minecraft/profiles/profiles.repository.ts
 
 import type { Db } from "@/db/client.js";
 import { MINECRAFT_PROFILES_CONSTRAINTS } from "@/db/constraints.js";

@@ -1,4 +1,4 @@
-// packages/shared/src/features/minecraft/server/minecraft-server.schemas.ts
+// packages/shared/src/features/minecraft/server/server.schemas.ts
 
 import z from "zod";
 

@@ -1,4 +1,4 @@
-// packages/shared/src/features/minecraft/clients/minecraft-clients.errors.ts
+// packages/shared/src/features/minecraft/clients/clients.errors.ts
 
 import type { ErrorMeta } from "@/common/index.js";
 

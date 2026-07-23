@@ -1,4 +1,4 @@
-// apps/backend/src/features/minecraft/server/minecraft-server.service.ts
+// apps/backend/src/features/minecraft/server/server.service.ts
 
 import type { ProcessApi, RconApi } from "@/features/minecraft/minecraft.types.js";
 import type { MinecraftServerStatus } from "@minecraft-server/shared/minecraft";

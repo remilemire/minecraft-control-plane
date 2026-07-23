@@ -1,9 +1,9 @@
-// apps/backend/src/features/minecraft/server/minecraft-server.service.test.ts
+// apps/backend/src/features/minecraft/server/server.service.test.ts
 
 import { FakeProcessClient } from "@test/fakes/fake-process.client.js";
 import { FakeRconClient } from "@test/fakes/fake-rcon.client.js";
 import { describe, expect, it } from "vitest";
-import { MinecraftServerService } from "./minecraft-server.service.js";
+import { MinecraftServerService } from "./server.service.js";
 
 describe("MinecraftServerService", () => {
   it("whitelists the given username", async () => {

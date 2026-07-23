@@ -4,8 +4,8 @@
 // import side effect; they must be imported before the document is generated.
 import "@/features/auth/auth.openapi.js";
 import "@/features/invitations/invitations.openapi.js";
-import "@/features/minecraft/players/minecraft-players.openapi.js";
-import "@/features/minecraft/server/minecraft-server.openapi.js";
+import "@/features/minecraft/players/players.openapi.js";
+import "@/features/minecraft/server/server.openapi.js";
 import "@/features/users/users.openapi.js";
 
 import { OpenApiGeneratorV31 } from "@asteasolutions/zod-to-openapi";

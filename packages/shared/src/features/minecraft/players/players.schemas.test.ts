@@ -1,7 +1,7 @@
-// packages/shared/src/features/minecraft/players/minecraft-players.schemas.test.ts
+// packages/shared/src/features/minecraft/players/players.schemas.test.ts
 
 import { describe, expect, it } from "vitest";
-import { minecraftUsernameSchema } from "./minecraft-players.schemas.js";
+import { minecraftUsernameSchema } from "./players.schemas.js";
 
 describe("minecraftUsernameSchema", () => {
   it("accepts letters, digits, and underscores", () => {

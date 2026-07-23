@@ -1,10 +1,10 @@
-// apps/backend/src/features/minecraft/players/minecraft-players.service.ts
+// apps/backend/src/features/minecraft/players/players.service.ts
 
 import type { MinecraftProfile } from "@/db/schema/index.js";
 import type { SetMinecraftPlayerInput } from "@minecraft-server/shared/minecraft";
-import type { MinecraftProfileService } from "@/features/minecraft/profiles/minecraft-profiles.service.js";
-import type { MinecraftServerService } from "@/features/minecraft/server/minecraft-server.service.js";
-import type { MinecraftPlayer } from "./minecraft-players.types.js";
+import type { MinecraftProfileService } from "@/features/minecraft/profiles/profiles.service.js";
+import type { MinecraftServerService } from "@/features/minecraft/server/server.service.js";
+import type { MinecraftPlayer } from "./players.types.js";
 
 function toPlayer(profile: MinecraftProfile, onlineUsernames: readonly string[]): MinecraftPlayer {
   return {

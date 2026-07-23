@@ -1,4 +1,4 @@
-// packages/shared/src/features/minecraft/profiles/minecraft-profiles.errors.ts
+// packages/shared/src/features/minecraft/profiles/profiles.errors.ts
 
 import type { ErrorMeta } from "@/common/index.js";
 

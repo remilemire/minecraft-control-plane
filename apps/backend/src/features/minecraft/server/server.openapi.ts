@@ -1,4 +1,4 @@
-// apps/backend/src/features/minecraft/server/minecraft-server.openapi.ts
+// apps/backend/src/features/minecraft/server/server.openapi.ts
 
 import { openApiRegistry } from "@/openapi/openapi.registry.js";
 import {

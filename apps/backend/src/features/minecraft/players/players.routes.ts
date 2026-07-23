@@ -1,9 +1,9 @@
-// apps/backend/src/features/minecraft/players/minecraft-players.routes.ts
+// apps/backend/src/features/minecraft/players/players.routes.ts
 
 import { requireAdmin } from "@/features/auth/auth.middleware.js";
 import { requireCsrf } from "@/http/csrf/csrf.middleware.js";
 import { Router, type RequestHandler } from "express";
-import type { MinecraftPlayerController } from "./minecraft-players.controller.js";
+import type { MinecraftPlayerController } from "./players.controller.js";
 
 export function createMinecraftPlayerRoutes(
   minecraftPlayerController: MinecraftPlayerController,

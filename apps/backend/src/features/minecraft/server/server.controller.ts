@@ -1,8 +1,8 @@
-// apps/backend/src/features/minecraft/server/minecraft-server.controller.ts
+// apps/backend/src/features/minecraft/server/server.controller.ts
 
 import { minecraftServerStatusResponseSchema } from "@minecraft-server/shared/minecraft";
 import type { Request, Response } from "express";
-import type { MinecraftServerService } from "./minecraft-server.service.js";
+import type { MinecraftServerService } from "./server.service.js";
 
 export class MinecraftServerController {
   public constructor(private readonly minecraftServerService: MinecraftServerService) {}

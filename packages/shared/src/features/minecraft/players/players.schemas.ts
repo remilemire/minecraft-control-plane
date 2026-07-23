@@ -1,4 +1,4 @@
-// packages/shared/src/features/minecraft/players/minecraft-players.schemas.ts
+// packages/shared/src/features/minecraft/players/players.schemas.ts
 
 import { userIdSchema } from "@/features/users/index.js";
 import z from "zod";

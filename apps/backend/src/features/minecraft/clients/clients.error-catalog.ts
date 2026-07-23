@@ -1,4 +1,4 @@
-// apps/backend/src/features/minecraft/clients/minecraft-client.error-catalog.ts
+// apps/backend/src/features/minecraft/clients/clients.error-catalog.ts
 
 import type { ErrorCatalog } from "@/errors/catalog-contracts.js";
 import type { MinecraftClientErrorCode } from "@minecraft-server/shared/minecraft";

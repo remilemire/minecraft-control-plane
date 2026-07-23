@@ -1,9 +1,9 @@
 // apps/backend/src/features/minecraft/minecraft.error-catalog.ts
 
 import type { ErrorCatalog } from "@/errors/catalog-contracts.js";
-import { minecraftClientErrorCatalog } from "./clients/minecraft-client.error-catalog.js";
-import { minecraftProfileErrorCatalog } from "./profiles/minecraft-profiles.error-catalog.js";
-import { minecraftServerErrorCatalog } from "./server/minecraft-server.error-catalog.js";
+import { minecraftClientErrorCatalog } from "./clients/clients.error-catalog.js";
+import { minecraftProfileErrorCatalog } from "./profiles/profiles.error-catalog.js";
+import { minecraftServerErrorCatalog } from "./server/server.error-catalog.js";
 import type {
   MinecraftClientErrorCode,
   MinecraftProfileErrorCode,

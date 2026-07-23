@@ -2,7 +2,7 @@
 
 import type { RconApi } from "@/features/minecraft/minecraft.types.js";
 
-// The vanilla `list` command's reply format (see minecraft-server.service.ts);
+// The vanilla `list` command's reply format (see minecraft/server/server.service.ts);
 // used as the default so callers that don't care about online status don't
 // have to stub it every time.
 const DEFAULT_LIST_RESPONSE = "There are 0 of a max of 20 players online:";

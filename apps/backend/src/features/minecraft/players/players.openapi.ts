@@ -1,4 +1,4 @@
-// apps/backend/src/features/minecraft/players/minecraft-players.openapi.ts
+// apps/backend/src/features/minecraft/players/players.openapi.ts
 
 import { openApiRegistry } from "@/openapi/openapi.registry.js";
 import {

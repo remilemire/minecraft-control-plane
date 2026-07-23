@@ -1,11 +1,11 @@
-// apps/backend/src/features/minecraft/profiles/minecraft-profiles.service.test.ts
+// apps/backend/src/features/minecraft/profiles/profiles.service.test.ts
 
 import type { MinecraftProfile, NewMinecraftProfile } from "@/db/schema/index.js";
 import { FakeMojangClient } from "@test/fakes/fake-mojang.client.js";
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";
-import type { MinecraftProfileRepository } from "./minecraft-profiles.repository.js";
-import { MinecraftProfileService } from "./minecraft-profiles.service.js";
+import type { MinecraftProfileRepository } from "./profiles.repository.js";
+import { MinecraftProfileService } from "./profiles.service.js";
 
 const USER_ID = "00000000-0000-0000-0000-000000000001";
 

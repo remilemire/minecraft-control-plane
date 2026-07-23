@@ -15,12 +15,12 @@ import { createInvitationRoutes } from "@/features/invitations/invitations.route
 import { InvitationService } from "@/features/invitations/invitations.service.js";
 import { createMinecraftRoutes } from "@/features/minecraft/minecraft.routes.js";
 import type { MojangApi, ProcessApi, RconApi } from "@/features/minecraft/minecraft.types.js";
-import { MinecraftPlayerController } from "@/features/minecraft/players/minecraft-players.controller.js";
-import { MinecraftPlayerService } from "@/features/minecraft/players/minecraft-players.service.js";
-import { MinecraftProfileRepository } from "@/features/minecraft/profiles/minecraft-profiles.repository.js";
-import { MinecraftProfileService } from "@/features/minecraft/profiles/minecraft-profiles.service.js";
-import { MinecraftServerController } from "@/features/minecraft/server/minecraft-server.controller.js";
-import { MinecraftServerService } from "@/features/minecraft/server/minecraft-server.service.js";
+import { MinecraftPlayerController } from "@/features/minecraft/players/players.controller.js";
+import { MinecraftPlayerService } from "@/features/minecraft/players/players.service.js";
+import { MinecraftProfileRepository } from "@/features/minecraft/profiles/profiles.repository.js";
+import { MinecraftProfileService } from "@/features/minecraft/profiles/profiles.service.js";
+import { MinecraftServerController } from "@/features/minecraft/server/server.controller.js";
+import { MinecraftServerService } from "@/features/minecraft/server/server.service.js";
 import { SessionRepository } from "@/features/sessions/sessions.repository.js";
 import { SessionService } from "@/features/sessions/sessions.service.js";
 import { UserController } from "@/features/users/users.controller.js";

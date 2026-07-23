@@ -1,4 +1,4 @@
-// apps/backend/src/features/minecraft/players/minecraft-players.types.ts
+// apps/backend/src/features/minecraft/players/players.types.ts
 
 export type MinecraftPlayer = {
   readonly userId: string;

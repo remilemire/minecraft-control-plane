@@ -1,11 +1,11 @@
-// apps/backend/src/features/minecraft/profiles/minecraft-profiles.repository.integration.test.ts
+// apps/backend/src/features/minecraft/profiles/profiles.repository.integration.test.ts
 
 import { db } from "@/db/client.js";
 import { createMinecraftProfile } from "@test/helpers/factories/minecraft-profile.factory.js";
 import { createUser } from "@test/helpers/factories/user.factory.js";
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";
-import { MinecraftProfileRepository } from "./minecraft-profiles.repository.js";
+import { MinecraftProfileRepository } from "./profiles.repository.js";
 
 describe("MinecraftProfileRepository", () => {
   const repository = new MinecraftProfileRepository(db);
