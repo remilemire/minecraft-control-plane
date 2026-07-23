@@ -1,4 +1,4 @@
-// apps/backend/src/features/sessions/sessions.repository.integration.test.ts
+// apps/backend/src/features/auth/sessions/sessions.repository.integration.test.ts
 
 import { db } from "@/db/client.js";
 import { users } from "@/db/schema/index.js";

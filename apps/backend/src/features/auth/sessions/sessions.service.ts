@@ -1,4 +1,4 @@
-// apps/backend/src/features/sessions/sessions.service.ts
+// apps/backend/src/features/auth/sessions/sessions.service.ts
 
 import { env } from "@/config/env.js";
 import type { Session } from "@/db/schema/index.js";

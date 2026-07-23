@@ -11,7 +11,8 @@ import {
 } from "@/db/schema/index.js";
 import { AppError } from "@/errors/app-error.js";
 import { and, eq } from "drizzle-orm";
-import type { OAuthIdentityWithUser, OAuthProvider } from "@/features/auth/auth.types.js";
+import type { OAuthProvider } from "@/features/auth/auth.types.js";
+import type { OAuthIdentityWithUser } from "./oauth-identities.types.js";
 
 export class OAuthIdentityRepository {
   public constructor(private readonly db: Db | Tx) {}

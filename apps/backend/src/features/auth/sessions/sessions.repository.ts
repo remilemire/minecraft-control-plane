@@ -1,4 +1,4 @@
-// apps/backend/src/features/sessions/sessions.repository.ts
+// apps/backend/src/features/auth/sessions/sessions.repository.ts
 
 import type { Db } from "@/db/client.js";
 import { withDbErrors } from "@/db/errors.js";

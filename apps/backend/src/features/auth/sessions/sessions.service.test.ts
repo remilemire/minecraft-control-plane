@@ -1,4 +1,4 @@
-// apps/backend/src/features/sessions/sessions.service.test.ts
+// apps/backend/src/features/auth/sessions/sessions.service.test.ts
 
 import { env } from "@/config/env.js";
 import type { NewSession, Session, User } from "@/db/schema/index.js";

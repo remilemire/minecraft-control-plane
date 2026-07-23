@@ -23,10 +23,6 @@
       "types": "./dist/features/minecraft/index.d.ts",
       "import": "./dist/features/minecraft/index.js"
     },
-    "./sessions": {
-      "types": "./dist/features/sessions/index.d.ts",
-      "import": "./dist/features/sessions/index.js"
-    },
     "./users": {
       "types": "./dist/features/users/index.d.ts",
       "import": "./dist/features/users/index.js"

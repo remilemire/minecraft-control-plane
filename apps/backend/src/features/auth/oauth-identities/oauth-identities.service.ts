@@ -2,8 +2,9 @@
 
 import type { NewOAuthIdentity, OAuthIdentity } from "@/db/schema/index.js";
 import type { Tx } from "@/db/transactions.js";
-import type { OAuthIdentityWithUser, OAuthProvider } from "@/features/auth/auth.types.js";
+import type { OAuthProvider } from "@/features/auth/auth.types.js";
 import type { OAuthIdentityRepository } from "./oauth-identities.repository.js";
+import type { OAuthIdentityWithUser } from "./oauth-identities.types.js";
 
 // Owns the `oauth_identities` table (the link between a provider account and a
 // user). There are no domain rules to enforce yet — the value is the boundary:

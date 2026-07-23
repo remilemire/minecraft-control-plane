@@ -6,10 +6,10 @@ import type { Tx, TransactionRunner } from "@/db/transactions.js";
 import { FakeGoogleOauthClient } from "@test/fakes/fake-google-oauth.client.js";
 import { describe, expect, it } from "vitest";
 import type { InvitationService } from "@/features/invitations/invitations.service.js";
-import type { SessionService } from "@/features/sessions/sessions.service.js";
-import type { SessionWithToken, SessionWithUser } from "@/features/sessions/sessions.types.js";
 import type { UserService } from "@/features/users/users.service.js";
 import type { OAuthIdentityService } from "./oauth-identities/oauth-identities.service.js";
+import type { SessionService } from "./sessions/sessions.service.js";
+import type { SessionWithToken, SessionWithUser } from "./sessions/sessions.types.js";
 import { AuthService } from "./auth.service.js";
 
 const USER_ID = "00000000-0000-0000-0000-000000000001";

@@ -7,24 +7,24 @@ import {
   type ErrorMeta,
   type ErrorKind,
 } from "./common/index.js";
-import { authErrorMeta } from "./features/auth/index.js";
+import { authClientErrorMeta, authErrorMeta, sessionErrorMeta } from "./features/auth/index.js";
 import { invitationErrorMeta } from "./features/invitations/index.js";
 import {
   minecraftClientErrorMeta,
   minecraftProfileErrorMeta,
   minecraftServerErrorMeta,
 } from "./features/minecraft/index.js";
-import { sessionErrorMeta } from "./features/sessions/index.js";
 import { userErrorMeta } from "./features/users/index.js";
 
 export const errorMeta = {
   ...commonErrorMeta,
   ...authErrorMeta,
+  ...authClientErrorMeta,
+  ...sessionErrorMeta,
   ...invitationErrorMeta,
   ...minecraftProfileErrorMeta,
   ...minecraftServerErrorMeta,
   ...minecraftClientErrorMeta,
-  ...sessionErrorMeta,
   ...userErrorMeta,
 } as const satisfies ErrorMeta;
 

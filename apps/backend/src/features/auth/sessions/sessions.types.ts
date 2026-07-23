@@ -1,4 +1,4 @@
-// apps/backend/src/features/sessions/sessions.types.ts
+// apps/backend/src/features/auth/sessions/sessions.types.ts
 
 import type { Session, User } from "@/db/schema/index.js";
 

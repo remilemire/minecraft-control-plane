@@ -1,6 +1,6 @@
 // apps/backend/src/features/auth/auth.types.ts
 
-import type { OAuthIdentity, oauthProviderEnum, Session, User } from "@/db/schema/index.js";
+import type { oauthProviderEnum, Session, User } from "@/db/schema/index.js";
 
 export interface UserWithSessionToken {
   readonly user: User;
@@ -49,8 +49,3 @@ export interface OAuthData {
 // The OAuth clients the auth service dispatches to, one per provider. Wiring
 // (routes/index.ts) assembles the registry from the injected boundary clients.
 export type OAuthClients = Record<OAuthProvider, OAuthApi>;
-
-export interface OAuthIdentityWithUser {
-  readonly identity: OAuthIdentity;
-  readonly user: User;
-}

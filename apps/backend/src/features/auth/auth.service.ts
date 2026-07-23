@@ -5,9 +5,9 @@ import type { User } from "@/db/schema/index.js";
 import type { TransactionRunner } from "@/db/transactions.js";
 import { AppError } from "@/errors/app-error.js";
 import type { InvitationService } from "@/features/invitations/invitations.service.js";
-import type { SessionService } from "@/features/sessions/sessions.service.js";
 import type { UserService } from "@/features/users/users.service.js";
 import type { OAuthIdentityService } from "./oauth-identities/oauth-identities.service.js";
+import type { SessionService } from "./sessions/sessions.service.js";
 import type {
   AuthContext,
   ExternalIdentity,

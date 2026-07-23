@@ -2,14 +2,13 @@
 
 import { describe, expect, it } from "vitest";
 import { commonErrorMeta, errorKindSchema } from "./common/index.js";
-import { authErrorMeta } from "./features/auth/index.js";
+import { authClientErrorMeta, authErrorMeta, sessionErrorMeta } from "./features/auth/index.js";
 import { invitationErrorMeta } from "./features/invitations/index.js";
 import {
   minecraftClientErrorMeta,
   minecraftProfileErrorMeta,
   minecraftServerErrorMeta,
 } from "./features/minecraft/index.js";
-import { sessionErrorMeta } from "./features/sessions/index.js";
 import { userErrorMeta } from "./features/users/index.js";
 import { errorMeta, errorCodeSchema, errorResponseSchema } from "./errors.js";
 
@@ -19,11 +18,12 @@ import { errorMeta, errorCodeSchema, errorResponseSchema } from "./errors.js";
 const featureMetas = {
   common: commonErrorMeta,
   auth: authErrorMeta,
+  authClient: authClientErrorMeta,
+  session: sessionErrorMeta,
   invitation: invitationErrorMeta,
   minecraftProfile: minecraftProfileErrorMeta,
   minecraftServer: minecraftServerErrorMeta,
   minecraftClient: minecraftClientErrorMeta,
-  session: sessionErrorMeta,
   user: userErrorMeta,
 };
 

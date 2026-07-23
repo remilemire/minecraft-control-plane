@@ -19,11 +19,11 @@ of files by role (not all features have every file):
 | `*.openapi.ts`       | Registers the feature's operations on the OpenAPI registry (import side effect).    |
 | `*.error-catalog.ts` | Human-readable messages for this feature's error codes.                             |
 
-Features: `auth` (with `auth/oauth-identities` and `auth/clients/`), `users`,
-`sessions`, `invitations`, `minecraft` (with `minecraft/players`,
-`minecraft/server`, `minecraft/profiles`, and `minecraft/clients/`). Cross-cutting
-code sits outside `features/`: `config/`, `db/`, `errors/`, `http/`, `validation/`,
-`openapi/`, `middleware/`, `lib/`, `routes/`.
+Features: `auth` (with `auth/oauth-identities`, `auth/sessions`, `auth/clients/`),
+`users`, `invitations`, `minecraft` (with `minecraft/players`, `minecraft/server`,
+`minecraft/profiles`, and `minecraft/clients/`). Cross-cutting code sits outside
+`features/`: `config/`, `db/`, `errors/`, `http/`, `validation/`, `openapi/`,
+`middleware/`, `lib/`, `routes/`.
 
 A sub-feature is a directory under its parent whose files are named for the
 **sub-feature alone** (`oauth-identities/oauth-identities.service.ts`) — the parent's
@@ -31,13 +31,25 @@ name is not repeated in the filename. A parent reaches into its own sub-feature 
 a descending `./sub/...` import; a sub-feature reaches back out (e.g. to the parent's
 `*.types.ts`) through the `@/*` alias, never `../`.
 
-Two sub-features are partial exceptions to the file-role layout above — both are
+A sub-feature owns its own types and error codes: a type or code used only inside
+one belongs in that sub-feature's `*.types.ts` / errors module, not the parent's.
+The parent's `*.types.ts` keeps what the whole feature shares — including the
+external-client seams (`OAuthApi`, `MojangApi`), which stay at parent level rather
+than moving into `clients/`.
+
+The parent's `*.error-catalog.ts` **aggregates** its sub-features' catalogs (spread
+them alongside its own codes) so `errors/catalog.ts` has one entry per top-level
+feature; `auth.error-catalog.ts` and `minecraft.error-catalog.ts` both do this.
+
+Several sub-features are partial exceptions to the file-role layout above — all are
 internal-only (`*.service.ts` + `*.repository.ts`, no
 `*.routes.ts`/`*.controller.ts`/`*.openapi.ts`), reached only through their service:
 
 - `auth/oauth-identities` owns the `oauth_identities` table (the provider-account →
   user link). `AuthService` depends on `OAuthIdentityService`, never on
   `OAuthIdentityRepository`.
+- `auth/sessions` owns the `sessions` table and the token lifecycle, plus the
+  `SESSION_NOT_FOUND` / `INVALID_SESSION` codes. `AuthService` is its only consumer.
 - `minecraft/profiles` owns the `minecraft_profiles` table (a user's linked
   username/uuid) and adds a `*.error-catalog.ts`; `minecraft/players` is the
   HTTP-facing feature that composes `MinecraftProfileService` with
@@ -97,11 +109,13 @@ One shape out the door: `{ kind, code, message, issues? }`.
   (`errors/translator.ts`): `ValidationError`/`AppError` → their code; anything else →
   `INTERNAL`.
 - The shared **error metadata** (`errorMeta`, `@minecraft-server/shared/errors`,
-  aggregated from per-feature maps in `packages/shared/src/features/*/*.errors.ts`) maps
+  aggregated from per-feature maps in `packages/shared/src/features/**/*.errors.ts` —
+  sub-features have their own, re-exported through the parent feature's barrel) maps
   each `code` → `kind`; `errors/http-status.ts` maps `kind` → HTTP status. It's also the
   source that derives the `ErrorCode` types and the wire `errorResponseSchema`.
 - **Human messages** are the backend **catalog** (`errorCatalog`): per-feature
-  `src/features/*/*.error-catalog.ts`, aggregated in `errors/catalog.ts`.
+  `src/features/**/*.error-catalog.ts`, with each parent feature aggregating its
+  sub-features' catalogs, all aggregated in `errors/catalog.ts`.
 
 To add an error code, update three places that must stay in sync:
 

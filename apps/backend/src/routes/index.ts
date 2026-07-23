@@ -9,6 +9,8 @@ import { AuthService } from "@/features/auth/auth.service.js";
 import type { OAuthApi } from "@/features/auth/auth.types.js";
 import { OAuthIdentityRepository } from "@/features/auth/oauth-identities/oauth-identities.repository.js";
 import { OAuthIdentityService } from "@/features/auth/oauth-identities/oauth-identities.service.js";
+import { SessionRepository } from "@/features/auth/sessions/sessions.repository.js";
+import { SessionService } from "@/features/auth/sessions/sessions.service.js";
 import { InvitationController } from "@/features/invitations/invitations.controller.js";
 import { InvitationRepository } from "@/features/invitations/invitations.repository.js";
 import { createInvitationRoutes } from "@/features/invitations/invitations.routes.js";
@@ -21,8 +23,6 @@ import { MinecraftProfileRepository } from "@/features/minecraft/profiles/profil
 import { MinecraftProfileService } from "@/features/minecraft/profiles/profiles.service.js";
 import { MinecraftServerController } from "@/features/minecraft/server/server.controller.js";
 import { MinecraftServerService } from "@/features/minecraft/server/server.service.js";
-import { SessionRepository } from "@/features/sessions/sessions.repository.js";
-import { SessionService } from "@/features/sessions/sessions.service.js";
 import { UserController } from "@/features/users/users.controller.js";
 import { UserRepository } from "@/features/users/users.repository.js";
 import { createUserRoutes } from "@/features/users/users.routes.js";
