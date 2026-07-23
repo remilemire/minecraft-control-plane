@@ -1,7 +1,7 @@
 // apps/backend/src/features/auth/sessions/sessions.service.test.ts
 
 import { env } from "@/config/env.js";
-import type { NewSession, Session, User } from "@/db/schema/index.js";
+import type { NewSession, Session, User } from "@/infrastructure/db/schema/index.js";
 import { hashSecret } from "@/lib/tokens.js";
 import { describe, expect, it } from "vitest";
 import type { SessionRepository } from "./sessions.repository.js";

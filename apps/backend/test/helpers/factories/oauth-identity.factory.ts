@@ -1,7 +1,7 @@
 // apps/backend/test/helpers/factories/oauth-identity.factory.ts
 
-import { db } from "@/db/client.js";
-import { oauthIdentities, type NewOAuthIdentity, type OAuthIdentity } from "@/db/schema/index.js";
+import { db } from "@/infrastructure/db/client.js";
+import { oauthIdentities, type NewOAuthIdentity, type OAuthIdentity } from "@/infrastructure/db/schema/index.js";
 import { createUser } from "./user.factory.js";
 
 let sequence = 0;

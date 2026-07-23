@@ -1,6 +1,6 @@
 // apps/backend/test/helpers/test-auth.ts
 
-import type { NewUser, User } from "@/db/schema/index.js";
+import type { NewUser, User } from "@/infrastructure/db/schema/index.js";
 import { createSession } from "./factories/session.factory.js";
 import { createUser } from "./factories/user.factory.js";
 import { sessionCookie } from "./test-cookies.js";

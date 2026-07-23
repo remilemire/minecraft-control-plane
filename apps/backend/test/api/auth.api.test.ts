@@ -1,7 +1,7 @@
 // apps/backend/test/api/auth.api.test.ts
 
-import { db } from "@/db/client.js";
-import { invitations } from "@/db/schema/index.js";
+import { db } from "@/infrastructure/db/client.js";
+import { invitations } from "@/infrastructure/db/schema/index.js";
 import { SESSION_COOKIE } from "@/http/session/session.constants.js";
 import { CSRF_COOKIE } from "@/http/csrf/csrf.constants.js";
 import { eq } from "drizzle-orm";

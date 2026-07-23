@@ -1,6 +1,6 @@
 // apps/backend/src/db/schema/users.ts
 
-import { USERS_CONSTRAINTS } from "@/db/constraints.js";
+import { USERS_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
 import { sql } from "drizzle-orm";
 import { boolean, check, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 

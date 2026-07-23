@@ -1,6 +1,6 @@
 // apps/backend/src/db/schema/oauth-identities.ts
 
-import { OAUTH_IDENTITIES_CONSTRAINTS } from "@/db/constraints.js";
+import { OAUTH_IDENTITIES_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
 import { foreignKey, pgEnum, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 

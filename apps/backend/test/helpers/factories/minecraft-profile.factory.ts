@@ -1,11 +1,11 @@
 // apps/backend/test/helpers/factories/minecraft-profile.factory.ts
 
-import { db } from "@/db/client.js";
+import { db } from "@/infrastructure/db/client.js";
 import {
   minecraftProfiles,
   type MinecraftProfile,
   type NewMinecraftProfile,
-} from "@/db/schema/index.js";
+} from "@/infrastructure/db/schema/index.js";
 import { randomUUID } from "crypto";
 import { createUser } from "./user.factory.js";
 

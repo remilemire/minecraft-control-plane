@@ -1,9 +1,9 @@
 // apps/backend/src/features/invitations/invitations.repository.ts
 
-import { INVITATIONS_CONSTRAINTS } from "@/db/constraints.js";
-import { withDbErrors } from "@/db/errors.js";
-import type { DatabaseProvider } from "@/db/provider.js";
-import { invitations, type Invitation, type NewInvitation } from "@/db/schema/index.js";
+import { INVITATIONS_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
+import { withDbErrors } from "@/infrastructure/db/errors.js";
+import type { DatabaseProvider } from "@/infrastructure/db/provider.js";
+import { invitations, type Invitation, type NewInvitation } from "@/infrastructure/db/schema/index.js";
 import { AppError } from "@/errors/app-error.js";
 import { eq } from "drizzle-orm";
 

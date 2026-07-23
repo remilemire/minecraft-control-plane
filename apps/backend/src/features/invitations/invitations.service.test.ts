@@ -1,7 +1,7 @@
 // apps/backend/src/features/invitations/invitations.service.test.ts
 
 import { env } from "@/config/env.js";
-import type { Invitation, NewInvitation } from "@/db/schema/index.js";
+import type { Invitation, NewInvitation } from "@/infrastructure/db/schema/index.js";
 import { describe, expect, it } from "vitest";
 import type { InvitationRepository } from "./invitations.repository.js";
 import { InvitationService } from "./invitations.service.js";

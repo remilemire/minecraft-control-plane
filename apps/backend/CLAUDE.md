@@ -58,8 +58,8 @@ internal-only (`*.service.ts` + `*.repository.ts`, no
 
 Path alias: `@/*` → `src/*` (and `@test/*` → `test/*`). Use `.js` extensions on
 relative/alias imports (ESM). Imports never use `../`; same-directory `./` imports
-are fine, anything else goes through the alias, preferring a barrel (`@/db/schema/index.js`)
-over reaching into a directory's internals (`@/db/schema/users.js`) when one exists.
+are fine, anything else goes through the alias, preferring a barrel (`@/infrastructure/db/schema/index.js`)
+over reaching into a directory's internals (`@/infrastructure/db/schema/users.js`) when one exists.
 
 ## Layering & dependency injection
 

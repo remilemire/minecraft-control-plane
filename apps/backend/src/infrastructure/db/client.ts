@@ -3,7 +3,7 @@
 // TODO: rename to database.ts
 
 import { env } from "@/config/env.js";
-import * as schema from "@/db/schema/index.js";
+import * as schema from "@/infrastructure/db/schema/index.js";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 

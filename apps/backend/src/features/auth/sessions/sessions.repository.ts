@@ -1,8 +1,13 @@
 // apps/backend/src/features/auth/sessions/sessions.repository.ts
 
-import { withDbErrors } from "@/db/errors.js";
-import type { DatabaseProvider } from "@/db/provider.js";
-import { sessions, users, type NewSession, type Session } from "@/db/schema/index.js";
+import { withDbErrors } from "@/infrastructure/db/errors.js";
+import type { DatabaseProvider } from "@/infrastructure/db/provider.js";
+import {
+  sessions,
+  users,
+  type NewSession,
+  type Session,
+} from "@/infrastructure/db/schema/index.js";
 import { AppError } from "@/errors/app-error.js";
 import { eq } from "drizzle-orm";
 import type { SessionWithUser } from "./sessions.types.js";

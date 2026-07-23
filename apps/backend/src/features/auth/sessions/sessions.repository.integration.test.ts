@@ -1,8 +1,8 @@
 // apps/backend/src/features/auth/sessions/sessions.repository.integration.test.ts
 
-import { db } from "@/db/client.js";
-import { DatabaseProvider } from "@/db/provider.js";
-import { users } from "@/db/schema/index.js";
+import { db } from "@/infrastructure/db/client.js";
+import { DatabaseProvider } from "@/infrastructure/db/provider.js";
+import { users } from "@/infrastructure/db/schema/index.js";
 import { hashSecret } from "@/lib/tokens.js";
 import { createSession } from "@test/helpers/factories/session.factory.js";
 import { createUser } from "@test/helpers/factories/user.factory.js";

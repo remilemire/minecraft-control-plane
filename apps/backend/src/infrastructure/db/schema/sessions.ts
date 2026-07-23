@@ -1,6 +1,6 @@
 // apps/backend/src/db/schema/sessions.ts
 
-import { SESSIONS_CONSTRAINTS } from "@/db/constraints.js";
+import { SESSIONS_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
 import { sql } from "drizzle-orm";
 import { check, foreignKey, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "./users.js";

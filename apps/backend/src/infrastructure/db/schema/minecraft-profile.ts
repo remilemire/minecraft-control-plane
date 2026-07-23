@@ -1,6 +1,6 @@
 // apps/backend/src/db/schema/minecraft-profile.ts
 
-import { MINECRAFT_PROFILES_CONSTRAINTS } from "@/db/constraints.js";
+import { MINECRAFT_PROFILES_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
 import { sql } from "drizzle-orm";
 import { check, foreignKey, pgTable, text, unique, uuid } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
