@@ -9,15 +9,15 @@ internals. Keep it high-signal and update it when conventions change.
 Everything domain-specific lives under `src/features/<feature>/`. A feature is a set
 of files by role (not all features have every file):
 
-| File                 | Role                                                                                |
-| -------------------- | ----------------------------------------------------------------------------------- |
-| `*.routes.ts`        | Builds an Express `Router`; applies `requireAuth` / `requireAdmin` / `requireCsrf`. |
-| `*.controller.ts`    | Class of request handlers: parse input, call the service, serialize the response.   |
-| `*.service.ts`       | Class holding business logic; throws `AppError` on domain failures.                 |
-| `*.repository.ts`    | Class of Drizzle queries; wraps them in `withDbErrors`.                             |
-| `*.types.ts`         | Internal TS types + boundary interfaces (e.g. `MojangApi`).                         |
-| `*.openapi.ts`       | Registers the feature's operations on the OpenAPI registry (import side effect).    |
-| `*.error-catalog.ts` | Human-readable messages for this feature's error codes.                             |
+| File                 | Role                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------- |
+| `*.routes.ts`        | Builds an Express `Router`; applies `requireAuth` / `requireAdmin` / `requireCsrf`.    |
+| `*.controller.ts`    | Class of request handlers: parse input, call the service, serialize the response.      |
+| `*.service.ts`       | Class holding business logic; throws `AppError` on domain failures.                    |
+| `*.repository.ts`    | Class of Drizzle queries; executor from `DatabaseProvider`, wrapped in `withDbErrors`. |
+| `*.types.ts`         | Internal TS types + boundary interfaces (e.g. `MojangApi`).                            |
+| `*.openapi.ts`       | Registers the feature's operations on the OpenAPI registry (import side effect).       |
+| `*.error-catalog.ts` | Human-readable messages for this feature's error codes.                                |
 
 Features: `auth` (with `auth/oauth-identities`, `auth/sessions`, `auth/clients/`),
 `users`, `invitations`, `minecraft` (with `minecraft/players`, `minecraft/server`,
@@ -130,12 +130,12 @@ To add an error code, update three places that must stay in sync:
   the credential via that client, then looks up `oauth_identities` by
   `(provider, providerSubject)` (`OAuthIdentityService.findBySubjectWithUser`). Found
   → that user. Not found → `registerInvited`: the admin check
-  (`email === env.ADMIN_EMAIL`) and, for non-admins, `InvitationService.isInvited(email)`
-  (else `NOT_INVITED`) run **before** a transaction; inside it
-  (`TransactionRunner.run`), the user is created (or `bootstrapAdmin`'d) and its first
-  `oauth_identities` row is inserted as one unit of work, via `UserService`/
-  `OAuthIdentityService.withTx(tx)`. Session creation happens after, outside the
-  transaction.
+  (`email === env.ADMIN_EMAIL`) and, for non-admins, the
+  `InvitationService.findPending(email)` lookup (else `NOT_INVITED`) run **before**
+  the transaction; inside it (`TransactionManager.run`), the user is created (or
+  `bootstrapAdmin`'d), its first `oauth_identities` row is inserted, and the
+  invitation is marked accepted by that user — one unit of work. Session creation
+  happens after, outside the transaction.
 - **Sessions:** opaque random token in an httponly `session_token` cookie; only its
   **sha256 hash** (`lib/tokens.ts`) is stored in the `sessions` table. Cookie helpers
   in `http/session/`, base cookie options in `config/cookies.ts`.
@@ -152,8 +152,20 @@ To add an error code, update three places that must stay in sync:
 
 ## Database & migrations (Drizzle)
 
-- Schema in `src/db/schema/*.ts`; the drizzle client is `db/client.ts` (`Db` type).
+- Schema in `src/db/schema/*.ts`; the drizzle client is `db/client.ts`; the
+  `Db`/`Tx`/`DatabaseExecutor` types live in `db/types.ts`.
   Tables use `uuid` PKs (`defaultRandom()`) and `timestamp(..., { withTimezone: true })`.
+- **Ambient transactions.** Repositories never hold a db handle: they take
+  `DatabaseProvider` (`db/provider.ts`) and resolve their executor **per query** via
+  `this.databaseProvider.get()` — never cached in a field. `get()` returns the
+  transaction bound to the current async context (`db/transaction/context.ts`,
+  AsyncLocalStorage) or falls back to the root client. A service opens a unit of work
+  with `TransactionManager.run(operation)` (`db/transaction/`); every repository call
+  inside `operation` joins that transaction automatically, with no `tx` threading.
+  `run` inside an already-active transaction **joins** it — no savepoints, no nesting.
+  Only db infrastructure touches the context; services depend on `TransactionManager`
+  alone. Keep external side effects (HTTP, RCON, email) **outside** `run`: resolve
+  before, fire after (see `MinecraftPlayerService.setByUserId`).
 - **Every schema module must be re-exported from `src/db/schema/index.ts`** — that
   barrel is what the client and `drizzle-kit` see.
 - Migrations are SQL under `migrations/`, generated by `drizzle-kit`. Config

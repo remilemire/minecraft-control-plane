@@ -51,11 +51,30 @@ describe("MinecraftProfileService", () => {
     });
   });
 
-  describe("setByUserId", () => {
-    it("stores the uuid and canonical username resolved from Mojang", async () => {
+  describe("resolveUsername", () => {
+    it("resolves the uuid and canonical username from Mojang", async () => {
       const mojang = new FakeMojangClient();
       const uuid = randomUUID();
       mojang.setProfile({ username: "Steve", uuid });
+
+      const service = new MinecraftProfileService(repositoryStub({}), mojang);
+
+      // The caller supplies a differently-cased username.
+      expect(await service.resolveUsername("steve")).toEqual({ username: "Steve", uuid });
+    });
+
+    it("throws MOJANG_PROFILE_NOT_FOUND when Mojang has no such account", async () => {
+      const service = new MinecraftProfileService(repositoryStub({}), new FakeMojangClient());
+
+      await expect(service.resolveUsername("Ghost")).rejects.toMatchObject({
+        code: "MOJANG_PROFILE_NOT_FOUND",
+      });
+    });
+  });
+
+  describe("setByUserId", () => {
+    it("upserts the resolved profile for the user", async () => {
+      const uuid = randomUUID();
 
       let upsertArgs:
         | { userId: string; input: Pick<NewMinecraftProfile, "username" | "uuid"> }
@@ -70,29 +89,13 @@ describe("MinecraftProfileService", () => {
             return profile({ username: input.username, uuid: input.uuid });
           },
         }),
-        mojang,
-      );
-
-      // The caller supplies a differently-cased username.
-      const result = await service.setByUserId(USER_ID, { username: "steve" });
-
-      expect(upsertArgs).toEqual({ userId: USER_ID, input: { username: "Steve", uuid } });
-      expect(result).toMatchObject({ username: "Steve", uuid });
-    });
-
-    it("throws MOJANG_PROFILE_NOT_FOUND when Mojang has no such account", async () => {
-      const service = new MinecraftProfileService(
-        repositoryStub({
-          upsertByUserId: async () => {
-            throw new Error("must not upsert when Mojang has no account");
-          },
-        }),
         new FakeMojangClient(),
       );
 
-      await expect(service.setByUserId(USER_ID, { username: "Ghost" })).rejects.toMatchObject({
-        code: "MOJANG_PROFILE_NOT_FOUND",
-      });
+      const result = await service.setByUserId(USER_ID, { username: "Steve", uuid });
+
+      expect(upsertArgs).toEqual({ userId: USER_ID, input: { username: "Steve", uuid } });
+      expect(result).toMatchObject({ username: "Steve", uuid });
     });
   });
 

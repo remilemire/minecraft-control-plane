@@ -1,6 +1,7 @@
 // apps/backend/src/features/auth/sessions/sessions.repository.integration.test.ts
 
 import { db } from "@/db/client.js";
+import { DatabaseProvider } from "@/db/provider.js";
 import { users } from "@/db/schema/index.js";
 import { hashSecret } from "@/lib/tokens.js";
 import { createSession } from "@test/helpers/factories/session.factory.js";
@@ -10,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { SessionRepository } from "./sessions.repository.js";
 
 describe("SessionRepository", () => {
-  const repository = new SessionRepository(db);
+  const repository = new SessionRepository(new DatabaseProvider(db));
 
   it("finds a session with its user by token hash", async () => {
     const user = await createUser();

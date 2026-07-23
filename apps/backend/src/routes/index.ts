@@ -1,7 +1,7 @@
 // apps/backend/routes/index.ts
 
-import type { Db } from "@/db/client.js";
 import { DatabaseProvider } from "@/db/provider.js";
+import type { Db } from "@/db/types.js";
 import { TransactionManager } from "@/db/transaction/index.js";
 import { AuthController } from "@/features/auth/auth.controller.js";
 import { createRequireAuth } from "@/features/auth/auth.middleware.js";
@@ -47,10 +47,10 @@ export function createRouter(deps: AppDeps): Router {
   const transactionManager = new TransactionManager(deps.db);
 
   const users = new UserRepository(databaseProvider);
-  const sessions = new SessionRepository(deps.db);
+  const sessions = new SessionRepository(databaseProvider);
   const invitations = new InvitationRepository(databaseProvider);
   const oauthIdentities = new OAuthIdentityRepository(databaseProvider);
-  const minecraftProfiles = new MinecraftProfileRepository(deps.db);
+  const minecraftProfiles = new MinecraftProfileRepository(databaseProvider);
 
   const userService = new UserService(users);
   const sessionService = new SessionService(sessions);
@@ -71,6 +71,7 @@ export function createRouter(deps: AppDeps): Router {
   const minecraftPlayerService = new MinecraftPlayerService(
     minecraftProfileService,
     minecraftServerService,
+    transactionManager,
   );
 
   const userController = new UserController(userService);

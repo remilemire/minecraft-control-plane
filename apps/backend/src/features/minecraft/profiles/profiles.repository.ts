@@ -1,8 +1,8 @@
 // apps/backend/src/features/minecraft/profiles/profiles.repository.ts
 
-import type { Db } from "@/db/client.js";
 import { MINECRAFT_PROFILES_CONSTRAINTS } from "@/db/constraints.js";
 import { withDbErrors } from "@/db/errors.js";
+import type { DatabaseProvider } from "@/db/provider.js";
 import {
   minecraftProfiles,
   type MinecraftProfile,
@@ -12,15 +12,20 @@ import { AppError } from "@/errors/app-error.js";
 import { eq } from "drizzle-orm";
 
 export class MinecraftProfileRepository {
-  public constructor(private readonly db: Db) {}
+  public constructor(private readonly databaseProvider: DatabaseProvider) {}
 
   public async findAll(): Promise<MinecraftProfile[]> {
-    return withDbErrors(() => this.db.select().from(minecraftProfiles));
+    return withDbErrors(() => this.databaseProvider.get().select().from(minecraftProfiles));
   }
 
   public async findByUserId(userId: string): Promise<MinecraftProfile | null> {
     const [minecraftProfile] = await withDbErrors(() =>
-      this.db.select().from(minecraftProfiles).where(eq(minecraftProfiles.userId, userId)).limit(1),
+      this.databaseProvider
+        .get()
+        .select()
+        .from(minecraftProfiles)
+        .where(eq(minecraftProfiles.userId, userId))
+        .limit(1),
     );
 
     return minecraftProfile ?? null;
@@ -35,7 +40,8 @@ export class MinecraftProfileRepository {
   ): Promise<MinecraftProfile> {
     const [minecraftProfile] = await withDbErrors(
       () =>
-        this.db
+        this.databaseProvider
+          .get()
           .insert(minecraftProfiles)
           .values({ userId, ...input })
           .onConflictDoUpdate({ target: minecraftProfiles.userId, set: input })
@@ -55,7 +61,11 @@ export class MinecraftProfileRepository {
 
   public async deleteByUserId(userId: string): Promise<MinecraftProfile | null> {
     const [minecraftProfile] = await withDbErrors(() =>
-      this.db.delete(minecraftProfiles).where(eq(minecraftProfiles.userId, userId)).returning(),
+      this.databaseProvider
+        .get()
+        .delete(minecraftProfiles)
+        .where(eq(minecraftProfiles.userId, userId))
+        .returning(),
     );
 
     return minecraftProfile ?? null;

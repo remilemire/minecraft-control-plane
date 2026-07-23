@@ -1,6 +1,7 @@
 // apps/backend/src/features/minecraft/profiles/profiles.repository.integration.test.ts
 
 import { db } from "@/db/client.js";
+import { DatabaseProvider } from "@/db/provider.js";
 import { createMinecraftProfile } from "@test/helpers/factories/minecraft-profile.factory.js";
 import { createUser } from "@test/helpers/factories/user.factory.js";
 import { randomUUID } from "crypto";
@@ -8,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { MinecraftProfileRepository } from "./profiles.repository.js";
 
 describe("MinecraftProfileRepository", () => {
-  const repository = new MinecraftProfileRepository(db);
+  const repository = new MinecraftProfileRepository(new DatabaseProvider(db));
 
   describe("upsertByUserId", () => {
     it("inserts a profile for a user without one", async () => {

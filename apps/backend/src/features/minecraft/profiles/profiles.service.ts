@@ -3,7 +3,6 @@
 import type { MinecraftProfile } from "@/db/schema/index.js";
 import { AppError } from "@/errors/app-error.js";
 import type { MojangApi, MojangProfile } from "@/features/minecraft/minecraft.types.js";
-import type { SetMinecraftPlayerInput } from "@minecraft-server/shared/minecraft";
 import { MinecraftProfileRepository } from "./profiles.repository.js";
 
 export class MinecraftProfileService {
@@ -26,15 +25,24 @@ export class MinecraftProfileService {
     return minecraftProfile;
   }
 
+  // Resolves a username to its canonical Mojang profile (exact casing +
+  // uuid). A separate step from `setByUserId` so callers can keep this HTTP
+  // lookup outside a database transaction.
+  public async resolveUsername(username: string): Promise<MojangProfile> {
+    const profile = await this.mojangClient.findByUsername(username);
+
+    if (profile === null) {
+      throw new AppError("MOJANG_PROFILE_NOT_FOUND");
+    }
+
+    return profile;
+  }
+
   // PUT semantics: creates the profile if the user has none, otherwise
-  // replaces it. Resolving the username against Mojang first ensures we only
-  // ever store a real account's uuid.
-  public async setByUserId(
-    userId: string,
-    { username }: SetMinecraftPlayerInput,
-  ): Promise<MinecraftProfile> {
-    const mojangProfile = await this.getMojangProfile(username);
-    return this.minecraftProfiles.upsertByUserId(userId, mojangProfile);
+  // replaces it. Takes a profile already resolved via `resolveUsername`, so
+  // only a real account's uuid is ever stored.
+  public async setByUserId(userId: string, profile: MojangProfile): Promise<MinecraftProfile> {
+    return this.minecraftProfiles.upsertByUserId(userId, profile);
   }
 
   public async deleteByUserId(userId: string): Promise<MinecraftProfile> {
@@ -45,15 +53,5 @@ export class MinecraftProfileService {
     }
 
     return minecraftProfile;
-  }
-
-  private async getMojangProfile(username: string): Promise<MojangProfile> {
-    const profile = await this.mojangClient.findByUsername(username);
-
-    if (profile === null) {
-      throw new AppError("MOJANG_PROFILE_NOT_FOUND");
-    }
-
-    return profile;
   }
 }

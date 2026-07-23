@@ -1,6 +1,7 @@
 // apps/backend/src/features/minecraft/players/players.service.ts
 
 import type { MinecraftProfile } from "@/db/schema/index.js";
+import type { TransactionManager } from "@/db/transaction/index.js";
 import type { SetMinecraftPlayerInput } from "@minecraft-server/shared/minecraft";
 import type { MinecraftProfileService } from "@/features/minecraft/profiles/profiles.service.js";
 import type { MinecraftServerService } from "@/features/minecraft/server/server.service.js";
@@ -19,6 +20,7 @@ export class MinecraftPlayerService {
   public constructor(
     private readonly minecraftProfileService: MinecraftProfileService,
     private readonly minecraftServerService: MinecraftServerService,
+    private readonly transactionManager: TransactionManager,
   ) {}
 
   public async list(): Promise<MinecraftPlayer[]> {
@@ -47,7 +49,16 @@ export class MinecraftPlayerService {
     userId: string,
     input: SetMinecraftPlayerInput,
   ): Promise<MinecraftPlayer> {
-    const profile = await this.minecraftProfileService.setByUserId(userId, input);
+    // External calls stay outside the transaction: Mojang resolution happens
+    // before it, the RCON whitelist call after it.
+    const mojangProfile = await this.minecraftProfileService.resolveUsername(input.username);
+
+    // The transaction spans a single write today, so it changes nothing yet;
+    // it is the seam where the planned transactional outbox will enqueue the
+    // whitelist command atomically with the profile write.
+    const profile = await this.transactionManager.run(() =>
+      this.minecraftProfileService.setByUserId(userId, mojangProfile),
+    );
     await this.minecraftServerService.addToWhitelist(profile.username);
 
     return toPlayer(profile, []);
