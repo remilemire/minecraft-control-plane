@@ -1,3 +1,21 @@
-// apps/backend/src/db/index.ts
+// apps/backend/src/infrastructure/db/index.ts
 
-// TODO: ensure imports go through here
+// The database module's public surface: how the rest of the app *talks to*
+// the database. What the database *looks like* keeps its own entry points —
+// `@/infrastructure/db/schema/index.js` for tables and row types, and
+// `@/infrastructure/db/constraints.js` for constraint names — since those are
+// shared with the schema modules and drizzle-kit.
+//
+// Importing this barrel constructs the connection pool, but `pg.Pool` opens
+// no sockets until the first query, so pulling in `withDbErrors` or a type
+// costs nothing at import time.
+//
+// Modules *inside* this directory must not import the barrel (it would be a
+// cycle); they reach each other by relative path, or through
+// `@/infrastructure/db/*.js` from a subdirectory.
+
+export * from "./database.js";
+export * from "./errors.js";
+export * from "./provider.js";
+export * from "./transaction/index.js";
+export * from "./types.js";

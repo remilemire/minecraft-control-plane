@@ -1,7 +1,7 @@
 // apps/backend/test/helpers/create-test-app.ts
 
 import { createApp } from "@/app.js";
-import { db } from "@/infrastructure/db/client.js";
+import { db } from "@/infrastructure/db/index.js";
 import type { AppDeps } from "@/routes/index.js";
 import { FakeGoogleOauthClient } from "@test/fakes/fake-google-oauth.client.js";
 import { FakeMojangClient } from "@test/fakes/fake-mojang.client.js";

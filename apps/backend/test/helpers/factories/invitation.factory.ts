@@ -1,7 +1,11 @@
 // apps/backend/test/helpers/factories/invitation.factory.ts
 
-import { db } from "@/infrastructure/db/client.js";
-import { invitations, type Invitation, type NewInvitation } from "@/infrastructure/db/schema/index.js";
+import { db } from "@/infrastructure/db/index.js";
+import {
+  invitations,
+  type Invitation,
+  type NewInvitation,
+} from "@/infrastructure/db/schema/index.js";
 import { createUser } from "./user.factory.js";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;

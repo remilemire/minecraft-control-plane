@@ -1,6 +1,6 @@
-// apps/backend/src/db/types.ts
+// apps/backend/src/infrastructure/db/types.ts
 
-import type { db } from "./client.js";
+import type { db } from "./database.js";
 
 export type Db = typeof db;
 

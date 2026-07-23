@@ -5,7 +5,7 @@
 // database before anything imported @/config/env.js.
 
 import { env } from "@/config/env.js";
-import { db, pool } from "@/infrastructure/db/client.js";
+import { db, pool } from "@/infrastructure/db/index.js";
 import * as schema from "@/infrastructure/db/schema/index.js";
 import { getTableName, is, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";

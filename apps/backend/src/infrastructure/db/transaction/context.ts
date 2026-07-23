@@ -1,4 +1,4 @@
-// apps/backend/src/db/transaction/context.ts
+// apps/backend/src/infrastructure/db/transaction/context.ts
 
 import type { Tx } from "@/infrastructure/db/types.js";
 import { AsyncLocalStorage } from "async_hooks";

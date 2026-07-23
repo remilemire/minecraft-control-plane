@@ -1,4 +1,4 @@
-// apps/backend/src/db/provider.ts
+// apps/backend/src/infrastructure/db/provider.ts
 
 import { transactionContext } from "./transaction/index.js";
 import type { DatabaseExecutor, Db } from "./types.js";

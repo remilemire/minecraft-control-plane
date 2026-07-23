@@ -1,7 +1,6 @@
 // apps/backend/src/features/invitations/invitations.repository.integration.test.ts
 
-import { db } from "@/infrastructure/db/client.js";
-import { DatabaseProvider } from "@/infrastructure/db/provider.js";
+import { db, DatabaseProvider } from "@/infrastructure/db/index.js";
 import { createInvitation } from "@test/helpers/factories/invitation.factory.js";
 import { createUser } from "@test/helpers/factories/user.factory.js";
 import { randomUUID } from "crypto";

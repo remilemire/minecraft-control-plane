@@ -1,6 +1,6 @@
 // apps/backend/test/helpers/factories/minecraft-profile.factory.ts
 
-import { db } from "@/infrastructure/db/client.js";
+import { db } from "@/infrastructure/db/index.js";
 import {
   minecraftProfiles,
   type MinecraftProfile,

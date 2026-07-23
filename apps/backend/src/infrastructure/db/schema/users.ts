@@ -1,4 +1,4 @@
-// apps/backend/src/db/schema/users.ts
+// apps/backend/src/infrastructure/db/schema/users.ts
 
 import { USERS_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
 import { sql } from "drizzle-orm";

@@ -1,8 +1,6 @@
-// apps/backend/routes/index.ts
+// apps/backend/src/routes/index.ts
 
-import { DatabaseProvider } from "@/infrastructure/db/provider.js";
-import type { Db } from "@/infrastructure/db/types.js";
-import { TransactionManager } from "@/infrastructure/db/transaction/index.js";
+import { DatabaseProvider, type Db, TransactionManager } from "@/infrastructure/db/index.js";
 import { AuthController } from "@/features/auth/auth.controller.js";
 import { createRequireAuth } from "@/features/auth/auth.middleware.js";
 import { createAuthRoutes } from "@/features/auth/auth.routes.js";

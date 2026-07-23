@@ -1,6 +1,4 @@
-// apps/backend/src/db/client.ts
-
-// TODO: rename to database.ts
+// apps/backend/src/infrastructure/db/database.ts
 
 import { env } from "@/config/env.js";
 import * as schema from "@/infrastructure/db/schema/index.js";

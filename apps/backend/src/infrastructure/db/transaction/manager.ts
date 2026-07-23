@@ -1,4 +1,4 @@
-// apps/backend/src/db/transaction/manager.ts
+// apps/backend/src/infrastructure/db/transaction/manager.ts
 
 import type { Db } from "@/infrastructure/db/types.js";
 import { transactionContext } from "./context.js";

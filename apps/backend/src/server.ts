@@ -3,7 +3,7 @@
 import "dotenv/config";
 import { createApp } from "./app.js";
 import { env } from "./config/env.js";
-import { db } from "./db/client.js";
+import { db } from "@/infrastructure/db/index.js";
 import { GoogleOauthClient } from "./features/auth/clients/google-oauth.client.js";
 import { MojangClient } from "./features/minecraft/clients/mojang.client.js";
 import { ProcessClient } from "./features/minecraft/clients/process.client.js";

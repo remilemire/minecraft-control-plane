@@ -1,7 +1,6 @@
 // apps/backend/src/features/minecraft/profiles/profiles.repository.integration.test.ts
 
-import { db } from "@/infrastructure/db/client.js";
-import { DatabaseProvider } from "@/infrastructure/db/provider.js";
+import { db, DatabaseProvider } from "@/infrastructure/db/index.js";
 import { createMinecraftProfile } from "@test/helpers/factories/minecraft-profile.factory.js";
 import { createUser } from "@test/helpers/factories/user.factory.js";
 import { randomUUID } from "crypto";

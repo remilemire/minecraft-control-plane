@@ -1,4 +1,4 @@
-// apps/backend/src/db/schema/sessions.ts
+// apps/backend/src/infrastructure/db/schema/sessions.ts
 
 import { SESSIONS_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
 import { sql } from "drizzle-orm";

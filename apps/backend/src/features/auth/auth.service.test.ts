@@ -2,7 +2,7 @@
 
 import { env } from "@/config/env.js";
 import type { Invitation, OAuthIdentity, Session, User } from "@/infrastructure/db/schema/index.js";
-import type { TransactionManager } from "@/infrastructure/db/transaction/index.js";
+import type { TransactionManager } from "@/infrastructure/db/index.js";
 import { FakeGoogleOauthClient } from "@test/fakes/fake-google-oauth.client.js";
 import { describe, expect, it } from "vitest";
 import type { InvitationService } from "@/features/invitations/invitations.service.js";

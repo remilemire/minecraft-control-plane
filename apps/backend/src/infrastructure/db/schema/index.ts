@@ -1,4 +1,4 @@
-// apps/backend/src/db/schema/index.ts
+// apps/backend/src/infrastructure/db/schema/index.ts
 
 export * from "./invitations.js";
 export * from "./minecraft-profile.js";

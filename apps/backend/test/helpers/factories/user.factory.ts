@@ -1,6 +1,6 @@
 // apps/backend/test/helpers/factories/user.factory.ts
 
-import { db } from "@/infrastructure/db/client.js";
+import { db } from "@/infrastructure/db/index.js";
 import { users, type NewUser, type User } from "@/infrastructure/db/schema/index.js";
 
 let sequence = 0;

@@ -1,9 +1,7 @@
 // apps/backend/src/features/auth/oauth-identities/oauth-identities.repository.integration.test.ts
 
 import { OAUTH_IDENTITIES_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
-import { db } from "@/infrastructure/db/client.js";
-import { DatabaseProvider } from "@/infrastructure/db/provider.js";
-import { TransactionManager } from "@/infrastructure/db/transaction/index.js";
+import { db, DatabaseProvider, TransactionManager } from "@/infrastructure/db/index.js";
 import { users } from "@/infrastructure/db/schema/index.js";
 import { UserRepository } from "@/features/users/users.repository.js";
 import { createOAuthIdentity } from "@test/helpers/factories/oauth-identity.factory.js";

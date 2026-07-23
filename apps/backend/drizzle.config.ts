@@ -10,7 +10,7 @@ const postgres = postgresEnvSchema.parse(process.env);
 const postgresUrl = buildPostgresUrl({ ...postgres });
 
 export default defineConfig({
-  schema: "./src/db/schema/index.ts",
+  schema: "./src/infrastructure/db/schema/index.ts",
   out: "./migrations",
   dialect: "postgresql",
   dbCredentials: {

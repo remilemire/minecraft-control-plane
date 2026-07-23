@@ -1,4 +1,4 @@
-// apps/backend/src/db/schema/invitations.ts
+// apps/backend/src/infrastructure/db/schema/invitations.ts
 
 import { INVITATIONS_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
 import { sql } from "drizzle-orm";

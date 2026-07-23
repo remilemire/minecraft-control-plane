@@ -1,8 +1,7 @@
 // apps/backend/src/features/minecraft/profiles/profiles.repository.ts
 
 import { MINECRAFT_PROFILES_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
-import { withDbErrors } from "@/infrastructure/db/errors.js";
-import type { DatabaseProvider } from "@/infrastructure/db/provider.js";
+import { withDbErrors, type DatabaseProvider } from "@/infrastructure/db/index.js";
 import {
   minecraftProfiles,
   type MinecraftProfile,

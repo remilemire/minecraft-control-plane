@@ -1,4 +1,4 @@
-// apps/backend/src/db/constraints.ts
+// apps/backend/src/infrastructure/db/constraints.ts
 
 // Single source of truth for every unique/foreign key constraint name.
 // Schema modules pass these into `.unique(...)` / `foreignKey({ name: ... })`

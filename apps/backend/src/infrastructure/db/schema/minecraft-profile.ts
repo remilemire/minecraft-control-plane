@@ -1,4 +1,4 @@
-// apps/backend/src/db/schema/minecraft-profile.ts
+// apps/backend/src/infrastructure/db/schema/minecraft-profile.ts
 
 import { MINECRAFT_PROFILES_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
 import { sql } from "drizzle-orm";

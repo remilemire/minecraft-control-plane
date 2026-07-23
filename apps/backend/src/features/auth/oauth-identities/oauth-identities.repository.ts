@@ -1,7 +1,6 @@
 // apps/backend/src/features/auth/oauth-identities/oauth-identities.repository.ts
 
-import { withDbErrors } from "@/infrastructure/db/errors.js";
-import type { DatabaseProvider } from "@/infrastructure/db/provider.js";
+import { withDbErrors, type DatabaseProvider } from "@/infrastructure/db/index.js";
 import {
   oauthIdentities,
   users,
