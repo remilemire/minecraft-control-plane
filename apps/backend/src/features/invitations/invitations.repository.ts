@@ -1,22 +1,22 @@
 // apps/backend/src/features/invitations/invitations.repository.ts
 
-import { type Db } from "@/db/client.js";
 import { INVITATIONS_CONSTRAINTS } from "@/db/constraints.js";
 import { withDbErrors } from "@/db/errors.js";
+import type { DatabaseProvider } from "@/db/provider.js";
 import { invitations, type Invitation, type NewInvitation } from "@/db/schema/index.js";
 import { AppError } from "@/errors/app-error.js";
 import { eq } from "drizzle-orm";
 
 export class InvitationRepository {
-  public constructor(private readonly db: Db) {}
+  public constructor(private readonly databaseProvider: DatabaseProvider) {}
 
   public async findAll(): Promise<Invitation[]> {
-    return this.db.select().from(invitations);
+    return this.databaseProvider.get().select().from(invitations);
   }
 
   public async findByEmail(email: string): Promise<Invitation | null> {
     const [invitation] = await withDbErrors(() =>
-      this.db.select().from(invitations).where(eq(invitations.email, email)),
+      this.databaseProvider.get().select().from(invitations).where(eq(invitations.email, email)),
     );
 
     return invitation ?? null;
@@ -24,14 +24,14 @@ export class InvitationRepository {
 
   public async findById(id: string): Promise<Invitation | null> {
     const [invitation] = await withDbErrors(() =>
-      this.db.select().from(invitations).where(eq(invitations.id, id)),
+      this.databaseProvider.get().select().from(invitations).where(eq(invitations.id, id)),
     );
     return invitation ?? null;
   }
 
   public async create(input: NewInvitation): Promise<Invitation> {
     const [invitation] = await withDbErrors(
-      () => this.db.insert(invitations).values(input).returning(),
+      () => this.databaseProvider.get().insert(invitations).values(input).returning(),
       { [INVITATIONS_CONSTRAINTS.EMAIL_UNIQUE]: "INVITATION_ALREADY_EXISTS" },
     );
 
@@ -44,7 +44,12 @@ export class InvitationRepository {
 
   public async updateById(id: string, input: Partial<NewInvitation>): Promise<Invitation | null> {
     const [invitation] = await withDbErrors(() =>
-      this.db.update(invitations).set(input).where(eq(invitations.id, id)).returning(),
+      this.databaseProvider
+        .get()
+        .update(invitations)
+        .set(input)
+        .where(eq(invitations.id, id))
+        .returning(),
     );
 
     return invitation ?? null;
@@ -52,7 +57,7 @@ export class InvitationRepository {
 
   public async deleteById(id: string): Promise<Invitation | null> {
     const [invitation] = await withDbErrors(() =>
-      this.db.delete(invitations).where(eq(invitations.id, id)).returning(),
+      this.databaseProvider.get().delete(invitations).where(eq(invitations.id, id)).returning(),
     );
 
     return invitation ?? null;

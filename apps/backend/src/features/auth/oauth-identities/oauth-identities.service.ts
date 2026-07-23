@@ -1,7 +1,6 @@
 // apps/backend/src/features/auth/oauth-identities/oauth-identities.service.ts
 
 import type { NewOAuthIdentity, OAuthIdentity } from "@/db/schema/index.js";
-import type { Tx } from "@/db/transactions.js";
 import type { OAuthProvider } from "@/features/auth/auth.types.js";
 import type { OAuthIdentityRepository } from "./oauth-identities.repository.js";
 import type { OAuthIdentityWithUser } from "./oauth-identities.types.js";
@@ -12,10 +11,6 @@ import type { OAuthIdentityWithUser } from "./oauth-identities.types.js";
 // linking rules have somewhere to live when they arrive.
 export class OAuthIdentityService {
   public constructor(private readonly oauthIdentities: OAuthIdentityRepository) {}
-
-  public withTx(tx: Tx): OAuthIdentityService {
-    return new OAuthIdentityService(this.oauthIdentities.withTx(tx));
-  }
 
   public async findBySubjectWithUser(
     provider: OAuthProvider,

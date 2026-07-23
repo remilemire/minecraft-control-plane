@@ -1,5 +1,7 @@
 // apps/backend/src/db/transactions.ts
 
+// TODO: REMOVE
+
 import type { Db } from "@/db/client.js";
 
 // The transaction-bound client drizzle passes into a `db.transaction(...)`

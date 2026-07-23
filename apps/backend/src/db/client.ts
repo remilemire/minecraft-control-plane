@@ -1,5 +1,7 @@
 // apps/backend/src/db/client.ts
 
+// TODO: rename to database.ts
+
 import { env } from "@/config/env.js";
 import * as schema from "@/db/schema/index.js";
 import { drizzle } from "drizzle-orm/node-postgres";

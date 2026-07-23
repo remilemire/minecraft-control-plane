@@ -1,13 +1,14 @@
 // apps/backend/src/features/users/users.repository.integration.test.ts
 
 import { db } from "@/db/client.js";
+import { DatabaseProvider } from "@/db/provider.js";
 import { createUser } from "@test/helpers/factories/user.factory.js";
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";
 import { UserRepository } from "./users.repository.js";
 
 describe("UserRepository", () => {
-  const repository = new UserRepository(db);
+  const repository = new UserRepository(new DatabaseProvider(db));
 
   it("creates a user and finds it by id", async () => {
     const created = await repository.create({

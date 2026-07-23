@@ -42,11 +42,17 @@ export class InvitationService {
     return invitation;
   }
 
-  public async isInvited(email: string) {
+  // A pending invitation is one that can still be consumed: it exists, has
+  // not been accepted, and has not expired.
+  public async findPending(email: string): Promise<Invitation | null> {
     const invitation = await this.invitations.findByEmail(email);
-    return (
-      invitation !== null && invitation.acceptedAt === null && invitation.expiresAt > new Date()
-    );
+    const isPending =
+      invitation !== null && invitation.acceptedAt === null && invitation.expiresAt > new Date();
+    return isPending ? invitation : null;
+  }
+
+  public async isInvited(email: string) {
+    return (await this.findPending(email)) !== null;
   }
 
   public async delete(id: string): Promise<Invitation> {

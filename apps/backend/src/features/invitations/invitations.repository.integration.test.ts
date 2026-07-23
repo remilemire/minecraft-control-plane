@@ -1,6 +1,7 @@
 // apps/backend/src/features/invitations/invitations.repository.integration.test.ts
 
 import { db } from "@/db/client.js";
+import { DatabaseProvider } from "@/db/provider.js";
 import { createInvitation } from "@test/helpers/factories/invitation.factory.js";
 import { createUser } from "@test/helpers/factories/user.factory.js";
 import { randomUUID } from "crypto";
@@ -10,7 +11,7 @@ import { InvitationRepository } from "./invitations.repository.js";
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 describe("InvitationRepository", () => {
-  const repository = new InvitationRepository(db);
+  const repository = new InvitationRepository(new DatabaseProvider(db));
 
   it("creates an invitation and finds it by email", async () => {
     const user = await createUser();

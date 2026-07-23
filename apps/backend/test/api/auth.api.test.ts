@@ -1,7 +1,10 @@
 // apps/backend/test/api/auth.api.test.ts
 
+import { db } from "@/db/client.js";
+import { invitations } from "@/db/schema/index.js";
 import { SESSION_COOKIE } from "@/http/session/session.constants.js";
 import { CSRF_COOKIE } from "@/http/csrf/csrf.constants.js";
+import { eq } from "drizzle-orm";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestApp, type TestApp } from "@test/helpers/create-test-app.js";
@@ -48,7 +51,7 @@ describe("POST /api/auth/google", () => {
 
   it("registers an invited user on first login, and persists the identity for a later login", async () => {
     const { app, googleOauthClient } = testApp;
-    await createInvitation({ email: "newplayer@example.com" });
+    const invitation = await createInvitation({ email: "newplayer@example.com" });
     const credential = googleOauthClient.issueToken({
       email: "newplayer@example.com",
       sub: "google-newplayer",
@@ -65,6 +68,15 @@ describe("POST /api/auth/google", () => {
     });
     expect(response.body.id).toBeDefined();
     expect(findSetCookie(response, SESSION_COOKIE)).toBeDefined();
+
+    // Registration consumes the invitation: it is marked accepted by the
+    // user it created.
+    const [storedInvitation] = await db
+      .select()
+      .from(invitations)
+      .where(eq(invitations.id, invitation.id));
+    expect(storedInvitation?.acceptedAt).not.toBeNull();
+    expect(storedInvitation?.acceptedByUserId).toBe(response.body.id);
 
     // The first-login identity must have been persisted: a later login with
     // the same provider subject resolves to the same user, rather than

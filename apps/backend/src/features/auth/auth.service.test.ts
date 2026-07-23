@@ -1,8 +1,8 @@
 // apps/backend/src/features/auth/auth.service.test.ts
 
 import { env } from "@/config/env.js";
-import type { OAuthIdentity, Session, User } from "@/db/schema/index.js";
-import type { Tx, TransactionRunner } from "@/db/transactions.js";
+import type { Invitation, OAuthIdentity, Session, User } from "@/db/schema/index.js";
+import type { TransactionManager } from "@/db/transaction/index.js";
 import { FakeGoogleOauthClient } from "@test/fakes/fake-google-oauth.client.js";
 import { describe, expect, it } from "vitest";
 import type { InvitationService } from "@/features/invitations/invitations.service.js";
@@ -14,10 +14,7 @@ import { AuthService } from "./auth.service.js";
 
 const USER_ID = "00000000-0000-0000-0000-000000000001";
 const IDENTITY_ID = "00000000-0000-0000-0000-0000000000bb";
-
-// Never dereferenced by the service directly (only handed back to `withTx`),
-// so a bare marker object stands in for a real drizzle transaction handle.
-const DUMMY_TX = {} as Tx;
+const INVITATION_ID = "00000000-0000-0000-0000-0000000000cc";
 
 function user(overrides: Partial<User> = {}): User {
   return {
@@ -41,6 +38,19 @@ function oauthIdentity(overrides: Partial<OAuthIdentity> = {}): OAuthIdentity {
   };
 }
 
+function invitation(overrides: Partial<Invitation> = {}): Invitation {
+  return {
+    id: INVITATION_ID,
+    email: "invited@example.com",
+    invitedByUserId: "00000000-0000-0000-0000-0000000000dd",
+    acceptedByUserId: null,
+    createdAt: new Date(),
+    expiresAt: new Date(Date.now() + 1_000),
+    acceptedAt: null,
+    ...overrides,
+  };
+}
+
 function session(overrides: Partial<Session> = {}): Session {
   return {
     id: "00000000-0000-0000-0000-0000000000aa",
@@ -53,14 +63,9 @@ function session(overrides: Partial<Session> = {}): Session {
 }
 
 // The services/repositories are classes (nominal because of their private
-// fields), so method-level stubs need the double cast. `withTx` defaults to
-// returning the same stub, mirroring the real classes' "same instance, bound
-// to a transaction" contract, since the fake never actually runs a query
-// against `tx`.
+// fields), so method-level stubs need the double cast.
 function userServiceStub(methods: Partial<Record<keyof UserService, unknown>>): UserService {
-  const stub: Partial<Record<keyof UserService, unknown>> = { ...methods };
-  stub.withTx = () => stub;
-  return stub as unknown as UserService;
+  return methods as unknown as UserService;
 }
 function sessionServiceStub(
   methods: Partial<Record<keyof SessionService, unknown>>,
@@ -75,26 +80,25 @@ function invitationServiceStub(
 function oauthIdentityServiceStub(
   methods: Partial<Record<keyof OAuthIdentityService, unknown>>,
 ): OAuthIdentityService {
-  const stub: Partial<Record<keyof OAuthIdentityService, unknown>> = { ...methods };
-  stub.withTx = () => stub;
-  return stub as unknown as OAuthIdentityService;
+  return methods as unknown as OAuthIdentityService;
 }
-// Defaults to actually invoking the callback (like the real runner), so
-// tests that only care about what happens *inside* the transaction don't
-// need to repeat the plumbing. Tests proving a code path never opens a
-// transaction override `run` to throw instead.
-function transactionRunnerStub(
-  overrides: Partial<Record<keyof TransactionRunner, unknown>> = {},
-): TransactionRunner {
+// Defaults to actually invoking the operation (like the real manager, minus
+// the ambient transaction context), so tests that only care about what
+// happens *inside* the transaction don't need to repeat the plumbing. Tests
+// proving a code path never opens a transaction override `run` to throw
+// instead.
+function transactionManagerStub(
+  overrides: Partial<Record<keyof TransactionManager, unknown>> = {},
+): TransactionManager {
   return {
-    run: async (fn: (tx: Tx) => Promise<unknown>) => fn(DUMMY_TX),
+    run: async (operation: () => Promise<unknown>) => operation(),
     ...overrides,
-  } as unknown as TransactionRunner;
+  } as unknown as TransactionManager;
 }
 // Proves a code path returns without ever opening a transaction: if it were
 // entered, the test would fail with this error instead of the expected one.
-function neverRunsTransactionRunner(): TransactionRunner {
-  return transactionRunnerStub({
+function neverRunsTransactionManager(): TransactionManager {
+  return transactionManagerStub({
     run: async () => {
       throw new Error("must not open a transaction on this path");
     },
@@ -144,7 +148,7 @@ describe("AuthService", () => {
             throw new Error("an already-linked identity must not be re-created");
           },
         }),
-        neverRunsTransactionRunner(),
+        neverRunsTransactionManager(),
       );
 
       const result = await service.authenticateWithOAuth({ credential, provider: "google" });
@@ -156,7 +160,7 @@ describe("AuthService", () => {
       expect(sessionUserId).toBe(existing.id);
     });
 
-    it("registers an invited user on first login: user created, then its identity, in order", async () => {
+    it("registers an invited user on first login: user, identity, then invitation acceptance, in order", async () => {
       const googleOauthClient = new FakeGoogleOauthClient();
       const credential = googleOauthClient.issueToken({
         email: "invited@example.com",
@@ -164,10 +168,13 @@ describe("AuthService", () => {
         name: "In Vited",
       });
       const created = user({ email: "invited@example.com", fullName: "In Vited" });
+      const pending = invitation({ email: "invited@example.com" });
 
       const callOrder: string[] = [];
       let createInput: unknown;
       let identityInput: unknown;
+      let acceptedId: unknown;
+      let acceptedInput: unknown;
 
       const service = new AuthService(
         userServiceStub({
@@ -178,7 +185,15 @@ describe("AuthService", () => {
           },
         }),
         sessionServiceStub({ create: async () => issuedSession }),
-        invitationServiceStub({ isInvited: async () => true }),
+        invitationServiceStub({
+          findPending: async () => pending,
+          markAccepted: async (id: unknown, input: unknown) => {
+            callOrder.push("accept-invitation");
+            acceptedId = id;
+            acceptedInput = input;
+            return invitation({ acceptedByUserId: created.id, acceptedAt: new Date() });
+          },
+        }),
         { google: googleOauthClient },
         oauthIdentityServiceStub({
           findBySubjectWithUser: async () => null,
@@ -188,7 +203,7 @@ describe("AuthService", () => {
             return oauthIdentity();
           },
         }),
-        transactionRunnerStub(),
+        transactionManagerStub(),
       );
 
       const result = await service.authenticateWithOAuth({ credential, provider: "google" });
@@ -205,7 +220,11 @@ describe("AuthService", () => {
         provider: "google",
         subject: "google-invited",
       });
-      expect(callOrder).toEqual(["create-user", "create-identity"]);
+      // The invitation is consumed by the registration, attributed to the
+      // user it created.
+      expect(acceptedId).toBe(pending.id);
+      expect(acceptedInput).toEqual({ acceptedByUserId: created.id });
+      expect(callOrder).toEqual(["create-user", "create-identity", "accept-invitation"]);
     });
 
     it("bootstraps the configured ADMIN_EMAIL as an admin, bypassing the invite check", async () => {
@@ -229,11 +248,14 @@ describe("AuthService", () => {
           },
         }),
         sessionServiceStub({ create: async () => issuedSession }),
-        // isInvited throwing proves the admin bootstrap path skips the
+        // findPending throwing proves the admin bootstrap path skips the
         // invitation check entirely, rather than happening to pass it.
         invitationServiceStub({
-          isInvited: async () => {
+          findPending: async () => {
             throw new Error("the admin email must not be checked against invitations");
+          },
+          markAccepted: async () => {
+            throw new Error("the admin bootstrap must not consume an invitation");
           },
         }),
         { google: googleOauthClient },
@@ -244,7 +266,7 @@ describe("AuthService", () => {
             return oauthIdentity();
           },
         }),
-        transactionRunnerStub(),
+        transactionManagerStub(),
       );
 
       const result = await service.authenticateWithOAuth({ credential, provider: "google" });
@@ -274,13 +296,16 @@ describe("AuthService", () => {
           },
         }),
         sessionServiceStub({ create: async () => issuedSession }),
-        invitationServiceStub({ isInvited: async () => true }),
+        invitationServiceStub({
+          findPending: async () => invitation({ email: "invited@example.com" }),
+          markAccepted: async () => invitation(),
+        }),
         { google: googleOauthClient },
         oauthIdentityServiceStub({
           findBySubjectWithUser: async () => null,
           create: async () => oauthIdentity(),
         }),
-        transactionRunnerStub(),
+        transactionManagerStub(),
       );
 
       const result = await service.authenticateWithOAuth({ credential, provider: "google" });
@@ -300,7 +325,7 @@ describe("AuthService", () => {
           create: async () => user({ email: "stranger@example.com" }),
         }),
         sessionServiceStub({ create: async () => issuedSession }),
-        invitationServiceStub({ isInvited: async () => false }),
+        invitationServiceStub({ findPending: async () => null }),
         { google: googleOauthClient },
         oauthIdentityServiceStub({
           findBySubjectWithUser: async () => null,
@@ -308,7 +333,7 @@ describe("AuthService", () => {
             throw new Error("no identity must be created when registration is rejected");
           },
         }),
-        neverRunsTransactionRunner(),
+        neverRunsTransactionManager(),
       );
 
       await expect(
@@ -331,7 +356,7 @@ describe("AuthService", () => {
         invitationServiceStub({}),
         { google: googleOauthClient },
         oauthIdentityServiceStub({}),
-        neverRunsTransactionRunner(),
+        neverRunsTransactionManager(),
       );
 
       await expect(
@@ -358,7 +383,7 @@ describe("AuthService", () => {
         invitationServiceStub({}),
         { google: new FakeGoogleOauthClient() },
         oauthIdentityServiceStub({}),
-        neverRunsTransactionRunner(),
+        neverRunsTransactionManager(),
       );
 
       const result = await service.authenticateFromSession("raw-token");
@@ -374,7 +399,7 @@ describe("AuthService", () => {
         invitationServiceStub({}),
         { google: new FakeGoogleOauthClient() },
         oauthIdentityServiceStub({}),
-        neverRunsTransactionRunner(),
+        neverRunsTransactionManager(),
       );
 
       await expect(service.authenticateFromSession("nope")).rejects.toMatchObject({
@@ -397,7 +422,7 @@ describe("AuthService", () => {
         invitationServiceStub({}),
         { google: new FakeGoogleOauthClient() },
         oauthIdentityServiceStub({}),
-        neverRunsTransactionRunner(),
+        neverRunsTransactionManager(),
       );
 
       await service.logout("raw-token");

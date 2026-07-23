@@ -1,8 +1,7 @@
 // apps/backend/src/features/auth/oauth-identities/oauth-identities.repository.ts
 
-import type { Db } from "@/db/client.js";
-import type { Tx } from "@/db/transactions.js";
 import { withDbErrors } from "@/db/errors.js";
+import type { DatabaseProvider } from "@/db/provider.js";
 import {
   oauthIdentities,
   users,
@@ -15,18 +14,15 @@ import type { OAuthProvider } from "@/features/auth/auth.types.js";
 import type { OAuthIdentityWithUser } from "./oauth-identities.types.js";
 
 export class OAuthIdentityRepository {
-  public constructor(private readonly db: Db | Tx) {}
-
-  public withTx(tx: Tx): OAuthIdentityRepository {
-    return new OAuthIdentityRepository(tx);
-  }
+  public constructor(private readonly databaseProvider: DatabaseProvider) {}
 
   public async findBySubjectWithUser(
     provider: OAuthProvider,
     subject: string,
   ): Promise<OAuthIdentityWithUser | null> {
     const [row] = await withDbErrors(() =>
-      this.db
+      this.databaseProvider
+        .get()
         .select()
         .from(oauthIdentities)
         .innerJoin(users, eq(oauthIdentities.userId, users.id))
@@ -42,7 +38,7 @@ export class OAuthIdentityRepository {
   // through `withDbErrors` to `INTERNAL` rather than a dedicated error code.
   public async create(input: NewOAuthIdentity): Promise<OAuthIdentity> {
     const [identity] = await withDbErrors(() =>
-      this.db.insert(oauthIdentities).values(input).returning(),
+      this.databaseProvider.get().insert(oauthIdentities).values(input).returning(),
     );
 
     if (identity === undefined) {

@@ -2,7 +2,7 @@
 
 import { env } from "@/config/env.js";
 import type { User } from "@/db/schema/index.js";
-import type { TransactionRunner } from "@/db/transactions.js";
+import type { TransactionManager } from "@/db/transaction/index.js";
 import { AppError } from "@/errors/app-error.js";
 import type { InvitationService } from "@/features/invitations/invitations.service.js";
 import type { UserService } from "@/features/users/users.service.js";
@@ -23,7 +23,7 @@ export class AuthService {
     private readonly invitationService: InvitationService,
     private readonly oauthClients: OAuthClients,
     private readonly oauthIdentityService: OAuthIdentityService,
-    private readonly transactionRunner: TransactionRunner,
+    private readonly transactionManager: TransactionManager,
   ) {}
 
   public async authenticateWithOAuth({
@@ -64,7 +64,8 @@ export class AuthService {
     const { email, provider, providerSubject } = identity;
     const isAdmin = email === env.ADMIN_EMAIL;
 
-    if (!isAdmin && !(await this.invitationService.isInvited(email))) {
+    const invitation = isAdmin ? null : await this.invitationService.findPending(email);
+    if (!isAdmin && invitation === null) {
       throw new AppError("NOT_INVITED");
     }
 
@@ -73,19 +74,23 @@ export class AuthService {
       ...(identity.fullName !== undefined ? { fullName: identity.fullName } : {}),
     };
 
-    // Registering a new user and linking their first OAuth identity is a
-    // single unit of work: either both rows exist afterward or neither does.
-    return await this.transactionRunner.run(async (tx) => {
-      const userService = this.userService.withTx(tx);
+    // Registering a new user, linking their first OAuth identity, and
+    // consuming their invitation is a single unit of work: either all of it
+    // happened afterward or none of it did.
+    return await this.transactionManager.run(async () => {
       const user = isAdmin
-        ? await userService.bootstrapAdmin(input)
-        : await userService.create(input);
+        ? await this.userService.bootstrapAdmin(input)
+        : await this.userService.create(input);
 
-      await this.oauthIdentityService.withTx(tx).create({
+      await this.oauthIdentityService.create({
         userId: user.id,
         provider,
         subject: providerSubject,
       });
+
+      if (invitation !== null) {
+        await this.invitationService.markAccepted(invitation.id, { acceptedByUserId: user.id });
+      }
 
       return user;
     });
