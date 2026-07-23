@@ -1,4 +1,4 @@
-// apps/backend/src/features/auth/oauth-identities.repository.integration.test.ts
+// apps/backend/src/features/auth/oauth-identities/oauth-identities.repository.integration.test.ts
 
 import { OAUTH_IDENTITIES_CONSTRAINTS } from "@/db/constraints.js";
 import { db } from "@/db/client.js";

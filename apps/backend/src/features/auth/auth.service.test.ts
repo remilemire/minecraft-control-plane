@@ -9,7 +9,7 @@ import type { InvitationService } from "@/features/invitations/invitations.servi
 import type { SessionService } from "@/features/sessions/sessions.service.js";
 import type { SessionWithToken, SessionWithUser } from "@/features/sessions/sessions.types.js";
 import type { UserService } from "@/features/users/users.service.js";
-import type { OAuthIdentityRepository } from "./oauth-identities.repository.js";
+import type { OAuthIdentityService } from "./oauth-identities/oauth-identities.service.js";
 import { AuthService } from "./auth.service.js";
 
 const USER_ID = "00000000-0000-0000-0000-000000000001";
@@ -72,12 +72,12 @@ function invitationServiceStub(
 ): InvitationService {
   return methods as unknown as InvitationService;
 }
-function oauthIdentityRepositoryStub(
-  methods: Partial<Record<keyof OAuthIdentityRepository, unknown>>,
-): OAuthIdentityRepository {
-  const stub: Partial<Record<keyof OAuthIdentityRepository, unknown>> = { ...methods };
+function oauthIdentityServiceStub(
+  methods: Partial<Record<keyof OAuthIdentityService, unknown>>,
+): OAuthIdentityService {
+  const stub: Partial<Record<keyof OAuthIdentityService, unknown>> = { ...methods };
   stub.withTx = () => stub;
-  return stub as unknown as OAuthIdentityRepository;
+  return stub as unknown as OAuthIdentityService;
 }
 // Defaults to actually invoking the callback (like the real runner), so
 // tests that only care about what happens *inside* the transaction don't
@@ -134,7 +134,7 @@ describe("AuthService", () => {
         }),
         invitationServiceStub({}),
         { google: googleOauthClient },
-        oauthIdentityRepositoryStub({
+        oauthIdentityServiceStub({
           findBySubjectWithUser: async (provider: string, subject: string) => {
             lookedUpProvider = provider;
             lookedUpSubject = subject;
@@ -180,7 +180,7 @@ describe("AuthService", () => {
         sessionServiceStub({ create: async () => issuedSession }),
         invitationServiceStub({ isInvited: async () => true }),
         { google: googleOauthClient },
-        oauthIdentityRepositoryStub({
+        oauthIdentityServiceStub({
           findBySubjectWithUser: async () => null,
           create: async (input: unknown) => {
             callOrder.push("create-identity");
@@ -237,7 +237,7 @@ describe("AuthService", () => {
           },
         }),
         { google: googleOauthClient },
-        oauthIdentityRepositoryStub({
+        oauthIdentityServiceStub({
           findBySubjectWithUser: async () => null,
           create: async (input: unknown) => {
             identityInput = input;
@@ -276,7 +276,7 @@ describe("AuthService", () => {
         sessionServiceStub({ create: async () => issuedSession }),
         invitationServiceStub({ isInvited: async () => true }),
         { google: googleOauthClient },
-        oauthIdentityRepositoryStub({
+        oauthIdentityServiceStub({
           findBySubjectWithUser: async () => null,
           create: async () => oauthIdentity(),
         }),
@@ -302,7 +302,7 @@ describe("AuthService", () => {
         sessionServiceStub({ create: async () => issuedSession }),
         invitationServiceStub({ isInvited: async () => false }),
         { google: googleOauthClient },
-        oauthIdentityRepositoryStub({
+        oauthIdentityServiceStub({
           findBySubjectWithUser: async () => null,
           create: async () => {
             throw new Error("no identity must be created when registration is rejected");
@@ -330,7 +330,7 @@ describe("AuthService", () => {
         sessionServiceStub({}),
         invitationServiceStub({}),
         { google: googleOauthClient },
-        oauthIdentityRepositoryStub({}),
+        oauthIdentityServiceStub({}),
         neverRunsTransactionRunner(),
       );
 
@@ -357,7 +357,7 @@ describe("AuthService", () => {
         }),
         invitationServiceStub({}),
         { google: new FakeGoogleOauthClient() },
-        oauthIdentityRepositoryStub({}),
+        oauthIdentityServiceStub({}),
         neverRunsTransactionRunner(),
       );
 
@@ -373,7 +373,7 @@ describe("AuthService", () => {
         sessionServiceStub({ findValidWithUser: async () => null }),
         invitationServiceStub({}),
         { google: new FakeGoogleOauthClient() },
-        oauthIdentityRepositoryStub({}),
+        oauthIdentityServiceStub({}),
         neverRunsTransactionRunner(),
       );
 
@@ -396,7 +396,7 @@ describe("AuthService", () => {
         }),
         invitationServiceStub({}),
         { google: new FakeGoogleOauthClient() },
-        oauthIdentityRepositoryStub({}),
+        oauthIdentityServiceStub({}),
         neverRunsTransactionRunner(),
       );
 

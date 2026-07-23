@@ -19,17 +19,30 @@ of files by role (not all features have every file):
 | `*.openapi.ts`       | Registers the feature's operations on the OpenAPI registry (import side effect).    |
 | `*.error-catalog.ts` | Human-readable messages for this feature's error codes.                             |
 
-Features: `auth`, `users`, `sessions`, `invitations`, `minecraft` (with
-`minecraft/players`, `minecraft/server`, `minecraft/profiles`, and
-`minecraft/clients/`). Cross-cutting code sits outside `features/`: `config/`, `db/`,
-`errors/`, `http/`, `validation/`, `openapi/`, `middleware/`, `lib/`, `routes/`.
+Features: `auth` (with `auth/oauth-identities` and `auth/clients/`), `users`,
+`sessions`, `invitations`, `minecraft` (with `minecraft/players`,
+`minecraft/server`, `minecraft/profiles`, and `minecraft/clients/`). Cross-cutting
+code sits outside `features/`: `config/`, `db/`, `errors/`, `http/`, `validation/`,
+`openapi/`, `middleware/`, `lib/`, `routes/`.
 
-`minecraft/profiles` is a partial exception to the layout above: it's now
-internal-only (`*.service.ts` + `*.repository.ts` + `*.error-catalog.ts`, no
-`*.routes.ts`/`*.controller.ts`/`*.openapi.ts`). It owns the `minecraft_profiles`
-table (a user's linked username/uuid); `minecraft/players` is the HTTP-facing
-feature that composes `MinecraftProfileService` with `MinecraftServerService` to
-merge profile data with live online status and drive the whitelist.
+A sub-feature is a directory under its parent whose files are named for the
+**sub-feature alone** (`oauth-identities/oauth-identities.service.ts`) — the parent's
+name is not repeated in the filename. A parent reaches into its own sub-feature with
+a descending `./sub/...` import; a sub-feature reaches back out (e.g. to the parent's
+`*.types.ts`) through the `@/*` alias, never `../`.
+
+Two sub-features are partial exceptions to the file-role layout above — both are
+internal-only (`*.service.ts` + `*.repository.ts`, no
+`*.routes.ts`/`*.controller.ts`/`*.openapi.ts`), reached only through their service:
+
+- `auth/oauth-identities` owns the `oauth_identities` table (the provider-account →
+  user link). `AuthService` depends on `OAuthIdentityService`, never on
+  `OAuthIdentityRepository`.
+- `minecraft/profiles` owns the `minecraft_profiles` table (a user's linked
+  username/uuid) and adds a `*.error-catalog.ts`; `minecraft/players` is the
+  HTTP-facing feature that composes `MinecraftProfileService` with
+  `MinecraftServerService` to merge profile data with live online status and drive
+  the whitelist.
 
 Path alias: `@/*` → `src/*` (and `@test/*` → `test/*`). Use `.js` extensions on
 relative/alias imports (ESM). Imports never use `../`; same-directory `./` imports
@@ -101,13 +114,13 @@ To add an error code, update three places that must stay in sync:
 - **OAuth, invite-only, provider-agnostic.** `AuthService.authenticateWithOAuth` picks
   the caller's provider (today just `google`) from its `OAuthClients` registry, verifies
   the credential via that client, then looks up `oauth_identities` by
-  `(provider, providerSubject)` (`OAuthIdentityRepository.findBySubjectWithUser`). Found
+  `(provider, providerSubject)` (`OAuthIdentityService.findBySubjectWithUser`). Found
   → that user. Not found → `registerInvited`: the admin check
   (`email === env.ADMIN_EMAIL`) and, for non-admins, `InvitationService.isInvited(email)`
   (else `NOT_INVITED`) run **before** a transaction; inside it
   (`TransactionRunner.run`), the user is created (or `bootstrapAdmin`'d) and its first
-  `oauth_identities` row is inserted as one unit of work, via `UserRepository`/
-  `OAuthIdentityRepository.withTx(tx)`. Session creation happens after, outside the
+  `oauth_identities` row is inserted as one unit of work, via `UserService`/
+  `OAuthIdentityService.withTx(tx)`. Session creation happens after, outside the
   transaction.
 - **Sessions:** opaque random token in an httponly `session_token` cookie; only its
   **sha256 hash** (`lib/tokens.ts`) is stored in the `sessions` table. Cookie helpers

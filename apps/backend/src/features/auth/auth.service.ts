@@ -7,7 +7,7 @@ import { AppError } from "@/errors/app-error.js";
 import type { InvitationService } from "@/features/invitations/invitations.service.js";
 import type { SessionService } from "@/features/sessions/sessions.service.js";
 import type { UserService } from "@/features/users/users.service.js";
-import type { OAuthIdentityRepository } from "./oauth-identities.repository.js";
+import type { OAuthIdentityService } from "./oauth-identities/oauth-identities.service.js";
 import type {
   AuthContext,
   ExternalIdentity,
@@ -22,7 +22,7 @@ export class AuthService {
     private readonly sessionService: SessionService,
     private readonly invitationService: InvitationService,
     private readonly oauthClients: OAuthClients,
-    private readonly oauthIdentityRepository: OAuthIdentityRepository,
+    private readonly oauthIdentityService: OAuthIdentityService,
     private readonly transactionRunner: TransactionRunner,
   ) {}
 
@@ -32,7 +32,7 @@ export class AuthService {
   }: OAuthData): Promise<UserWithSessionToken> {
     const profile = await this.oauthClients[provider].verifyCredential(credential);
 
-    const found = await this.oauthIdentityRepository.findBySubjectWithUser(
+    const found = await this.oauthIdentityService.findBySubjectWithUser(
       provider,
       profile.providerSubject,
     );
@@ -81,7 +81,7 @@ export class AuthService {
         ? await userService.bootstrapAdmin(input)
         : await userService.create(input);
 
-      await this.oauthIdentityRepository.withTx(tx).create({
+      await this.oauthIdentityService.withTx(tx).create({
         userId: user.id,
         provider,
         subject: providerSubject,
