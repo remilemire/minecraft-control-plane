@@ -1,6 +1,6 @@
 // apps/backend/src/features/auth/oauth-identities/oauth-identities.service.ts
 
-import type { NewOAuthIdentity, OAuthIdentity } from "@/infrastructure/db/schema/index.js";
+import type { NewOAuthIdentity, OAuthIdentity } from "./oauth-identities.schema.js";
 import type { OAuthProvider } from "@/features/auth/auth.types.js";
 import type { OAuthIdentityRepository } from "./oauth-identities.repository.js";
 import type { OAuthIdentityWithUser } from "./oauth-identities.types.js";

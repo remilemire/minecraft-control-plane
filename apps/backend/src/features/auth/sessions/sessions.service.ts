@@ -1,7 +1,7 @@
 // apps/backend/src/features/auth/sessions/sessions.service.ts
 
 import { env } from "@/config/env.js";
-import type { Session } from "@/infrastructure/db/schema/index.js";
+import type { Session } from "./sessions.schema.js";
 import { AppError } from "@/errors/app-error.js";
 import { generateRandomSecret, hashSecret } from "@/lib/tokens.js";
 import type { SessionRepository } from "./sessions.repository.js";

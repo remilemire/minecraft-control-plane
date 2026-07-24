@@ -1,6 +1,8 @@
 // apps/backend/src/features/auth/auth.types.ts
 
-import type { oauthProviderEnum, Session, User } from "@/infrastructure/db/schema/index.js";
+import type { User } from "@/infrastructure/db/schemas.js";
+import type { oauthProviderEnum } from "./oauth-identities/oauth-identities.schema.js";
+import type { Session } from "./sessions/sessions.schema.js";
 
 export interface UserWithSessionToken {
   readonly user: User;

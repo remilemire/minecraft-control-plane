@@ -1,10 +1,10 @@
 // apps/backend/src/features/users/users.repository.ts
 
-import { USERS_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
 import { withDbErrors, type DatabaseProvider } from "@/infrastructure/db/index.js";
-import { users, type NewUser, type User } from "@/infrastructure/db/schema/index.js";
 import { AppError } from "@/errors/app-error.js";
 import { eq } from "drizzle-orm";
+import { USERS_CONSTRAINTS } from "./users.constraints.js";
+import { users, type NewUser, type User } from "./users.schema.js";
 
 export class UserRepository {
   public constructor(private readonly databaseProvider: DatabaseProvider) {}

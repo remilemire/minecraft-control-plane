@@ -1,15 +1,15 @@
 // apps/backend/src/features/auth/oauth-identities/oauth-identities.repository.ts
 
 import { withDbErrors, type DatabaseProvider } from "@/infrastructure/db/index.js";
-import {
-  oauthIdentities,
-  users,
-  type NewOAuthIdentity,
-  type OAuthIdentity,
-} from "@/infrastructure/db/schema/index.js";
+import { users } from "@/infrastructure/db/schemas.js";
 import { AppError } from "@/errors/app-error.js";
 import { and, eq } from "drizzle-orm";
 import type { OAuthProvider } from "@/features/auth/auth.types.js";
+import {
+  oauthIdentities,
+  type NewOAuthIdentity,
+  type OAuthIdentity,
+} from "./oauth-identities.schema.js";
 import type { OAuthIdentityWithUser } from "./oauth-identities.types.js";
 
 export class OAuthIdentityRepository {

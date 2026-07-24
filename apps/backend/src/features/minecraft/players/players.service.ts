@@ -1,6 +1,6 @@
 // apps/backend/src/features/minecraft/players/players.service.ts
 
-import type { MinecraftProfile } from "@/infrastructure/db/schema/index.js";
+import type { MinecraftProfile } from "@/infrastructure/db/schemas.js";
 import type { TransactionManager } from "@/infrastructure/db/index.js";
 import type { SetMinecraftPlayerInput } from "@minecraft-server/shared/minecraft";
 import type { MinecraftProfileService } from "@/features/minecraft/profiles/profiles.service.js";

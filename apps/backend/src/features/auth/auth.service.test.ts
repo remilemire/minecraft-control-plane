@@ -1,7 +1,9 @@
 // apps/backend/src/features/auth/auth.service.test.ts
 
 import { env } from "@/config/env.js";
-import type { Invitation, OAuthIdentity, Session, User } from "@/infrastructure/db/schema/index.js";
+import type { Invitation, User } from "@/infrastructure/db/schemas.js";
+import type { OAuthIdentity } from "./oauth-identities/oauth-identities.schema.js";
+import type { Session } from "./sessions/sessions.schema.js";
 import type { TransactionManager } from "@/infrastructure/db/index.js";
 import { FakeGoogleOauthClient } from "@test/fakes/fake-google-oauth.client.js";
 import { describe, expect, it } from "vitest";

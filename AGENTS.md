@@ -96,9 +96,10 @@ Gotchas:
 - **Imports never traverse up (`../`); same-directory imports (`./`) are fine.**
   Anything outside the current directory uses the `@/*` path alias (`@/*` → `src/*`
   in both `apps/backend` and `packages/shared`; `apps/backend` additionally has
-  `@test/*` → `test/*`). Prefer a directory's barrel (`index.ts`) over reaching into
-  its internals when one exists (e.g. `@/infrastructure/db/schema/index.js`, not
-  `@/infrastructure/db/schema/users.js`; `@/features/users/index.js` in `packages/shared`, not
+  `@test/*` → `test/*`). Prefer a directory's barrel (`index.ts`) or a module that
+  aggregates a convention over reaching into its internals when one exists (e.g.
+  `@/infrastructure/db/schemas.js`, not `@/features/users/users.schema.js`;
+  `@/features/users/index.js` in `packages/shared`, not
   `@/features/users/users.schemas.js` from outside that feature). `tsc` emits `@/`
   verbatim, so both packages' `build` scripts run `tsc-alias` afterward to rewrite
   it to real relative paths in the emitted `dist/`; `packages/shared`'s

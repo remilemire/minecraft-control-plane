@@ -1,8 +1,8 @@
-// apps/backend/src/infrastructure/db/schema/users.ts
+// apps/backend/src/features/users/users.schema.ts
 
-import { USERS_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
 import { sql } from "drizzle-orm";
 import { boolean, check, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { USERS_CONSTRAINTS } from "./users.constraints.js";
 
 export const users = pgTable(
   "users",

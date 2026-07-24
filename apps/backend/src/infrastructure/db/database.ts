@@ -1,7 +1,7 @@
 // apps/backend/src/infrastructure/db/database.ts
 
 import { env } from "@/config/env.js";
-import * as schema from "@/infrastructure/db/schema/index.js";
+import * as schema from "@/infrastructure/db/schemas.js";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 

@@ -1,14 +1,14 @@
 // apps/backend/src/features/auth/oauth-identities/oauth-identities.repository.integration.test.ts
 
-import { OAUTH_IDENTITIES_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
 import { db, DatabaseProvider, TransactionManager } from "@/infrastructure/db/index.js";
-import { users } from "@/infrastructure/db/schema/index.js";
+import { users } from "@/infrastructure/db/schemas.js";
 import { UserRepository } from "@/features/users/users.repository.js";
 import { createOAuthIdentity } from "@test/helpers/factories/oauth-identity.factory.js";
 import { createUser } from "@test/helpers/factories/user.factory.js";
 import { randomUUID } from "crypto";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+import { OAUTH_IDENTITIES_CONSTRAINTS } from "./oauth-identities.constraints.js";
 import { OAuthIdentityRepository } from "./oauth-identities.repository.js";
 
 describe("OAuthIdentityRepository", () => {

@@ -5,7 +5,7 @@ import {
   oauthIdentities,
   type NewOAuthIdentity,
   type OAuthIdentity,
-} from "@/infrastructure/db/schema/index.js";
+} from "@/infrastructure/db/schemas.js";
 import { createUser } from "./user.factory.js";
 
 let sequence = 0;

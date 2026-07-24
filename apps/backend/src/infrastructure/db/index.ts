@@ -1,10 +1,10 @@
 // apps/backend/src/infrastructure/db/index.ts
 
 // The database module's public surface: how the rest of the app *talks to*
-// the database. What the database *looks like* keeps its own entry points —
-// `@/infrastructure/db/schema/index.js` for tables and row types, and
-// `@/infrastructure/db/constraints.js` for constraint names — since those are
-// shared with the schema modules and drizzle-kit.
+// the database. What the database *looks like* is owned by the features and
+// keeps its own entry points — `@/infrastructure/db/schemas.js` for tables and
+// row types, `@/infrastructure/db/constraints.js` for constraint names — since
+// those aggregate the features' own modules and are shared with drizzle-kit.
 //
 // Importing this barrel constructs the connection pool, but `pg.Pool` opens
 // no sockets until the first query, so pulling in `withDbErrors` or a type

@@ -1,9 +1,9 @@
-// apps/backend/src/infrastructure/db/schema/sessions.ts
+// apps/backend/src/features/auth/sessions/sessions.schema.ts
 
-import { SESSIONS_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
+import { users } from "@/features/users/users.schema.js";
 import { sql } from "drizzle-orm";
 import { check, foreignKey, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import { users } from "./users.js";
+import { SESSIONS_CONSTRAINTS } from "./sessions.constraints.js";
 
 export const sessions = pgTable(
   "sessions",

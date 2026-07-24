@@ -1,9 +1,9 @@
-// apps/backend/src/infrastructure/db/schema/invitations.ts
+// apps/backend/src/features/invitations/invitations.schema.ts
 
-import { INVITATIONS_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
+import { users } from "@/features/users/users.schema.js";
 import { sql } from "drizzle-orm";
 import { check, foreignKey, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import { users } from "./users.js";
+import { INVITATIONS_CONSTRAINTS } from "./invitations.constraints.js";
 
 export const invitations = pgTable(
   "invitations",

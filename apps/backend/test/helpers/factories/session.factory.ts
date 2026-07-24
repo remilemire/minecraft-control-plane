@@ -1,7 +1,7 @@
 // apps/backend/test/helpers/factories/session.factory.ts
 
 import { db } from "@/infrastructure/db/index.js";
-import { sessions, type NewSession, type Session } from "@/infrastructure/db/schema/index.js";
+import { sessions, type NewSession, type Session } from "@/infrastructure/db/schemas.js";
 import { generateRandomSecret, hashSecret } from "@/lib/tokens.js";
 import { createUser } from "./user.factory.js";
 

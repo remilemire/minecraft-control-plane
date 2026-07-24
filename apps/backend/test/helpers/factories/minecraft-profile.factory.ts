@@ -5,7 +5,7 @@ import {
   minecraftProfiles,
   type MinecraftProfile,
   type NewMinecraftProfile,
-} from "@/infrastructure/db/schema/index.js";
+} from "@/infrastructure/db/schemas.js";
 import { randomUUID } from "crypto";
 import { createUser } from "./user.factory.js";
 

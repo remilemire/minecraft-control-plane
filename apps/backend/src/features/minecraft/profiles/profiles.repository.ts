@@ -1,14 +1,14 @@
 // apps/backend/src/features/minecraft/profiles/profiles.repository.ts
 
-import { MINECRAFT_PROFILES_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
 import { withDbErrors, type DatabaseProvider } from "@/infrastructure/db/index.js";
+import { AppError } from "@/errors/app-error.js";
+import { eq } from "drizzle-orm";
+import { MINECRAFT_PROFILES_CONSTRAINTS } from "./profiles.constraints.js";
 import {
   minecraftProfiles,
   type MinecraftProfile,
   type NewMinecraftProfile,
-} from "@/infrastructure/db/schema/index.js";
-import { AppError } from "@/errors/app-error.js";
-import { eq } from "drizzle-orm";
+} from "./profiles.schema.js";
 
 export class MinecraftProfileRepository {
   public constructor(private readonly databaseProvider: DatabaseProvider) {}

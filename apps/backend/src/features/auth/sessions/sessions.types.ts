@@ -1,6 +1,7 @@
 // apps/backend/src/features/auth/sessions/sessions.types.ts
 
-import type { Session, User } from "@/infrastructure/db/schema/index.js";
+import type { User } from "@/infrastructure/db/schemas.js";
+import type { Session } from "./sessions.schema.js";
 
 export interface CreateSessionData {
   readonly userId: string;

@@ -1,9 +1,9 @@
-// apps/backend/src/infrastructure/db/schema/minecraft-profile.ts
+// apps/backend/src/features/minecraft/profiles/profiles.schema.ts
 
-import { MINECRAFT_PROFILES_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
+import { users } from "@/features/users/users.schema.js";
 import { sql } from "drizzle-orm";
 import { check, foreignKey, pgTable, text, unique, uuid } from "drizzle-orm/pg-core";
-import { users } from "./users.js";
+import { MINECRAFT_PROFILES_CONSTRAINTS } from "./profiles.constraints.js";
 
 export const minecraftProfiles = pgTable(
   "minecraft_profiles",

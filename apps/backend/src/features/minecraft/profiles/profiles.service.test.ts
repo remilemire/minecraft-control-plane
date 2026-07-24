@@ -1,6 +1,6 @@
 // apps/backend/src/features/minecraft/profiles/profiles.service.test.ts
 
-import type { MinecraftProfile, NewMinecraftProfile } from "@/infrastructure/db/schema/index.js";
+import type { MinecraftProfile, NewMinecraftProfile } from "./profiles.schema.js";
 import { FakeMojangClient } from "@test/fakes/fake-mojang.client.js";
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";

@@ -1,34 +1,18 @@
 // apps/backend/src/infrastructure/db/constraints.ts
 
-// Single source of truth for every unique/foreign key constraint name.
-// Schema modules pass these into `.unique(...)` / `foreignKey({ name: ... })`
-// so Drizzle never auto-generates a name; repositories key their
-// `withDbErrors` constraint maps off the same constants so a rename can't
-// silently desync the two.
+// Every unique/foreign key constraint name in the database, aggregated from the
+// features that own them (`features/**/<feature>.constraints.ts`). A feature's
+// schema module passes its own names into `.unique(...)` /
+// `foreignKey({ name: ... })` so Drizzle never auto-generates one, and its
+// repository keys the `withDbErrors` constraint map off the same constants, so
+// a rename can't silently desync the two.
+//
+// Within a feature, import the constants from `./<feature>.constraints.js`;
+// this barrel is for anything outside the owning feature (and for reading the
+// whole set at once — constraint names share one namespace per database).
 
-export const USERS_CONSTRAINTS = {
-  EMAIL_UNIQUE: "users_email_unique",
-} as const;
-
-export const INVITATIONS_CONSTRAINTS = {
-  EMAIL_UNIQUE: "invitations_email_unique",
-  INVITED_BY_USER_ID_FK: "invitations_created_by_user_id_users_id_fk",
-  ACCEPTED_BY_USER_ID_FK: "invitations_accepted_by_user_id_users_id_fk",
-} as const;
-
-export const MINECRAFT_PROFILES_CONSTRAINTS = {
-  USERNAME_UNIQUE: "minecraft_profiles_username_unique",
-  UUID_UNIQUE: "minecraft_profiles_uuid_unique",
-  USER_ID_UNIQUE: "minecraft_profiles_user_id_unique",
-  USER_ID_FK: "minecraft_profiles_user_id_users_id_fk",
-} as const;
-
-export const SESSIONS_CONSTRAINTS = {
-  TOKEN_HASH_UNIQUE: "sessions_token_hash_unique",
-  USER_ID_FK: "sessions_user_id_users_id_fk",
-} as const;
-
-export const OAUTH_IDENTITIES_CONSTRAINTS = {
-  PROVIDER_SUBJECT_UNIQUE: "oauth_identities_provider_subject_unique",
-  USER_ID_FK: "oauth_identities_user_id_users_id_fk",
-} as const;
+export * from "@/features/auth/oauth-identities/oauth-identities.constraints.js";
+export * from "@/features/auth/sessions/sessions.constraints.js";
+export * from "@/features/invitations/invitations.constraints.js";
+export * from "@/features/minecraft/profiles/profiles.constraints.js";
+export * from "@/features/users/users.constraints.js";

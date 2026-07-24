@@ -1,8 +1,8 @@
-// apps/backend/src/infrastructure/db/schema/oauth-identities.ts
+// apps/backend/src/features/auth/oauth-identities/oauth-identities.schema.ts
 
-import { OAUTH_IDENTITIES_CONSTRAINTS } from "@/infrastructure/db/constraints.js";
+import { users } from "@/features/users/users.schema.js";
 import { foreignKey, pgEnum, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
-import { users } from "./users.js";
+import { OAUTH_IDENTITIES_CONSTRAINTS } from "./oauth-identities.constraints.js";
 
 export const oauthProviderEnum = pgEnum("oauth_provider", ["google"]);
 

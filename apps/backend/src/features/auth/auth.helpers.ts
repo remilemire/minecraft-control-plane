@@ -1,6 +1,6 @@
 // apps/backend/src/features/auth/auth.helpers.ts
 
-import type { User } from "@/infrastructure/db/schema/index.js";
+import type { User } from "@/infrastructure/db/schemas.js";
 import { AppError } from "@/errors/app-error.js";
 import type { Request } from "express";
 

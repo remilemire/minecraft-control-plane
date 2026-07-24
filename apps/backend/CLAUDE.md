@@ -15,6 +15,8 @@ of files by role (not all features have every file):
 | `*.controller.ts`    | Class of request handlers: parse input, call the service, serialize the response.      |
 | `*.service.ts`       | Class holding business logic; throws `AppError` on domain failures.                    |
 | `*.repository.ts`    | Class of Drizzle queries; executor from `DatabaseProvider`, wrapped in `withDbErrors`. |
+| `*.schema.ts`        | The Drizzle table(s) this feature owns, plus its `$inferSelect`/`$inferInsert` types.  |
+| `*.constraints.ts`   | The unique/FK constraint **names** for those tables.                                   |
 | `*.types.ts`         | Internal TS types + boundary interfaces (e.g. `MojangApi`).                            |
 | `*.openapi.ts`       | Registers the feature's operations on the OpenAPI registry (import side effect).       |
 | `*.error-catalog.ts` | Human-readable messages for this feature's error codes.                                |
@@ -46,8 +48,8 @@ internal-only (`*.service.ts` + `*.repository.ts`, no
 `*.routes.ts`/`*.controller.ts`/`*.openapi.ts`), reached only through their service:
 
 - `auth/oauth-identities` owns the `oauth_identities` table (the provider-account →
-  user link). `AuthService` depends on `OAuthIdentityService`, never on
-  `OAuthIdentityRepository`.
+  user link), declared in its own `*.schema.ts`. `AuthService` depends on
+  `OAuthIdentityService`, never on `OAuthIdentityRepository`.
 - `auth/sessions` owns the `sessions` table and the token lifecycle, plus the
   `SESSION_NOT_FOUND` / `INVALID_SESSION` codes. `AuthService` is its only consumer.
 - `minecraft/profiles` owns the `minecraft_profiles` table (a user's linked
@@ -58,8 +60,9 @@ internal-only (`*.service.ts` + `*.repository.ts`, no
 
 Path alias: `@/*` → `src/*` (and `@test/*` → `test/*`). Use `.js` extensions on
 relative/alias imports (ESM). Imports never use `../`; same-directory `./` imports
-are fine, anything else goes through the alias, preferring a barrel (`@/infrastructure/db/schema/index.js`)
-over reaching into a directory's internals (`@/infrastructure/db/schema/users.js`) when one exists.
+are fine, anything else goes through the alias, preferring an aggregate
+(`@/infrastructure/db/schemas.js`) over reaching into a feature's internals
+(`@/features/users/users.schema.js`) when one exists.
 
 ## Layering & dependency injection
 
@@ -97,9 +100,9 @@ as a client (real in `server.ts`, fake in `test/fakes/`), and thread it through
    `08`/`53`/`57`, or a socket errno) → `SERVICE_UNAVAILABLE`; anything else →
    `INTERNAL`. An `AppError` raised inside the operation passes through untouched.
    Constraint names are never left to Drizzle's auto-generated defaults — every
-   unique/foreign key constraint is named explicitly via the constants in
-   `infrastructure/db/constraints.ts`, which schema modules and repositories both
-   import, so a rename can't silently desync the two.
+   unique/foreign key constraint is named explicitly via the constants in the feature's
+   `*.constraints.ts`, which its `*.schema.ts` and its repository both import, so a
+   rename can't silently desync the two.
 4. Controller serializes with the response schema (`schema.parse(entity)`) and sets
    status.
 
@@ -159,11 +162,25 @@ To add an error code, update three places that must stay in sync:
 - The module lives in `src/infrastructure/db/`. Import it through its barrel,
   `@/infrastructure/db/index.js` — that is the drizzle client (`database.ts`, exported
   as `db`/`pool`), `DatabaseProvider`, `TransactionManager`, `withDbErrors`, and the
-  `Db`/`Tx`/`DatabaseExecutor` types. Two entry points stay separate because the schema
-  modules and `drizzle-kit` share them: `@/infrastructure/db/schema/index.js` (tables +
-  row types) and `@/infrastructure/db/constraints.js` (constraint names). Modules
-  _inside_ `infrastructure/db/` must not import the barrel — that would be a cycle.
-  Tables use `uuid` PKs (`defaultRandom()`) and `timestamp(..., { withTimezone: true })`.
+  `Db`/`Tx`/`DatabaseExecutor` types. Modules _inside_ `infrastructure/db/` must not
+  import the barrel — that would be a cycle. Tables use `uuid` PKs (`defaultRandom()`)
+  and `timestamp(..., { withTimezone: true })`.
+- **Features own their tables.** A feature declares its own table in
+  `<feature>.schema.ts` and its constraint names in `<feature>.constraints.ts`;
+  `db/schemas.ts` and `db/constraints.ts` only **aggregate** them (`export *`) into the
+  single view the drizzle client and `drizzle-kit` need. They stay outside the
+  `db/index.js` barrel because they describe what the database _looks like_, not how to
+  talk to it. **A new table is invisible to migrations until it is re-exported from
+  `db/schemas.ts`.**
+- Which import to use for a table or row type: its own feature reaches it by relative
+  path (`./users.schema.js`), and a parent feature reaches its sub-feature's by a
+  descending one (`./sessions/sessions.schema.js`); everyone else goes through
+  `@/infrastructure/db/schemas.js` — including a repository joining a table it doesn't
+  own (see `SessionRepository`'s join on `users`). The one exception is a `*.schema.ts`
+  declaring a foreign key: it imports the owning feature's schema module directly
+  (`@/features/users/users.schema.js`), because routing that through the aggregate
+  would be an import cycle. Constraints follow the same rule against
+  `@/infrastructure/db/constraints.js`.
 - **Ambient transactions.** Repositories never hold a db handle: they take
   `DatabaseProvider` (`db/provider.ts`) and resolve their executor **per query** via
   `this.databaseProvider.get()` — never cached in a field. `get()` returns the
@@ -175,8 +192,6 @@ To add an error code, update three places that must stay in sync:
   Only db infrastructure touches the context; services depend on `TransactionManager`
   alone. Keep external side effects (HTTP, RCON, email) **outside** `run`: resolve
   before, fire after (see `MinecraftPlayerService.setByUserId`).
-- **Every schema module must be re-exported from `src/infrastructure/db/schema/index.ts`**
-  — that barrel is what the client and `drizzle-kit` see.
 - Migrations are SQL under `migrations/`, generated by `drizzle-kit`. Config
   (`drizzle.config.ts`) forces `host=localhost`, so run these from the **host** with
   the `db` service up:
