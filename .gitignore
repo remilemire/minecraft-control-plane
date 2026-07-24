@@ -9,3 +9,4 @@ dist
 data/minecraft
 .claude/settings.local.json
 .pnpm-store
+.claude
