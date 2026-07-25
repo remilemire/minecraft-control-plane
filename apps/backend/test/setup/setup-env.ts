@@ -38,4 +38,4 @@ process.env.MINECRAFT_RCON_HOST ??= "localhost";
 process.env.MINECRAFT_RCON_PORT ??= "25575";
 process.env.MINECRAFT_RCON_PASSWORD ??= "test-rcon-password";
 process.env.MINECRAFT_COMPOSE_FILE ??= "/dev/null";
-process.env.MINECRAFT_SERVICE_NAME ??= "minecraft";
+process.env.MINECRAFT_CONTAINER ??= "minecraft";

@@ -22,7 +22,7 @@ const { app, outboxDispatcher } = createBackend({
   }),
   processClient: new ProcessClient({
     composeFile: env.MINECRAFT_COMPOSE_FILE,
-    serviceName: env.MINECRAFT_SERVICE_NAME,
+    serviceName: env.MINECRAFT_CONTAINER,
   }),
 });
 

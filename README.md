@@ -100,7 +100,7 @@ cp apps/frontend/.env.example apps/frontend/.env
 
 Fill in the values that have no working default — notably `GOOGLE_CLIENT_ID`,
 `SESSION_SECRET`, and (for server control) `MINECRAFT_COMPOSE_FILE` /
-`MINECRAFT_SERVICE_NAME`. See [Environment Variables](#environment-variables).
+`MINECRAFT_CONTAINER`. See [Environment Variables](#environment-variables).
 
 ### 2. Start the stack
 
@@ -188,7 +188,7 @@ root `.env` and `apps/backend/.env` (via `compose.yaml`'s `env_file`).
 | `INVITATION_TTL_DAYS`    | `7`                                  | Invitation lifetime (days). |
 | `GOOGLE_CLIENT_ID`       | `xxx.apps.googleusercontent.com`     | Google OAuth client ID used to verify sign-in credentials. |
 | `MINECRAFT_COMPOSE_FILE` | `/home/you/minecraft-server/compose.yaml` | Compose file the backend shells out to for server power control. |
-| `MINECRAFT_SERVICE_NAME` | `minecraft`                          | Compose service name of the Minecraft container. |
+| `MINECRAFT_CONTAINER` | `minecraft`                          | Compose service name of the Minecraft container. |
 | `BOOTSTRAP_EMAIL`        | `owner@domain.com`                   | The one email allowed to register without an invitation (so the first user can sign in). No special powers. |
 
 ### `apps/frontend/.env`

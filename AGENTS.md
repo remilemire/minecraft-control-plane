@@ -70,7 +70,7 @@ Three gitignored `.env` files (each has a committed `.env.example`):
 - **root `.env`** — compose-level: ports, Postgres (`POSTGRES_*`), RCON
   (`MINECRAFT_RCON_*`), `APP_ENV` (`dev`|`prod`).
 - **`apps/backend/.env`** — app settings: `SESSION_SECRET`, `CORS_ALLOWED_ORIGINS`,
-  `*_TTL_DAYS`, `GOOGLE_CLIENT_ID`, `MINECRAFT_COMPOSE_FILE`/`MINECRAFT_SERVICE_NAME`,
+  `*_TTL_DAYS`, `GOOGLE_CLIENT_ID`, `MINECRAFT_COMPOSE_FILE`/`MINECRAFT_CONTAINER`,
   `BOOTSTRAP_EMAIL`.
 - **`apps/frontend/.env`** — `BACKEND_ORIGIN` (Vite dev-server `/api` proxy target;
   `compose.yaml` overrides it to `http://backend:8000` inside the network) and
