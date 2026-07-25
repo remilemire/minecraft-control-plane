@@ -1,4 +1,4 @@
-// apps/backend/test/api/minecraft-players.api.test.ts
+// apps/backend/test/api/minecraft-profiles.api.test.ts
 
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -13,26 +13,26 @@ beforeEach(() => {
   testApp = createTestApp();
 });
 
-describe("GET /api/minecraft/players", () => {
-  it("lists every linked player with their online status", async () => {
+describe("GET /api/minecraft/profiles", () => {
+  it("lists every whitelisted profile with their online status", async () => {
     const { app, rconClient } = testApp;
     rconClient.respondTo("list", "There are 1 of a max of 20 players online: Steve");
-    const admin = await authenticateUser();
+    const auth = await authenticateUser();
     const online = await createMinecraftProfile({ username: "Steve" });
     const offline = await createMinecraftProfile({ username: "Alex" });
 
-    const response = await request(app).get("/api/minecraft/players").set("Cookie", [admin.cookie]);
+    const response = await request(app).get("/api/minecraft/profiles").set("Cookie", [auth.cookie]);
 
     expect(response.status).toBe(200);
     expect(response.body).toHaveLength(2);
     expect(response.body).toContainEqual({
-      userId: online.userId,
+      id: online.id,
       username: "Steve",
       uuid: online.uuid,
       online: true,
     });
     expect(response.body).toContainEqual({
-      userId: offline.userId,
+      id: offline.id,
       username: "Alex",
       uuid: offline.uuid,
       online: false,
@@ -42,121 +42,35 @@ describe("GET /api/minecraft/players", () => {
   it("rejects requests without a session", async () => {
     const { app } = testApp;
 
-    const response = await request(app).get("/api/minecraft/players");
+    const response = await request(app).get("/api/minecraft/profiles");
 
     expect(response.status).toBe(401);
     expect(response.body).toMatchObject({ code: "UNAUTHENTICATED" });
   });
 });
 
-describe("GET /api/minecraft/players/me", () => {
-  it("returns the caller's player with their online status", async () => {
-    const { app, rconClient } = testApp;
-    rconClient.respondTo("list", "There are 1 of a max of 20 players online: Alex");
-    const auth = await authenticateUser();
-    const profile = await createMinecraftProfile({ userId: auth.user.id, username: "Alex" });
-
-    const response = await request(app)
-      .get("/api/minecraft/players/me")
-      .set("Cookie", [auth.cookie]);
-
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      userId: profile.userId,
-      username: "Alex",
-      uuid: profile.uuid,
-      online: true,
-    });
-  });
-
-  it("404s when the caller has no profile", async () => {
-    const { app } = testApp;
-    const auth = await authenticateUser();
-
-    const response = await request(app)
-      .get("/api/minecraft/players/me")
-      .set("Cookie", [auth.cookie]);
-
-    expect(response.status).toBe(404);
-    expect(response.body).toMatchObject({
-      kind: "NOT_FOUND",
-      code: "MINECRAFT_PROFILE_NOT_FOUND",
-    });
-  });
-
-  it("only returns the caller's own player", async () => {
-    const { app } = testApp;
-    const auth = await authenticateUser();
-    await createMinecraftProfile({ userId: auth.user.id, username: "Mine" });
-    // A different user's profile must not be visible here.
-    await createMinecraftProfile({ username: "Other" });
-
-    const response = await request(app)
-      .get("/api/minecraft/players/me")
-      .set("Cookie", [auth.cookie]);
-
-    expect(response.status).toBe(200);
-    expect(response.body.username).toBe("Mine");
-    expect(response.body.userId).toBe(auth.user.id);
-  });
-});
-
-describe("PUT /api/minecraft/players/me", () => {
-  it("stores the profile and whitelists the canonical username via the outbox", async () => {
+describe("POST /api/minecraft/profiles", () => {
+  it("stores the canonical Mojang profile and whitelists it via the outbox", async () => {
     const { app, mojangClient, rconClient, outboxDispatcher } = testApp;
     const auth = await authenticateUser();
     const csrf = csrfPair();
     mojangClient.setProfile({ username: "Steve", uuid: crypto.randomUUID() });
 
     const response = await request(app)
-      .put("/api/minecraft/players/me")
+      .post("/api/minecraft/profiles")
       .set("Cookie", [auth.cookie, csrf.cookie])
       .set(csrf.headerName, csrf.headerValue)
       // The client submits a differently-cased username.
       .send({ username: "steve" });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     expect(response.body).toMatchObject({ username: "Steve", online: false });
+    expect(response.body.id).toBeDefined();
     // The response settles before any RCON runs; the dispatcher applies the
     // whitelist command afterwards.
     expect(rconClient.executed).toEqual([]);
     await outboxDispatcher.tick();
     expect(rconClient.executed).toEqual(["whitelist add Steve"]);
-  });
-
-  it("removes the old username and whitelists the new one when a profile is renamed", async () => {
-    const { app, mojangClient, rconClient, outboxDispatcher } = testApp;
-    const auth = await authenticateUser();
-    const csrf = csrfPair();
-
-    // First link: OldName is whitelisted.
-    mojangClient.setProfile({ username: "OldName", uuid: crypto.randomUUID() });
-    await request(app)
-      .put("/api/minecraft/players/me")
-      .set("Cookie", [auth.cookie, csrf.cookie])
-      .set(csrf.headerName, csrf.headerValue)
-      .send({ username: "OldName" });
-    await outboxDispatcher.tick();
-    expect(rconClient.executed).toEqual(["whitelist add OldName"]);
-
-    // Rename: the old username is removed and the new one whitelisted, both
-    // enqueued atomically with the profile write.
-    mojangClient.setProfile({ username: "NewName", uuid: crypto.randomUUID() });
-    const response = await request(app)
-      .put("/api/minecraft/players/me")
-      .set("Cookie", [auth.cookie, csrf.cookie])
-      .set(csrf.headerName, csrf.headerValue)
-      .send({ username: "NewName" });
-
-    expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ username: "NewName" });
-
-    // The two rename commands share a transaction timestamp, so their relative
-    // order isn't guaranteed (and doesn't matter — different usernames).
-    await outboxDispatcher.tick();
-    expect(rconClient.executed).toHaveLength(3);
-    expect(rconClient.executed).toContain("whitelist remove OldName");
-    expect(rconClient.executed).toContain("whitelist add NewName");
   });
 
   it("still succeeds when RCON is down and retries the command with backoff", async () => {
@@ -167,13 +81,13 @@ describe("PUT /api/minecraft/players/me", () => {
     rconClient.failOn("whitelist add Steve");
 
     const response = await request(app)
-      .put("/api/minecraft/players/me")
+      .post("/api/minecraft/profiles")
       .set("Cookie", [auth.cookie, csrf.cookie])
       .set(csrf.headerName, csrf.headerValue)
       .send({ username: "steve" });
 
-    // The canonical outbox contract: an RCON outage no longer fails the link.
-    expect(response.status).toBe(200);
+    // The canonical outbox contract: an RCON outage no longer fails the request.
+    expect(response.status).toBe(201);
 
     // The first tick claims the message and records the failed attempt.
     expect(await outboxDispatcher.tick()).toBe(1);
@@ -190,7 +104,7 @@ describe("PUT /api/minecraft/players/me", () => {
     const csrf = csrfPair();
 
     const response = await request(app)
-      .put("/api/minecraft/players/me")
+      .post("/api/minecraft/profiles")
       .set("Cookie", [auth.cookie, csrf.cookie])
       .set(csrf.headerName, csrf.headerValue)
       .send({ username: "Ghost" });
@@ -202,16 +116,15 @@ describe("PUT /api/minecraft/players/me", () => {
     expect(rconClient.executed).toEqual([]);
   });
 
-  it("409s when the username belongs to another user", async () => {
+  it("409s when the username is already whitelisted", async () => {
     const { app, mojangClient } = testApp;
     const auth = await authenticateUser();
     const csrf = csrfPair();
-    // Another user already owns this Minecraft account.
-    const taken = await createMinecraftProfile({ username: "Steve" });
-    mojangClient.setProfile({ username: "Steve", uuid: taken.uuid });
+    await createMinecraftProfile({ username: "Steve" });
+    mojangClient.setProfile({ username: "Steve", uuid: crypto.randomUUID() });
 
     const response = await request(app)
-      .put("/api/minecraft/players/me")
+      .post("/api/minecraft/profiles")
       .set("Cookie", [auth.cookie, csrf.cookie])
       .set(csrf.headerName, csrf.headerValue)
       .send({ username: "Steve" });
@@ -220,12 +133,30 @@ describe("PUT /api/minecraft/players/me", () => {
     expect(response.body).toMatchObject({ kind: "CONFLICT", code: "MINECRAFT_USERNAME_TAKEN" });
   });
 
+  it("409s when the account is already whitelisted under another name", async () => {
+    const { app, mojangClient } = testApp;
+    const auth = await authenticateUser();
+    const csrf = csrfPair();
+    const existing = await createMinecraftProfile({ username: "Steve" });
+    // Mojang resolves a different username to the already-stored account.
+    mojangClient.setProfile({ username: "Alex", uuid: existing.uuid });
+
+    const response = await request(app)
+      .post("/api/minecraft/profiles")
+      .set("Cookie", [auth.cookie, csrf.cookie])
+      .set(csrf.headerName, csrf.headerValue)
+      .send({ username: "Alex" });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({ kind: "CONFLICT", code: "MINECRAFT_ACCOUNT_TAKEN" });
+  });
+
   it("rejects mutations without the CSRF pair", async () => {
     const { app } = testApp;
     const auth = await authenticateUser();
 
     const response = await request(app)
-      .put("/api/minecraft/players/me")
+      .post("/api/minecraft/profiles")
       .set("Cookie", [auth.cookie])
       .send({ username: "Steve" });
 
@@ -239,7 +170,7 @@ describe("PUT /api/minecraft/players/me", () => {
     const csrf = csrfPair();
 
     const response = await request(app)
-      .put("/api/minecraft/players/me")
+      .post("/api/minecraft/profiles")
       .set("Cookie", [auth.cookie, csrf.cookie])
       .set(csrf.headerName, csrf.headerValue)
       // Spaces are not allowed by the username regex.
@@ -256,7 +187,7 @@ describe("PUT /api/minecraft/players/me", () => {
     const csrf = csrfPair();
 
     const response = await request(app)
-      .put("/api/minecraft/players/me")
+      .post("/api/minecraft/profiles")
       .set("Cookie", [auth.cookie, csrf.cookie])
       .set(csrf.headerName, csrf.headerValue)
       .send({ username: "Steve", uuid: "not-allowed" });
@@ -266,17 +197,16 @@ describe("PUT /api/minecraft/players/me", () => {
   });
 });
 
-describe("DELETE /api/minecraft/players/:userId", () => {
-  it("removes the target user's profile and unwhitelists it via the outbox", async () => {
+describe("DELETE /api/minecraft/profiles/:minecraftProfileId", () => {
+  it("removes the profile and unwhitelists it via the outbox", async () => {
     const { app, rconClient, outboxDispatcher } = testApp;
-    const admin = await authenticateUser();
+    const auth = await authenticateUser();
     const csrf = csrfPair();
-    const target = await authenticateUser();
-    await createMinecraftProfile({ userId: target.user.id, username: "Notch" });
+    const profile = await createMinecraftProfile({ username: "Notch" });
 
     const response = await request(app)
-      .delete(`/api/minecraft/players/${target.user.id}`)
-      .set("Cookie", [admin.cookie, csrf.cookie])
+      .delete(`/api/minecraft/profiles/${profile.id}`)
+      .set("Cookie", [auth.cookie, csrf.cookie])
       .set(csrf.headerName, csrf.headerValue);
 
     expect(response.status).toBe(204);
@@ -285,20 +215,19 @@ describe("DELETE /api/minecraft/players/:userId", () => {
     expect(rconClient.executed).toEqual(["whitelist remove Notch"]);
 
     const afterDelete = await request(app)
-      .get("/api/minecraft/players/me")
-      .set("Cookie", [target.cookie]);
-    expect(afterDelete.status).toBe(404);
+      .get("/api/minecraft/profiles")
+      .set("Cookie", [auth.cookie]);
+    expect(afterDelete.body).toEqual([]);
   });
 
-  it("404s when the target user has no profile", async () => {
+  it("404s for an unknown profile id", async () => {
     const { app, rconClient, outboxDispatcher } = testApp;
-    const admin = await authenticateUser();
+    const auth = await authenticateUser();
     const csrf = csrfPair();
-    const target = await authenticateUser();
 
     const response = await request(app)
-      .delete(`/api/minecraft/players/${target.user.id}`)
-      .set("Cookie", [admin.cookie, csrf.cookie])
+      .delete(`/api/minecraft/profiles/${crypto.randomUUID()}`)
+      .set("Cookie", [auth.cookie, csrf.cookie])
       .set(csrf.headerName, csrf.headerValue);
 
     expect(response.status).toBe(404);
@@ -307,14 +236,14 @@ describe("DELETE /api/minecraft/players/:userId", () => {
     expect(rconClient.executed).toEqual([]);
   });
 
-  it("422s when the userId is not a uuid", async () => {
+  it("422s when the id is not a uuid", async () => {
     const { app } = testApp;
-    const admin = await authenticateUser();
+    const auth = await authenticateUser();
     const csrf = csrfPair();
 
     const response = await request(app)
-      .delete("/api/minecraft/players/not-a-uuid")
-      .set("Cookie", [admin.cookie, csrf.cookie])
+      .delete("/api/minecraft/profiles/not-a-uuid")
+      .set("Cookie", [auth.cookie, csrf.cookie])
       .set(csrf.headerName, csrf.headerValue);
 
     expect(response.status).toBe(422);
@@ -323,14 +252,40 @@ describe("DELETE /api/minecraft/players/:userId", () => {
 
   it("rejects mutations without the CSRF pair", async () => {
     const { app } = testApp;
-    const admin = await authenticateUser();
-    const target = await authenticateUser();
+    const auth = await authenticateUser();
+    const profile = await createMinecraftProfile();
 
     const response = await request(app)
-      .delete(`/api/minecraft/players/${target.user.id}`)
-      .set("Cookie", [admin.cookie]);
+      .delete(`/api/minecraft/profiles/${profile.id}`)
+      .set("Cookie", [auth.cookie]);
 
     expect(response.status).toBe(403);
     expect(response.body).toMatchObject({ code: "INVALID_CSRF_TOKEN" });
+  });
+
+  it("converges when a username is deleted and re-added before dispatch", async () => {
+    const { app, mojangClient, rconClient, outboxDispatcher } = testApp;
+    const auth = await authenticateUser();
+    const csrf = csrfPair();
+    const original = await createMinecraftProfile({ username: "Steve" });
+
+    // Delete the profile (enqueues a remove), then re-add the same username
+    // as a new profile (enqueues an add) before the dispatcher runs.
+    await request(app)
+      .delete(`/api/minecraft/profiles/${original.id}`)
+      .set("Cookie", [auth.cookie, csrf.cookie])
+      .set(csrf.headerName, csrf.headerValue);
+    mojangClient.setProfile({ username: "Steve", uuid: crypto.randomUUID() });
+    await request(app)
+      .post("/api/minecraft/profiles")
+      .set("Cookie", [auth.cookie, csrf.cookie])
+      .set(csrf.headerName, csrf.headerValue)
+      .send({ username: "Steve" });
+
+    await outboxDispatcher.tick();
+
+    // The older remove no-ops (the username has a current owner again); only
+    // the add executes. The whitelist converges to the current state.
+    expect(rconClient.executed).toEqual(["whitelist add Steve"]);
   });
 });

@@ -10,9 +10,8 @@ const EXPECTED_PATHS = [
   "/auth/logout",
   "/invitations",
   "/invitations/{invitationId}",
-  "/minecraft/players",
-  "/minecraft/players/me",
-  "/minecraft/players/{userId}",
+  "/minecraft/profiles",
+  "/minecraft/profiles/{minecraftProfileId}",
   "/minecraft/server/status",
   "/minecraft/server/start",
   "/minecraft/server/stop",
@@ -41,7 +40,7 @@ describe("OpenAPI document", () => {
     for (const name of [
       "User",
       "Invitation",
-      "MinecraftPlayer",
+      "MinecraftProfile",
       "MinecraftServerStatus",
       "ValidationIssue",
       "ValidationError",
@@ -111,11 +110,13 @@ describe("OpenAPI document", () => {
     expect(me?.security).toEqual([{ sessionCookie: [] }]);
   });
 
-  it("documents the list and player set endpoints", () => {
+  it("documents the list and profile create endpoints", () => {
     expect(document.paths?.["/users"]?.get?.operationId).toBe("listUsers");
     expect(document.paths?.["/invitations"]?.get?.operationId).toBe("listInvitations");
-    expect(document.paths?.["/minecraft/players"]?.get?.operationId).toBe("listMinecraftPlayers");
-    expect(document.paths?.["/minecraft/players/me"]?.put?.operationId).toBe("setMinecraftPlayer");
+    expect(document.paths?.["/minecraft/profiles"]?.get?.operationId).toBe("listMinecraftProfiles");
+    expect(document.paths?.["/minecraft/profiles"]?.post?.operationId).toBe(
+      "createMinecraftProfile",
+    );
   });
 
   it("documents empty-body mutations with 204 and no 200", () => {
@@ -135,10 +136,12 @@ describe("OpenAPI document", () => {
     expect(del?.requestBody).toBeUndefined();
   });
 
-  it("declares the userId path parameter on the player delete route", () => {
-    const del = document.paths?.["/minecraft/players/{userId}"]?.delete;
+  it("declares the minecraftProfileId path parameter on the profile delete route", () => {
+    const del = document.paths?.["/minecraft/profiles/{minecraftProfileId}"]?.delete;
     const params = (del?.parameters ?? []) as { name: string; in: string }[];
-    expect(params).toContainEqual(expect.objectContaining({ name: "userId", in: "path" }));
+    expect(params).toContainEqual(
+      expect.objectContaining({ name: "minecraftProfileId", in: "path" }),
+    );
   });
 
   it("narrows error codes per route", () => {

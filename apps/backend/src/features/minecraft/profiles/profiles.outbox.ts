@@ -1,4 +1,4 @@
-// apps/backend/src/features/minecraft/players/players.outbox.ts
+// apps/backend/src/features/minecraft/profiles/profiles.outbox.ts
 
 // The feature's outbox messages: whitelist commands enqueued in the same
 // transaction as the profile write and executed by the OutboxDispatcher after
@@ -12,14 +12,16 @@ import {
   type OutboxHandler,
   type OutboxPayloadOf,
 } from "@/infrastructure/outbox/index.js";
-import { minecraftUsernameSchema } from "@minecraft-server/shared/minecraft";
-import { userIdSchema } from "@minecraft-server/shared/users";
+import {
+  minecraftProfileIdSchema,
+  minecraftUsernameSchema,
+} from "@minecraft-server/shared/minecraft";
 import z from "zod";
 
 export const whitelistAddMessage = defineOutboxMessage({
   type: "minecraft.whitelistAdd",
   payloadSchema: z.strictObject({
-    userId: userIdSchema,
+    minecraftProfileId: minecraftProfileIdSchema,
     username: minecraftUsernameSchema,
   }),
 });
@@ -27,14 +29,14 @@ export const whitelistAddMessage = defineOutboxMessage({
 export const whitelistRemoveMessage = defineOutboxMessage({
   type: "minecraft.whitelistRemove",
   payloadSchema: z.strictObject({
-    userId: userIdSchema,
+    minecraftProfileId: minecraftProfileIdSchema,
     username: minecraftUsernameSchema,
   }),
 });
 
 // Aggregated into `outboxMessageDefinitions` (outbox.registry.ts) the way
 // schemas/constraints are; computed keys keep the type string written once.
-export const minecraftPlayerOutboxMessages = {
+export const minecraftProfileOutboxMessages = {
   [whitelistAddMessage.type]: whitelistAddMessage,
   [whitelistRemoveMessage.type]: whitelistRemoveMessage,
 } as const;
@@ -48,14 +50,15 @@ export class WhitelistAddHandler implements OutboxHandler<typeof whitelistAddMes
   ) {}
 
   public async handle(payload: OutboxPayloadOf<typeof whitelistAddMessage>): Promise<void> {
-    const profile = await this.minecraftProfileService.findByUserId(payload.userId);
+    const profile = await this.minecraftProfileService.findById(payload.minecraftProfileId);
 
-    // Unlinked or re-linked to a different name since this was enqueued.
-    if (profile === null || profile.username !== payload.username) {
+    // Deleted since this was enqueued.
+    if (profile === null) {
       return;
     }
 
-    await this.minecraftServerService.addToWhitelist(payload.username);
+    // Whitelist what the row says now, not what the payload snapshotted.
+    await this.minecraftServerService.addToWhitelist(profile.username);
   }
 }
 
@@ -69,8 +72,7 @@ export class WhitelistRemoveHandler implements OutboxHandler<typeof whitelistRem
 
   public async handle(payload: OutboxPayloadOf<typeof whitelistRemoveMessage>): Promise<void> {
     // Usernames are unique across profiles, so any current owner (the same
-    // user re-linking or another user claiming the name) means the whitelist
-    // entry must stay.
+    // username re-added as a new profile) means the whitelist entry must stay.
     const currentOwner = await this.minecraftProfileService.findByUsername(payload.username);
 
     if (currentOwner !== null) {

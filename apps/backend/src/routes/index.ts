@@ -16,12 +16,11 @@ import { createInvitationRoutes } from "@/features/invitations/invitations.route
 import { InvitationService } from "@/features/invitations/invitations.service.js";
 import { createMinecraftRoutes } from "@/features/minecraft/minecraft.routes.js";
 import type { MojangApi, ProcessApi, RconApi } from "@/features/minecraft/minecraft.types.js";
-import { MinecraftPlayerController } from "@/features/minecraft/players/players.controller.js";
+import { MinecraftProfileController } from "@/features/minecraft/profiles/profiles.controller.js";
 import {
   WhitelistAddHandler,
   WhitelistRemoveHandler,
-} from "@/features/minecraft/players/players.outbox.js";
-import { MinecraftPlayerService } from "@/features/minecraft/players/players.service.js";
+} from "@/features/minecraft/profiles/profiles.outbox.js";
 import { MinecraftProfileRepository } from "@/features/minecraft/profiles/profiles.repository.js";
 import { MinecraftProfileService } from "@/features/minecraft/profiles/profiles.service.js";
 import { MinecraftServerController } from "@/features/minecraft/server/server.controller.js";
@@ -85,10 +84,10 @@ export function createRouter(deps: AppDeps): AppWiring {
     transactionManager,
   );
 
-  const minecraftProfileService = new MinecraftProfileService(minecraftProfiles, deps.mojangClient);
   const minecraftServerService = new MinecraftServerService(deps.rconClient, deps.processClient);
-  const minecraftPlayerService = new MinecraftPlayerService(
-    minecraftProfileService,
+  const minecraftProfileService = new MinecraftProfileService(
+    minecraftProfiles,
+    deps.mojangClient,
     minecraftServerService,
     transactionManager,
     outboxService,
@@ -105,7 +104,7 @@ export function createRouter(deps: AppDeps): AppWiring {
   const userController = new UserController(userService);
   const invitationController = new InvitationController(invitationService);
   const authController = new AuthController(authService);
-  const minecraftPlayerController = new MinecraftPlayerController(minecraftPlayerService);
+  const minecraftProfileController = new MinecraftProfileController(minecraftProfileService);
   const minecraftServerController = new MinecraftServerController(minecraftServerService);
 
   const requireAuth = createRequireAuth(authService);
@@ -115,7 +114,7 @@ export function createRouter(deps: AppDeps): AppWiring {
   router.use("/auth", createAuthRoutes(authController, requireAuth));
   router.use(
     "/minecraft",
-    createMinecraftRoutes(minecraftPlayerController, minecraftServerController, requireAuth),
+    createMinecraftRoutes(minecraftProfileController, minecraftServerController, requireAuth),
   );
 
   return { router, outboxDispatcher };

@@ -4,7 +4,7 @@
 // import side effect; they must be imported before the document is generated.
 import "@/features/auth/auth.openapi.js";
 import "@/features/invitations/invitations.openapi.js";
-import "@/features/minecraft/players/players.openapi.js";
+import "@/features/minecraft/profiles/profiles.openapi.js";
 import "@/features/minecraft/server/server.openapi.js";
 import "@/features/users/users.openapi.js";
 
@@ -20,7 +20,7 @@ export function createOpenApiDocument() {
       title: "Minecraft Server API",
       version: "1.0.0",
       description:
-        "Admin API for a private, invite-only Minecraft server. " +
+        "API for a private, invite-only Minecraft server. " +
         "Errors are returned as JSON: { kind, code, message, issues? }.",
     },
     servers: [{ url: "/api" }],

@@ -17,13 +17,13 @@ export class MinecraftProfileRepository {
     return withDbErrors(() => this.databaseProvider.get().select().from(minecraftProfiles));
   }
 
-  public async findByUserId(userId: string): Promise<MinecraftProfile | null> {
+  public async findById(id: string): Promise<MinecraftProfile | null> {
     const [minecraftProfile] = await withDbErrors(() =>
       this.databaseProvider
         .get()
         .select()
         .from(minecraftProfiles)
-        .where(eq(minecraftProfiles.userId, userId))
+        .where(eq(minecraftProfiles.id, id))
         .limit(1),
     );
 
@@ -43,21 +43,13 @@ export class MinecraftProfileRepository {
     return minecraftProfile ?? null;
   }
 
-  // Create-or-replace by userId. A conflict on userId updates the existing row;
-  // a conflict on the username or uuid unique constraints (i.e. taken by
-  // another user) surfaces as a unique violation -> AlreadyExistsError.
-  public async upsertByUserId(
-    userId: string,
+  // A username or uuid already present surfaces as a unique violation ->
+  // the mapped conflict error.
+  public async create(
     input: Pick<NewMinecraftProfile, "username" | "uuid">,
   ): Promise<MinecraftProfile> {
     const [minecraftProfile] = await withDbErrors(
-      () =>
-        this.databaseProvider
-          .get()
-          .insert(minecraftProfiles)
-          .values({ userId, ...input })
-          .onConflictDoUpdate({ target: minecraftProfiles.userId, set: input })
-          .returning(),
+      () => this.databaseProvider.get().insert(minecraftProfiles).values(input).returning(),
       {
         [MINECRAFT_PROFILES_CONSTRAINTS.USERNAME_UNIQUE]: "MINECRAFT_USERNAME_TAKEN",
         [MINECRAFT_PROFILES_CONSTRAINTS.UUID_UNIQUE]: "MINECRAFT_ACCOUNT_TAKEN",
@@ -65,18 +57,18 @@ export class MinecraftProfileRepository {
     );
 
     if (minecraftProfile === undefined) {
-      throw new AppError("SERVICE_UNAVAILABLE", { message: "Failed to upsert Minecraft profile." });
+      throw new AppError("SERVICE_UNAVAILABLE", { message: "Failed to create Minecraft profile." });
     }
 
     return minecraftProfile;
   }
 
-  public async deleteByUserId(userId: string): Promise<MinecraftProfile | null> {
+  public async deleteById(id: string): Promise<MinecraftProfile | null> {
     const [minecraftProfile] = await withDbErrors(() =>
       this.databaseProvider
         .get()
         .delete(minecraftProfiles)
-        .where(eq(minecraftProfiles.userId, userId))
+        .where(eq(minecraftProfiles.id, id))
         .returning(),
     );
 

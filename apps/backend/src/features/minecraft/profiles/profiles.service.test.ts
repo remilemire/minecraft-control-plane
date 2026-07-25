@@ -1,25 +1,27 @@
 // apps/backend/src/features/minecraft/profiles/profiles.service.test.ts
 
-import type { MinecraftProfile, NewMinecraftProfile } from "./profiles.schema.js";
+import type { MinecraftServerService } from "@/features/minecraft/server/server.service.js";
+import type { TransactionManager } from "@/infrastructure/db/index.js";
+import type { AppOutboxService } from "@/infrastructure/outbox/outbox.registry.js";
 import { FakeMojangClient } from "@test/fakes/fake-mojang.client.js";
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";
+import type { MinecraftProfile } from "./profiles.schema.js";
 import type { MinecraftProfileRepository } from "./profiles.repository.js";
 import { MinecraftProfileService } from "./profiles.service.js";
 
-const USER_ID = "00000000-0000-0000-0000-000000000001";
+const PROFILE_ID = "00000000-0000-0000-0000-0000000000bb";
 
 function profile(overrides: Partial<MinecraftProfile> = {}): MinecraftProfile {
   return {
-    id: "00000000-0000-0000-0000-0000000000bb",
+    id: PROFILE_ID,
     username: "Steve",
     uuid: randomUUID(),
-    userId: USER_ID,
     ...overrides,
   };
 }
 
-// The repository is a class (nominal because of its private db field), so
+// The collaborators are classes (nominal because of their private fields), so
 // method-level stubs need the double cast.
 function repositoryStub(
   methods: Partial<Record<keyof MinecraftProfileRepository, unknown>>,
@@ -27,114 +29,176 @@ function repositoryStub(
   return methods as unknown as MinecraftProfileRepository;
 }
 
+function serverServiceStub(onlineUsernames: readonly string[] = []): MinecraftServerService {
+  return {
+    listOnlineUsernames: async () => onlineUsernames,
+  } as unknown as MinecraftServerService;
+}
+
+// Records every enqueued outbox message.
+function outboxServiceRecorder() {
+  const enqueued: { type: string; payload: unknown }[] = [];
+  const service = {
+    enqueue: async (type: string, payload: unknown) => {
+      enqueued.push({ type, payload });
+    },
+  } as unknown as AppOutboxService;
+
+  return { service, enqueued };
+}
+
+// Defaults to actually invoking the operation (like the real manager, minus
+// the ambient transaction context). Tests proving a code path never opens a
+// transaction use neverRunsTransactionManager instead.
+function transactionManagerStub(): TransactionManager {
+  return {
+    run: async (operation: () => Promise<unknown>) => operation(),
+  } as unknown as TransactionManager;
+}
+
+function neverRunsTransactionManager(): TransactionManager {
+  return {
+    run: async () => {
+      throw new Error("must not open a transaction on this path");
+    },
+  } as unknown as TransactionManager;
+}
+
 describe("MinecraftProfileService", () => {
-  describe("getByUserId", () => {
-    it("returns the profile when the user has one", async () => {
-      const existing = profile();
+  describe("list", () => {
+    it("merges profiles with their online status", async () => {
+      const online = profile({ id: randomUUID(), username: "Steve" });
+      const offline = profile({ id: randomUUID(), username: "Alex" });
       const service = new MinecraftProfileService(
-        repositoryStub({ findByUserId: async () => existing }),
+        repositoryStub({ findAll: async () => [online, offline] }),
         new FakeMojangClient(),
+        serverServiceStub(["Steve"]),
+        neverRunsTransactionManager(),
+        outboxServiceRecorder().service,
       );
 
-      expect(await service.getByUserId(USER_ID)).toEqual(existing);
-    });
-
-    it("throws MINECRAFT_PROFILE_NOT_FOUND when the user has no profile", async () => {
-      const service = new MinecraftProfileService(
-        repositoryStub({ findByUserId: async () => null }),
-        new FakeMojangClient(),
-      );
-
-      await expect(service.getByUserId(USER_ID)).rejects.toMatchObject({
-        code: "MINECRAFT_PROFILE_NOT_FOUND",
-      });
+      expect(await service.list()).toEqual([
+        { id: online.id, username: "Steve", uuid: online.uuid, online: true },
+        { id: offline.id, username: "Alex", uuid: offline.uuid, online: false },
+      ]);
     });
   });
 
-  describe("findByUserId / findByUsername", () => {
+  describe("create", () => {
+    it("resolves the canonical Mojang profile, inserts it, and enqueues the whitelist add", async () => {
+      const mojang = new FakeMojangClient();
+      const uuid = randomUUID();
+      mojang.setProfile({ username: "Steve", uuid });
+      const created = profile({ username: "Steve", uuid });
+      const outbox = outboxServiceRecorder();
+
+      let createInput: unknown;
+      const service = new MinecraftProfileService(
+        repositoryStub({
+          create: async (input: unknown) => {
+            createInput = input;
+            return created;
+          },
+        }),
+        mojang,
+        serverServiceStub(),
+        transactionManagerStub(),
+        outbox.service,
+      );
+
+      // The caller supplies a differently-cased username.
+      const result = await service.create({ username: "steve" });
+
+      expect(createInput).toEqual({ username: "Steve", uuid });
+      expect(result).toEqual({ id: created.id, username: "Steve", uuid, online: false });
+      expect(outbox.enqueued).toEqual([
+        {
+          type: "minecraft.whitelistAdd",
+          payload: { minecraftProfileId: created.id, username: "Steve" },
+        },
+      ]);
+    });
+
+    it("throws MOJANG_PROFILE_NOT_FOUND for an unknown username, without opening a transaction", async () => {
+      const outbox = outboxServiceRecorder();
+      const service = new MinecraftProfileService(
+        repositoryStub({}),
+        new FakeMojangClient(),
+        serverServiceStub(),
+        neverRunsTransactionManager(),
+        outbox.service,
+      );
+
+      await expect(service.create({ username: "Ghost" })).rejects.toMatchObject({
+        code: "MOJANG_PROFILE_NOT_FOUND",
+      });
+      expect(outbox.enqueued).toEqual([]);
+    });
+  });
+
+  describe("deleteById", () => {
+    it("deletes the profile and enqueues the whitelist remove", async () => {
+      const removed = profile({ username: "Notch" });
+      const outbox = outboxServiceRecorder();
+
+      let deletedId: unknown;
+      const service = new MinecraftProfileService(
+        repositoryStub({
+          deleteById: async (id: unknown) => {
+            deletedId = id;
+            return removed;
+          },
+        }),
+        new FakeMojangClient(),
+        serverServiceStub(),
+        transactionManagerStub(),
+        outbox.service,
+      );
+
+      await service.deleteById(removed.id);
+
+      expect(deletedId).toBe(removed.id);
+      expect(outbox.enqueued).toEqual([
+        {
+          type: "minecraft.whitelistRemove",
+          payload: { minecraftProfileId: removed.id, username: "Notch" },
+        },
+      ]);
+    });
+
+    it("throws MINECRAFT_PROFILE_NOT_FOUND for an unknown id, enqueueing nothing", async () => {
+      const outbox = outboxServiceRecorder();
+      const service = new MinecraftProfileService(
+        repositoryStub({ deleteById: async () => null }),
+        new FakeMojangClient(),
+        serverServiceStub(),
+        transactionManagerStub(),
+        outbox.service,
+      );
+
+      await expect(service.deleteById(PROFILE_ID)).rejects.toMatchObject({
+        code: "MINECRAFT_PROFILE_NOT_FOUND",
+      });
+      expect(outbox.enqueued).toEqual([]);
+    });
+  });
+
+  describe("findById / findByUsername", () => {
     it("passes through current state without throwing on absence", async () => {
       const existing = profile();
       const service = new MinecraftProfileService(
         repositoryStub({
-          findByUserId: async () => existing,
+          findById: async () => existing,
           findByUsername: async () => null,
         }),
         new FakeMojangClient(),
+        serverServiceStub(),
+        neverRunsTransactionManager(),
+        outboxServiceRecorder().service,
       );
 
-      expect(await service.findByUserId(USER_ID)).toEqual(existing);
+      expect(await service.findById(PROFILE_ID)).toEqual(existing);
       expect(await service.findByUsername("Ghost")).toBeNull();
-    });
-  });
-
-  describe("resolveUsername", () => {
-    it("resolves the uuid and canonical username from Mojang", async () => {
-      const mojang = new FakeMojangClient();
-      const uuid = randomUUID();
-      mojang.setProfile({ username: "Steve", uuid });
-
-      const service = new MinecraftProfileService(repositoryStub({}), mojang);
-
-      // The caller supplies a differently-cased username.
-      expect(await service.resolveUsername("steve")).toEqual({ username: "Steve", uuid });
-    });
-
-    it("throws MOJANG_PROFILE_NOT_FOUND when Mojang has no such account", async () => {
-      const service = new MinecraftProfileService(repositoryStub({}), new FakeMojangClient());
-
-      await expect(service.resolveUsername("Ghost")).rejects.toMatchObject({
-        code: "MOJANG_PROFILE_NOT_FOUND",
-      });
-    });
-  });
-
-  describe("setByUserId", () => {
-    it("upserts the resolved profile for the user", async () => {
-      const uuid = randomUUID();
-
-      let upsertArgs:
-        | { userId: string; input: Pick<NewMinecraftProfile, "username" | "uuid"> }
-        | undefined;
-      const service = new MinecraftProfileService(
-        repositoryStub({
-          upsertByUserId: async (
-            userId: string,
-            input: Pick<NewMinecraftProfile, "username" | "uuid">,
-          ) => {
-            upsertArgs = { userId, input };
-            return profile({ username: input.username, uuid: input.uuid });
-          },
-        }),
-        new FakeMojangClient(),
-      );
-
-      const result = await service.setByUserId(USER_ID, { username: "Steve", uuid });
-
-      expect(upsertArgs).toEqual({ userId: USER_ID, input: { username: "Steve", uuid } });
-      expect(result).toMatchObject({ username: "Steve", uuid });
-    });
-  });
-
-  describe("deleteByUserId", () => {
-    it("returns the removed profile", async () => {
-      const removed = profile();
-      const service = new MinecraftProfileService(
-        repositoryStub({ deleteByUserId: async () => removed }),
-        new FakeMojangClient(),
-      );
-
-      expect(await service.deleteByUserId(USER_ID)).toEqual(removed);
-    });
-
-    it("throws MINECRAFT_PROFILE_NOT_FOUND when the user has no profile", async () => {
-      const service = new MinecraftProfileService(
-        repositoryStub({ deleteByUserId: async () => null }),
-        new FakeMojangClient(),
-      );
-
-      await expect(service.deleteByUserId(USER_ID)).rejects.toMatchObject({
-        code: "MINECRAFT_PROFILE_NOT_FOUND",
-      });
     });
   });
 });

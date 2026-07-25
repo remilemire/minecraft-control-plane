@@ -9,12 +9,12 @@
 // The composition root injects `outboxMessageDefinitions` into OutboxService
 // (typing `enqueue` end-to-end) and cross-checks it against the wired
 // handlers via `createOutboxHandlerRegistry`.
-import { minecraftPlayerOutboxMessages } from "@/features/minecraft/players/players.outbox.js";
+import { minecraftProfileOutboxMessages } from "@/features/minecraft/profiles/profiles.outbox.js";
 import type { OutboxService } from "./outbox.service.js";
 import type { OutboxMessageDefinitionMap } from "./outbox.types.js";
 
 export const outboxMessageDefinitions = {
-  ...minecraftPlayerOutboxMessages,
+  ...minecraftProfileOutboxMessages,
 } as const satisfies OutboxMessageDefinitionMap;
 
 export type OutboxMessageDefinitions = typeof outboxMessageDefinitions;

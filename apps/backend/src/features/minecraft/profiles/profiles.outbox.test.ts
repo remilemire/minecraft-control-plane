@@ -1,20 +1,19 @@
-// apps/backend/src/features/minecraft/players/players.outbox.test.ts
+// apps/backend/src/features/minecraft/profiles/profiles.outbox.test.ts
 
-import type { MinecraftProfile } from "@/infrastructure/db/schemas.js";
+import type { MinecraftServerService } from "@/features/minecraft/server/server.service.js";
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";
-import type { MinecraftProfileService } from "@/features/minecraft/profiles/profiles.service.js";
-import type { MinecraftServerService } from "@/features/minecraft/server/server.service.js";
-import { WhitelistAddHandler, WhitelistRemoveHandler } from "./players.outbox.js";
+import type { MinecraftProfile } from "./profiles.schema.js";
+import { WhitelistAddHandler, WhitelistRemoveHandler } from "./profiles.outbox.js";
+import type { MinecraftProfileService } from "./profiles.service.js";
 
-const USER_ID = "00000000-0000-0000-0000-000000000001";
+const PROFILE_ID = "00000000-0000-0000-0000-0000000000bb";
 
 function profile(overrides: Partial<MinecraftProfile> = {}): MinecraftProfile {
   return {
-    id: "00000000-0000-0000-0000-0000000000bb",
+    id: PROFILE_ID,
     username: "Steve",
     uuid: randomUUID(),
-    userId: USER_ID,
     ...overrides,
   };
 }
@@ -42,38 +41,26 @@ function serverServiceRecorder() {
 }
 
 describe("WhitelistAddHandler", () => {
-  it("whitelists the username while the profile still matches", async () => {
+  it("whitelists the profile's current username while it still exists", async () => {
     const { service, commands } = serverServiceRecorder();
     const handler = new WhitelistAddHandler(
-      profileServiceStub({ findByUserId: async () => profile({ username: "Steve" }) }),
+      profileServiceStub({ findById: async () => profile({ username: "Steve" }) }),
       service,
     );
 
-    await handler.handle({ userId: USER_ID, username: "Steve" });
+    await handler.handle({ minecraftProfileId: PROFILE_ID, username: "Steve" });
 
     expect(commands).toEqual(["add Steve"]);
   });
 
-  it("no-ops when the user unlinked since the message was enqueued", async () => {
+  it("no-ops when the profile was deleted since the message was enqueued", async () => {
     const { service, commands } = serverServiceRecorder();
     const handler = new WhitelistAddHandler(
-      profileServiceStub({ findByUserId: async () => null }),
+      profileServiceStub({ findById: async () => null }),
       service,
     );
 
-    await handler.handle({ userId: USER_ID, username: "Steve" });
-
-    expect(commands).toEqual([]);
-  });
-
-  it("no-ops when the user re-linked a different username", async () => {
-    const { service, commands } = serverServiceRecorder();
-    const handler = new WhitelistAddHandler(
-      profileServiceStub({ findByUserId: async () => profile({ username: "NewName" }) }),
-      service,
-    );
-
-    await handler.handle({ userId: USER_ID, username: "Steve" });
+    await handler.handle({ minecraftProfileId: PROFILE_ID, username: "Steve" });
 
     expect(commands).toEqual([]);
   });
@@ -87,21 +74,21 @@ describe("WhitelistRemoveHandler", () => {
       service,
     );
 
-    await handler.handle({ userId: USER_ID, username: "Steve" });
+    await handler.handle({ minecraftProfileId: PROFILE_ID, username: "Steve" });
 
     expect(commands).toEqual(["remove Steve"]);
   });
 
-  it("no-ops when the username was re-linked (by anyone) meanwhile", async () => {
+  it("no-ops when the username was re-added as a new profile meanwhile", async () => {
     const { service, commands } = serverServiceRecorder();
     const handler = new WhitelistRemoveHandler(
       profileServiceStub({
-        findByUsername: async () => profile({ userId: randomUUID(), username: "Steve" }),
+        findByUsername: async () => profile({ id: randomUUID(), username: "Steve" }),
       }),
       service,
     );
 
-    await handler.handle({ userId: USER_ID, username: "Steve" });
+    await handler.handle({ minecraftProfileId: PROFILE_ID, username: "Steve" });
 
     expect(commands).toEqual([]);
   });

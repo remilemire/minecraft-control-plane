@@ -1,8 +1,10 @@
 // apps/backend/src/features/minecraft/profiles/profiles.schema.ts
 
-import { users } from "@/features/users/users.schema.js";
+// A standalone whitelist entry: a Mojang account (username + uuid) allowed on
+// the server. Profiles are not tied to users — any authenticated user can add
+// or remove them.
 import { sql } from "drizzle-orm";
-import { check, foreignKey, pgTable, text, unique, uuid } from "drizzle-orm/pg-core";
+import { check, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { MINECRAFT_PROFILES_CONSTRAINTS } from "./profiles.constraints.js";
 
 export const minecraftProfiles = pgTable(
@@ -12,18 +14,8 @@ export const minecraftProfiles = pgTable(
 
     username: text("username").notNull().unique(MINECRAFT_PROFILES_CONSTRAINTS.USERNAME_UNIQUE),
     uuid: uuid("uuid").notNull().unique(MINECRAFT_PROFILES_CONSTRAINTS.UUID_UNIQUE),
-
-    userId: uuid("user_id").notNull(),
   },
-  (table) => [
-    check("username_length_check", sql`char_length(${table.username}) BETWEEN 3 AND 16`),
-    unique(MINECRAFT_PROFILES_CONSTRAINTS.USER_ID_UNIQUE).on(table.userId),
-    foreignKey({
-      name: MINECRAFT_PROFILES_CONSTRAINTS.USER_ID_FK,
-      columns: [table.userId],
-      foreignColumns: [users.id],
-    }).onDelete("cascade"),
-  ],
+  (table) => [check("username_length_check", sql`char_length(${table.username}) BETWEEN 3 AND 16`)],
 );
 
 export type MinecraftProfile = typeof minecraftProfiles.$inferSelect;

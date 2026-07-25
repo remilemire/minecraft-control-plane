@@ -12,7 +12,7 @@ import {
 } from "@minecraft-server/shared/errors";
 import { invitationResponseSchema } from "@minecraft-server/shared/invitations";
 import {
-  minecraftPlayerResponseSchema,
+  minecraftProfileResponseSchema,
   minecraftServerStatusResponseSchema,
 } from "@minecraft-server/shared/minecraft";
 import { userResponseSchema } from "@minecraft-server/shared/users";
@@ -174,9 +174,9 @@ export const openApiInvitationSchema = openApiRegistry.register(
   invitationResponseSchema,
 );
 
-export const openApiMinecraftPlayerSchema = openApiRegistry.register(
-  "MinecraftPlayer",
-  minecraftPlayerResponseSchema,
+export const openApiMinecraftProfileSchema = openApiRegistry.register(
+  "MinecraftProfile",
+  minecraftProfileResponseSchema,
 );
 
 export const openApiMinecraftServerStatusSchema = openApiRegistry.register(
