@@ -2,7 +2,6 @@
 
 import { ErrorText } from "@/components/ErrorText";
 import { LoadingText } from "@/components/LoadingText";
-import { McBadge } from "@/components/McBadge";
 import { McPanel } from "@/components/McPanel";
 import { formatDate } from "@/lib/format";
 import { useRequest } from "@/lib/useRequest";
@@ -27,11 +26,6 @@ export function UsersPanel() {
                   {user.email} · joined {formatDate(user.createdAt)}
                 </p>
               </div>
-              {user.isAdmin && (
-                <div className="ml-auto">
-                  <McBadge variant="highlight">Admin</McBadge>
-                </div>
-              )}
             </li>
           ))}
         </ul>

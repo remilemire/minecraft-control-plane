@@ -16,9 +16,9 @@ describe("UsersPanel", () => {
     vi.clearAllMocks();
   });
 
-  it("lists users with an admin badge", async () => {
+  it("lists every registered user", async () => {
     fetchUsersMock.mockResolvedValue([
-      makeUser({ id: "11111111-1111-4111-8111-111111111111", isAdmin: true }),
+      makeUser({ id: "11111111-1111-4111-8111-111111111111" }),
       makeUser({
         id: "22222222-2222-4222-8222-222222222222",
         email: "alex@example.com",
@@ -30,7 +30,6 @@ describe("UsersPanel", () => {
 
     expect(await screen.findByText("Steve Miner")).toBeInTheDocument();
     expect(screen.getByText("Alex")).toBeInTheDocument();
-    expect(screen.getByText("Admin")).toBeInTheDocument();
   });
 
   it("falls back to the email when the user has no name", async () => {
@@ -42,10 +41,12 @@ describe("UsersPanel", () => {
   });
 
   it("shows load errors", async () => {
-    fetchUsersMock.mockRejectedValue(new ApiError("FORBIDDEN", "ADMIN_REQUIRED", "Admins only."));
+    fetchUsersMock.mockRejectedValue(
+      new ApiError("SERVICE_UNAVAILABLE", "SERVICE_UNAVAILABLE", "Could not reach the server."),
+    );
 
     render(<UsersPanel />);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Admins only.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not reach the server.");
   });
 });

@@ -1,10 +1,9 @@
 // apps/frontend/src/app/guards/guards.test.tsx
 
-import { makeAuthValue, makeUser, renderWithAuth } from "@test/helpers/auth";
+import { makeAuthValue, renderWithAuth } from "@test/helpers/auth";
 import { screen } from "@testing-library/react";
 import { Route, Routes } from "react-router";
 import { describe, expect, it } from "vitest";
-import { RequireAdmin } from "./RequireAdmin";
 import { RequireAuth } from "./RequireAuth";
 import { RequireGuest } from "./RequireGuest";
 
@@ -16,9 +15,6 @@ function TestRoutes() {
       </Route>
       <Route element={<RequireAuth />}>
         <Route index element={<p>Home page</p>} />
-        <Route element={<RequireAdmin />}>
-          <Route path="/admin" element={<p>Admin page</p>} />
-        </Route>
       </Route>
     </Routes>
   );
@@ -51,20 +47,5 @@ describe("route guards", () => {
     renderWithAuth(<TestRoutes />, { route: "/login" });
 
     expect(screen.getByText("Home page")).toBeInTheDocument();
-  });
-
-  it("redirects non-admins away from admin routes", () => {
-    renderWithAuth(<TestRoutes />, { route: "/admin" });
-
-    expect(screen.getByText("Home page")).toBeInTheDocument();
-  });
-
-  it("lets admins through to admin routes", () => {
-    renderWithAuth(<TestRoutes />, {
-      auth: makeAuthValue({ user: makeUser({ isAdmin: true }) }),
-      route: "/admin",
-    });
-
-    expect(screen.getByText("Admin page")).toBeInTheDocument();
   });
 });
