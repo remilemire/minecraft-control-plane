@@ -7,8 +7,16 @@ import z from "zod";
 
 const MOJANG_API_BASE = "https://api.mojang.com";
 
+// Mojang returns the uuid undashed ("069a79f444e94726a5befca90e38aaf5"), while
+// everything downstream — the shared schemas and the `uuid` columns — expects the
+// canonical hyphenated form, so hyphenate it here at the boundary.
+const mojangUuidSchema = z
+  .string()
+  .regex(/^[0-9a-f]{32}$/i)
+  .transform((id) => id.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, "$1-$2-$3-$4-$5"));
+
 const mojangAccountSchema = z.object({
-  id: z.uuid(),
+  id: mojangUuidSchema,
   name: minecraftUsernameSchema,
 });
 

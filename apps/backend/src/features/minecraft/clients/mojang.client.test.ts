@@ -33,13 +33,16 @@ afterEach(() => {
 describe("MojangClient", () => {
   const client = new MojangClient();
 
-  it("returns the profile for a known username", async () => {
-    const id = randomUUID();
+  it("returns the profile for a known username, hyphenating Mojang's undashed uuid", async () => {
+    const uuid = randomUUID();
     const fetchMock = stubFetch(
-      fakeResponse({ status: 200, json: async () => ({ id, name: "Steve" }) }),
+      fakeResponse({
+        status: 200,
+        json: async () => ({ id: uuid.replaceAll("-", ""), name: "Steve" }),
+      }),
     );
 
-    expect(await client.findByUsername("Steve")).toEqual({ uuid: id, username: "Steve" });
+    expect(await client.findByUsername("Steve")).toEqual({ uuid, username: "Steve" });
     // The username is path-escaped in the request URL.
     expect(fetchMock).toHaveBeenCalledWith("https://api.mojang.com/users/profiles/minecraft/Steve");
   });
