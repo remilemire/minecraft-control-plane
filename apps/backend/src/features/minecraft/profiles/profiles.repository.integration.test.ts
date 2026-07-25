@@ -63,6 +63,13 @@ describe("MinecraftProfileRepository", () => {
     expect(await repository.findByUserId(randomUUID())).toBeNull();
   });
 
+  it("finds a profile by username", async () => {
+    const created = await createMinecraftProfile({ username: "Steve" });
+
+    expect(await repository.findByUsername("Steve")).toEqual(created);
+    expect(await repository.findByUsername("Ghost")).toBeNull();
+  });
+
   it("deletes by user id and returns the removed profile", async () => {
     const created = await createMinecraftProfile();
 

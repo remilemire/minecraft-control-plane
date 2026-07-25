@@ -17,6 +17,10 @@ import { InvitationService } from "@/features/invitations/invitations.service.js
 import { createMinecraftRoutes } from "@/features/minecraft/minecraft.routes.js";
 import type { MojangApi, ProcessApi, RconApi } from "@/features/minecraft/minecraft.types.js";
 import { MinecraftPlayerController } from "@/features/minecraft/players/players.controller.js";
+import {
+  WhitelistAddHandler,
+  WhitelistRemoveHandler,
+} from "@/features/minecraft/players/players.outbox.js";
 import { MinecraftPlayerService } from "@/features/minecraft/players/players.service.js";
 import { MinecraftProfileRepository } from "@/features/minecraft/profiles/profiles.repository.js";
 import { MinecraftProfileService } from "@/features/minecraft/profiles/profiles.service.js";
@@ -26,6 +30,13 @@ import { UserController } from "@/features/users/users.controller.js";
 import { UserRepository } from "@/features/users/users.repository.js";
 import { createUserRoutes } from "@/features/users/users.routes.js";
 import { UserService } from "@/features/users/users.service.js";
+import {
+  createOutboxHandlerRegistry,
+  OutboxDispatcher,
+  OutboxMessageRepository,
+  OutboxService,
+} from "@/infrastructure/outbox/index.js";
+import { outboxMessageDefinitions } from "@/infrastructure/outbox/outbox.registry.js";
 import { Router } from "express";
 
 // The external boundaries of the app. Production wires the real ones in
@@ -38,7 +49,15 @@ export interface AppDeps {
   readonly processClient: ProcessApi;
 }
 
-export function createRouter(deps: AppDeps): Router {
+// The wired dependency graph: the HTTP surface plus the background pieces the
+// composition roots own the lifecycle of (server.ts starts the dispatcher;
+// tests tick() it deterministically).
+export interface AppWiring {
+  readonly router: Router;
+  readonly outboxDispatcher: OutboxDispatcher;
+}
+
+export function createRouter(deps: AppDeps): AppWiring {
   const router = Router();
 
   const databaseProvider = new DatabaseProvider(deps.db);
@@ -49,11 +68,13 @@ export function createRouter(deps: AppDeps): Router {
   const invitations = new InvitationRepository(databaseProvider);
   const oauthIdentities = new OAuthIdentityRepository(databaseProvider);
   const minecraftProfiles = new MinecraftProfileRepository(databaseProvider);
+  const outboxMessages = new OutboxMessageRepository(databaseProvider);
 
   const userService = new UserService(users);
   const sessionService = new SessionService(sessions);
   const invitationService = new InvitationService(invitations);
   const oauthIdentityService = new OAuthIdentityService(oauthIdentities);
+  const outboxService = new OutboxService(outboxMessages, outboxMessageDefinitions);
 
   const authService = new AuthService(
     userService,
@@ -70,6 +91,15 @@ export function createRouter(deps: AppDeps): Router {
     minecraftProfileService,
     minecraftServerService,
     transactionManager,
+    outboxService,
+  );
+
+  const outboxDispatcher = new OutboxDispatcher(
+    outboxMessages,
+    createOutboxHandlerRegistry(outboxMessageDefinitions, [
+      new WhitelistAddHandler(minecraftProfileService, minecraftServerService),
+      new WhitelistRemoveHandler(minecraftProfileService, minecraftServerService),
+    ]),
   );
 
   const userController = new UserController(userService);
@@ -88,5 +118,5 @@ export function createRouter(deps: AppDeps): Router {
     createMinecraftRoutes(minecraftPlayerController, minecraftServerController, requireAuth),
   );
 
-  return router;
+  return { router, outboxDispatcher };
 }

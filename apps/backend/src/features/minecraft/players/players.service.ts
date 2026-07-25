@@ -2,9 +2,11 @@
 
 import type { MinecraftProfile } from "@/infrastructure/db/schemas.js";
 import type { TransactionManager } from "@/infrastructure/db/index.js";
+import type { AppOutboxService } from "@/infrastructure/outbox/outbox.registry.js";
 import type { SetMinecraftPlayerInput } from "@minecraft-server/shared/minecraft";
 import type { MinecraftProfileService } from "@/features/minecraft/profiles/profiles.service.js";
 import type { MinecraftServerService } from "@/features/minecraft/server/server.service.js";
+import { whitelistAddMessage, whitelistRemoveMessage } from "./players.outbox.js";
 import type { MinecraftPlayer } from "./players.types.js";
 
 function toPlayer(profile: MinecraftProfile, onlineUsernames: readonly string[]): MinecraftPlayer {
@@ -21,6 +23,7 @@ export class MinecraftPlayerService {
     private readonly minecraftProfileService: MinecraftProfileService,
     private readonly minecraftServerService: MinecraftServerService,
     private readonly transactionManager: TransactionManager,
+    private readonly outboxService: AppOutboxService,
   ) {}
 
   public async list(): Promise<MinecraftPlayer[]> {
@@ -42,31 +45,51 @@ export class MinecraftPlayerService {
   }
 
   // Resolves the username against Mojang (via the profile service) and
-  // whitelists it on the Minecraft server so the link takes effect immediately.
+  // enqueues the whitelist command atomically with the profile write; the
+  // outbox dispatcher whitelists the player moments after the response.
   // A newly linked account can't already be online, so there's no need to
-  // query RCON a second time just to fill in `online`.
+  // query RCON just to fill in `online`.
   public async setByUserId(
     userId: string,
     input: SetMinecraftPlayerInput,
   ): Promise<MinecraftPlayer> {
-    // External calls stay outside the transaction: Mojang resolution happens
-    // before it, the RCON whitelist call after it.
+    // Mojang resolution is an external read and stays outside the transaction.
     const mojangProfile = await this.minecraftProfileService.resolveUsername(input.username);
 
-    // The transaction spans a single write today, so it changes nothing yet;
-    // it is the seam where the planned transactional outbox will enqueue the
-    // whitelist command atomically with the profile write.
-    const profile = await this.transactionManager.run(() =>
-      this.minecraftProfileService.setByUserId(userId, mojangProfile),
-    );
-    await this.minecraftServerService.addToWhitelist(profile.username);
+    const profile = await this.transactionManager.run(async () => {
+      // Read the row the upsert is about to replace: a rename leaves the old
+      // username on the whitelist unless we enqueue its removal too.
+      const previous = await this.minecraftProfileService.findByUserId(userId);
+      const updated = await this.minecraftProfileService.setByUserId(userId, mojangProfile);
+
+      if (previous !== null && previous.username !== updated.username) {
+        await this.outboxService.enqueue(whitelistRemoveMessage.type, {
+          userId: updated.userId,
+          username: previous.username,
+        });
+      }
+
+      await this.outboxService.enqueue(whitelistAddMessage.type, {
+        userId: updated.userId,
+        username: updated.username,
+      });
+
+      return updated;
+    });
 
     return toPlayer(profile, []);
   }
 
   public async deleteByUserId(userId: string): Promise<MinecraftPlayer> {
-    const profile = await this.minecraftProfileService.deleteByUserId(userId);
-    await this.minecraftServerService.removeFromWhitelist(profile.username);
+    const profile = await this.transactionManager.run(async () => {
+      const deleted = await this.minecraftProfileService.deleteByUserId(userId);
+      await this.outboxService.enqueue(whitelistRemoveMessage.type, {
+        userId: deleted.userId,
+        username: deleted.username,
+      });
+
+      return deleted;
+    });
 
     return toPlayer(profile, []);
   }

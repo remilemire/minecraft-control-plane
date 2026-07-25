@@ -25,6 +25,18 @@ export class MinecraftProfileService {
     return minecraftProfile;
   }
 
+  // Reconciliation-style lookups (null instead of NOT_FOUND) for callers that
+  // check *current* state rather than assert it — the outbox handlers use
+  // these to no-op on stale messages. HTTP paths keep the throwing
+  // `getByUserId` semantics.
+  public async findByUserId(userId: string): Promise<MinecraftProfile | null> {
+    return this.minecraftProfiles.findByUserId(userId);
+  }
+
+  public async findByUsername(username: string): Promise<MinecraftProfile | null> {
+    return this.minecraftProfiles.findByUsername(username);
+  }
+
   // Resolves a username to its canonical Mojang profile (exact casing +
   // uuid). A separate step from `setByUserId` so callers can keep this HTTP
   // lookup outside a database transaction.

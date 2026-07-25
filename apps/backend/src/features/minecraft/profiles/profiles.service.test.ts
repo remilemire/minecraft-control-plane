@@ -51,6 +51,22 @@ describe("MinecraftProfileService", () => {
     });
   });
 
+  describe("findByUserId / findByUsername", () => {
+    it("passes through current state without throwing on absence", async () => {
+      const existing = profile();
+      const service = new MinecraftProfileService(
+        repositoryStub({
+          findByUserId: async () => existing,
+          findByUsername: async () => null,
+        }),
+        new FakeMojangClient(),
+      );
+
+      expect(await service.findByUserId(USER_ID)).toEqual(existing);
+      expect(await service.findByUsername("Ghost")).toBeNull();
+    });
+  });
+
   describe("resolveUsername", () => {
     it("resolves the uuid and canonical username from Mojang", async () => {
       const mojang = new FakeMojangClient();

@@ -20,12 +20,14 @@ of files by role (not all features have every file):
 | `*.types.ts`         | Internal TS types + boundary interfaces (e.g. `MojangApi`).                            |
 | `*.openapi.ts`       | Registers the feature's operations on the OpenAPI registry (import side effect).       |
 | `*.error-catalog.ts` | Human-readable messages for this feature's error codes.                                |
+| `*.outbox.ts`        | The feature's outbox message definitions (type + payload schema) and their handlers.   |
 
 Features: `auth` (with `auth/oauth-identities`, `auth/sessions`, `auth/clients/`),
 `users`, `invitations`, `minecraft` (with `minecraft/players`, `minecraft/server`,
 `minecraft/profiles`, and `minecraft/clients/`). Cross-cutting code sits outside
-`features/`: `config/`, `infrastructure/` (today `infrastructure/db/`), `errors/`,
-`http/`, `validation/`, `openapi/`, `middleware/`, `lib/`, `routes/`.
+`features/`: `config/`, `infrastructure/` (`infrastructure/db/`,
+`infrastructure/outbox/`), `errors/`, `http/`, `validation/`, `openapi/`,
+`middleware/`, `lib/`, `routes/`.
 
 A sub-feature is a directory under its parent whose files are named for the
 **sub-feature alone** (`oauth-identities/oauth-identities.service.ts`) — the parent's
@@ -71,14 +73,20 @@ don't touch Drizzle; repositories don't format HTTP).
 
 Composition is explicit DI:
 
-- `createApp(deps)` (`app.ts`) mounts middleware, the OpenAPI routes, and
-  `createRouter(deps)` under `/api`, then the error handler.
+- `createBackend(deps)` (`backend.ts`) is the composition entry point: it calls
+  `createRouter(deps)` and wraps the result in `createApp(router)`, returning
+  `{ app, outboxDispatcher }`. Consumers own the returned lifecycles.
 - `createRouter(deps)` (`routes/index.ts`) instantiates every repository → service →
-  controller and mounts the feature routers. **This is where wiring lives** — add new
+  controller, mounts the feature routers, and builds the outbox dispatcher; it
+  returns `{ router, outboxDispatcher }`. **This is where wiring lives** — add new
   features here.
+- `createApp(router)` (`app.ts`) is pure HTTP assembly: middleware, the OpenAPI
+  routes, the wired router under `/api`, then the error handler.
 - `AppDeps` are the external boundaries: `{ db, googleTokenVerifier, mojangClient,
 rconClient, processClient }`, each an **interface**. `server.ts` (the production
-  composition root) injects the real clients; tests inject fakes.
+  composition root) injects the real clients, starts the dispatcher's poll loop, and
+  owns graceful shutdown (SIGTERM/SIGINT: `server.close()` → `dispatcher.stop()` →
+  `pool.end()`); tests inject fakes and never `start()` the dispatcher.
 
 To add a dependency on an outside system, define an interface (a "seam"), implement it
 as a client (real in `server.ts`, fake in `test/fakes/`), and thread it through
@@ -165,8 +173,9 @@ To add an error code, update three places that must stay in sync:
   `Db`/`Tx`/`DatabaseExecutor` types. Modules _inside_ `infrastructure/db/` must not
   import the barrel — that would be a cycle. Tables use `uuid` PKs (`defaultRandom()`)
   and `timestamp(..., { withTimezone: true })`.
-- **Features own their tables.** A feature declares its own table in
-  `<feature>.schema.ts` and its constraint names in `<feature>.constraints.ts`;
+- **Features (and infrastructure modules) own their tables.** An owner declares its
+  table in `<module>.schema.ts` and its constraint names in `<module>.constraints.ts`
+  (the outbox in `infrastructure/outbox/` follows the same convention);
   `db/schemas.ts` and `db/constraints.ts` only **aggregate** them (`export *`) into the
   single view the drizzle client and `drizzle-kit` need. They stay outside the
   `db/index.js` barrel because they describe what the database _looks like_, not how to
@@ -189,15 +198,53 @@ To add an error code, update three places that must stay in sync:
   with `TransactionManager.run(operation)` (`db/transaction/`); every repository call
   inside `operation` joins that transaction automatically, with no `tx` threading.
   `run` inside an already-active transaction **joins** it — no savepoints, no nesting.
-  Only db infrastructure touches the context; services depend on `TransactionManager`
-  alone. Keep external side effects (HTTP, RCON, email) **outside** `run`: resolve
-  before, fire after (see `MinecraftPlayerService.setByUserId`).
+  Only db infrastructure touches the context (`DatabaseProvider.require()` is the
+  sanctioned way to _demand_ the ambient transaction); services depend on
+  `TransactionManager` alone. External **reads** (Mojang resolution) stay outside
+  `run`, resolved before it; external **side effects** (RCON, email) that must follow
+  a commit are not called after `run` — they are **enqueued as outbox messages inside
+  it** and executed by the dispatcher after commit (see
+  `MinecraftPlayerService.setByUserId` and the next section).
 - Migrations are SQL under `migrations/`, generated by `drizzle-kit`. Config
   (`drizzle.config.ts`) forces `host=localhost`, so run these from the **host** with
   the `db` service up:
   - `pnpm --filter @minecraft-server/backend db:generate` (from schema diffs)
   - `pnpm --filter @minecraft-server/backend db:migrate`
   - `db:studio` for the Drizzle Studio UI.
+
+## Transactional outbox
+
+`src/infrastructure/outbox/` makes side effects atomic with the state change that
+causes them: a service enqueues a message **inside** `TransactionManager.run` (via
+`OutboxService.enqueue`, which requires the ambient transaction —
+`MissingTransactionError` outside one), and the `OutboxDispatcher` — a poll loop
+started only in `server.ts` — claims due messages after commit and runs their
+handlers, with retries.
+
+- **Ownership mirrors tables**: a feature declares its message types, zod payload
+  schemas, and handlers in `<feature>.outbox.ts` (see
+  `features/minecraft/players/players.outbox.ts`); `outbox.registry.ts` only
+  **aggregates** the definitions (spread pattern, like `errorMeta`). The registry
+  stays outside the outbox barrel — it imports the features, which import the barrel.
+  `AppOutboxService` (from the registry) is the type feature services inject, giving
+  `enqueue` per-type payload checking. Handlers are wired in `routes/index.ts`;
+  `createOutboxHandlerRegistry` fails startup on a missing/duplicate/unknown handler.
+- **No status column** — `outbox_messages` state is derived: completed =
+  `completedAt` set (rows are kept as an audit trail); actively claimed =
+  `claimExpiresAt > now()`; due = not completed, `nextAttemptAt` passed, claim absent
+  or expired; dead-lettered = `attempts >= max` (loud `console.error`, `lastError`
+  kept). Claims are time-boxed (`claimExpiresAt`) and fenced: every claim stamps a
+  fresh `claimId`, and `markCompleted`/`markFailed` are compare-and-set on it, so an
+  expired claim's worker can't stomp a newer claim's outcome. Failures retry with
+  exponential backoff via `nextAttemptAt`.
+- **Ordering assumes ONE dispatcher instance** (the single backend process): chained
+  non-overlapping ticks processing each batch sequentially in creation order give
+  FIFO. More instances would stay safe (`FOR UPDATE SKIP LOCKED` + fencing) but
+  interleave; and retries can reorder regardless — so handlers must be idempotent and
+  **converge to current DB state** (re-check it, no-op when stale) rather than trust
+  the payload as a snapshot.
+- **Tests never `start()` the dispatcher** — api tests drive it deterministically
+  with `await testApp.outboxDispatcher.tick()` after the request settles.
 
 ## OpenAPI
 

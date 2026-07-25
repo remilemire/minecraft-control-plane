@@ -1,6 +1,6 @@
 // apps/backend/test/helpers/create-test-app.ts
 
-import { createApp } from "@/app.js";
+import { createBackend, type Backend } from "@/backend.js";
 import { db } from "@/infrastructure/db/index.js";
 import type { AppDeps } from "@/routes/index.js";
 import { FakeGoogleOauthClient } from "@test/fakes/fake-google-oauth.client.js";
@@ -9,7 +9,9 @@ import { FakeProcessClient } from "@test/fakes/fake-process.client.js";
 import { FakeRconClient } from "@test/fakes/fake-rcon.client.js";
 
 export interface TestApp {
-  readonly app: ReturnType<typeof createApp>;
+  readonly app: Backend["app"];
+  // Never start()ed in tests — drive it with `await outboxDispatcher.tick()`.
+  readonly outboxDispatcher: Backend["outboxDispatcher"];
   readonly googleOauthClient: FakeGoogleOauthClient;
   readonly mojangClient: FakeMojangClient;
   readonly rconClient: FakeRconClient;
@@ -25,7 +27,7 @@ export function createTestApp(overrides: Partial<AppDeps> = {}): TestApp {
   const rconClient = new FakeRconClient();
   const processClient = new FakeProcessClient();
 
-  const app = createApp({
+  const { app, outboxDispatcher } = createBackend({
     db,
     googleOauthClient,
     mojangClient,
@@ -34,5 +36,5 @@ export function createTestApp(overrides: Partial<AppDeps> = {}): TestApp {
     ...overrides,
   });
 
-  return { app, googleOauthClient, mojangClient, rconClient, processClient };
+  return { app, outboxDispatcher, googleOauthClient, mojangClient, rconClient, processClient };
 }

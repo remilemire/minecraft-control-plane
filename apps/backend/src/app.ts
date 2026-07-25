@@ -8,21 +8,23 @@ import "./openapi/zod-extend.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
-
-import { createRouter, type AppDeps } from "./routes/index.js";
+import type { Router } from "express";
 
 import { errorHandler } from "./middleware/error-handler.js";
 import { env } from "./config/env.js";
 import { createOpenApiRoutes } from "./openapi/openapi.routes.js";
 
-export function createApp(deps: AppDeps) {
+// Pure HTTP assembly: middleware, the OpenAPI routes, the already-wired api
+// router, and the error handler. Wiring lives in routes/index.ts; the two are
+// combined by createBackend (backend.ts).
+export function createApp(apiRouter: Router) {
   const app = express();
 
   app.use(cors({ origin: env.ALLOWED_ORIGINS, credentials: true }));
   app.use(express.json());
   app.use(cookieParser());
   app.use(createOpenApiRoutes());
-  app.use("/api", createRouter(deps));
+  app.use("/api", apiRouter);
   app.use(errorHandler);
 
   app.set("trust proxy", env.DEBUG ? false : 1);

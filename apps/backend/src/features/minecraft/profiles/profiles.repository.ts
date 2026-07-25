@@ -30,6 +30,19 @@ export class MinecraftProfileRepository {
     return minecraftProfile ?? null;
   }
 
+  public async findByUsername(username: string): Promise<MinecraftProfile | null> {
+    const [minecraftProfile] = await withDbErrors(() =>
+      this.databaseProvider
+        .get()
+        .select()
+        .from(minecraftProfiles)
+        .where(eq(minecraftProfiles.username, username))
+        .limit(1),
+    );
+
+    return minecraftProfile ?? null;
+  }
+
   // Create-or-replace by userId. A conflict on userId updates the existing row;
   // a conflict on the username or uuid unique constraints (i.e. taken by
   // another user) surfaces as a unique violation -> AlreadyExistsError.

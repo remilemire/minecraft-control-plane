@@ -1,11 +1,11 @@
 // apps/backend/src/infrastructure/db/schemas.ts
 
 // What the database *looks like*: every table, enum and row type, aggregated
-// from the features that own them. Each feature declares its own table in
-// `features/**/<feature>.schema.ts`; this file is the one place that sees all
-// of them at once, which is what the drizzle client (`database.ts`) and
-// `drizzle-kit` need. **A new feature table is invisible to migrations until
-// it is re-exported here.**
+// from the features and infrastructure modules that own them. Each owner
+// declares its own table in `**/<module>.schema.ts`; this file is the one
+// place that sees all of them at once, which is what the drizzle client
+// (`database.ts`) and `drizzle-kit` need. **A new table is invisible to
+// migrations until it is re-exported here.**
 //
 // It is also the import surface for anything reaching for a table it doesn't
 // own — a repository joining another feature's table, or a module wanting a
@@ -18,3 +18,4 @@ export * from "@/features/auth/sessions/sessions.schema.js";
 export * from "@/features/invitations/invitations.schema.js";
 export * from "@/features/minecraft/profiles/profiles.schema.js";
 export * from "@/features/users/users.schema.js";
+export * from "@/infrastructure/outbox/outbox.schema.js";
