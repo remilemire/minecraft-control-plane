@@ -58,8 +58,9 @@ function repositoryStub(
   return methods as unknown as OutboxMessageRepository;
 }
 
-// A recording repository whose claimBatch pops one batch per tick.
-function recordingRepository(batches: OutboxMessage[][]) {
+// A recording repository whose claimBatch pops one batch per tick. The first
+// reap returns `abandoned` (rows a dead worker left behind), later ones none.
+function recordingRepository(batches: OutboxMessage[][], abandoned: OutboxMessage[] = []) {
   const claims: ClaimBatchInput[] = [];
   const reaps: MarkAbandonedDeadInput[] = [];
   const completions: MarkCompletedInput[] = [];
@@ -68,7 +69,7 @@ function recordingRepository(batches: OutboxMessage[][]) {
   const repository = repositoryStub({
     markAbandonedDead: async (input: MarkAbandonedDeadInput) => {
       reaps.push(input);
-      return 0;
+      return reaps.length === 1 ? abandoned : [];
     },
     claimBatch: async (input: ClaimBatchInput) => {
       claims.push(input);
@@ -475,6 +476,195 @@ describe("OutboxDispatcher", () => {
     });
   });
 
+  // A worker that dies mid-attempt records no outcome at all: its row stays
+  // `processing` with a claim that simply stops being renewed. What happens
+  // next depends only on whether it had attempts left.
+  describe("a worker that died mid-attempt", () => {
+    // What claimBatch hands back after the dead worker's claim expired: still
+    // `processing`, attempts already spent, no outcome recorded.
+    function abandonedMessage(overrides: Partial<OutboxMessage> = {}): OutboxMessage {
+      return message({
+        status: "processing",
+        attempts: OUTBOX_DISPATCHER_DEFAULTS.maxAttempts,
+        claimExpiresAt: new Date(NOW.getTime() - 1_000),
+        lastError: null,
+        ...overrides,
+      });
+    }
+
+    it("retries it while attempts remain, without dead-lettering", async () => {
+      const handled: unknown[] = [];
+      // The reaper leaves it alone (attempts remain), so the next claim picks
+      // it up again — the same message, one attempt further along.
+      const retryable = message({
+        status: "processing",
+        attempts: 4,
+        claimExpiresAt: new Date(NOW.getTime() - 1_000),
+        lastError: "worker vanished",
+      });
+      const { repository, completions } = recordingRepository([[retryable]]);
+      const dispatcher = new OutboxDispatcher(
+        repository,
+        registryWith([
+          handlerFor(alphaMessage, async (payload) => {
+            handled.push(payload);
+          }),
+          handlerFor(betaMessage),
+        ]),
+      );
+
+      expect(await dispatcher.tick()).toBe(1);
+
+      expect(handled).toEqual([{ value: 1 }]);
+      expect(completions).toHaveLength(1);
+    });
+
+    it("buries the row and calls onDeadLetter once its attempts are spent", async () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const buried: { payload: unknown; error: unknown }[] = [];
+      const abandoned = abandonedMessage({ payload: { value: 3 } });
+      const { repository, failures } = recordingRepository([], [abandoned]);
+
+      const dispatcher = new OutboxDispatcher(
+        repository,
+        registryWith([
+          handlerFor(
+            alphaMessage,
+            async () => {},
+            async (payload, hookError) => {
+              buried.push({ payload, error: hookError });
+            },
+          ),
+          handlerFor(betaMessage),
+        ]),
+      );
+
+      // Nothing was claimed — the message is only reaped.
+      expect(await dispatcher.tick()).toBe(0);
+
+      expect(buried).toHaveLength(1);
+      expect(buried[0]?.payload).toEqual({ value: 3 });
+      expect(error).toHaveBeenCalledWith(expect.stringContaining("dead-lettered"));
+      // The row was already buried by the reaper's UPDATE; no outcome is
+      // recorded against a claim whose worker is gone.
+      expect(failures).toEqual([]);
+    });
+
+    it("tells the hook the message was abandoned, carrying the last error it recorded", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const errors: unknown[] = [];
+      const abandoned = abandonedMessage({ lastError: "RCON timed out" });
+      const { repository } = recordingRepository([], [abandoned]);
+
+      const dispatcher = new OutboxDispatcher(
+        repository,
+        registryWith([
+          handlerFor(
+            alphaMessage,
+            async () => {},
+            async (_payload, hookError) => {
+              errors.push(hookError);
+            },
+          ),
+          handlerFor(betaMessage),
+        ]),
+      );
+
+      await dispatcher.tick();
+
+      expect(errors[0]).toBeInstanceOf(Error);
+      expect((errors[0] as Error).message).toContain("abandoned mid-attempt");
+      expect((errors[0] as Error).message).toContain("RCON timed out");
+    });
+
+    it("buries what it abandoned before claiming anything new", async () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const order: string[] = [];
+      const abandoned = abandonedMessage({ id: "00000000-0000-0000-0000-00000000000a" });
+      const next = message({ id: "00000000-0000-0000-0000-00000000000b" });
+      const { repository } = recordingRepository([[next]], [abandoned]);
+
+      const dispatcher = new OutboxDispatcher(
+        repository,
+        registryWith([
+          handlerFor(
+            alphaMessage,
+            async () => {
+              order.push("handled");
+            },
+            async () => {
+              order.push("dead-lettered");
+            },
+          ),
+          handlerFor(betaMessage),
+        ]),
+      );
+
+      await dispatcher.tick();
+
+      expect(order).toEqual(["dead-lettered", "handled"]);
+      expect(error).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps polling when the hook for an abandoned message throws", async () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const { repository, reaps } = recordingRepository([], [abandonedMessage()]);
+
+      const dispatcher = new OutboxDispatcher(
+        repository,
+        registryWith([
+          handlerFor(
+            alphaMessage,
+            async () => {},
+            async () => {
+              throw new Error("hook exploded");
+            },
+          ),
+          handlerFor(betaMessage),
+        ]),
+      );
+
+      dispatcher.start();
+      await vi.advanceTimersByTimeAsync(OUTBOX_DISPATCHER_DEFAULTS.pollIntervalMs * 2);
+      await dispatcher.stop();
+
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining("onDeadLetter"),
+        expect.any(Error),
+      );
+      // The throw stayed inside the tick: the loop kept its cadence.
+      expect(reaps).toHaveLength(2);
+    });
+
+    it("skips the hook when its stored payload no longer parses", async () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const buried: unknown[] = [];
+      const { repository } = recordingRepository(
+        [],
+        [abandonedMessage({ payload: { value: "not-a-number" } })],
+      );
+
+      const dispatcher = new OutboxDispatcher(
+        repository,
+        registryWith([
+          handlerFor(
+            alphaMessage,
+            async () => {},
+            async (payload) => {
+              buried.push(payload);
+            },
+          ),
+          handlerFor(betaMessage),
+        ]),
+      );
+
+      await dispatcher.tick();
+
+      expect(buried).toEqual([]);
+      expect(error).toHaveBeenCalledWith(expect.stringContaining("no longer parses"));
+    });
+  });
+
   describe("start/stop", () => {
     it("polls on the interval and stops cleanly", async () => {
       const { repository, claims } = recordingRepository([]);
@@ -501,7 +691,7 @@ describe("OutboxDispatcher", () => {
       const error = vi.spyOn(console, "error").mockImplementation(() => {});
       const claims: ClaimBatchInput[] = [];
       const repository = repositoryStub({
-        markAbandonedDead: async () => 0,
+        markAbandonedDead: async () => [],
         claimBatch: async (input: ClaimBatchInput) => {
           claims.push(input);
           if (claims.length === 1) {

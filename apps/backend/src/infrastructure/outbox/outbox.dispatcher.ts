@@ -30,15 +30,26 @@ export type OutboxDispatcherOptions = Partial<typeof OUTBOX_DISPATCHER_DEFAULTS>
 
 export type OutboxHandlerRegistry = ReadonlyMap<string, OutboxHandler>;
 
-// What an attempt leaves behind when it throws. `handler`/`payload` are absent
-// for the failures that happen before there is either (unknown message type,
-// unparsable stored payload), which is why both are optional.
+// What an attempt leaves behind when it throws.
 interface FailedAttempt {
   readonly message: OutboxMessage;
   readonly claimId: string;
   readonly error: unknown;
-  readonly handler: OutboxHandler | undefined;
-  readonly payload: Record<string, unknown> | undefined;
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? (error.stack ?? error.message) : String(error);
+}
+
+// The failure a dead worker never got to report. Its own last error (from an
+// earlier attempt, if any) is the only clue left about why it was still
+// retrying, so carry it along.
+function abandonedError(message: OutboxMessage): Error {
+  const previously = message.lastError === null ? "" : ` Last recorded error: ${message.lastError}`;
+
+  return new Error(
+    `Outbox message ${message.id} (type "${message.type}") was abandoned mid-attempt: its claim expired with all ${String(message.attempts)} attempts spent.${previously}`,
+  );
 }
 
 // Boot-time cross-check of handlers against the aggregated definitions, so a
@@ -113,10 +124,15 @@ export class OutboxDispatcher {
   public async tick(): Promise<number> {
     const now = new Date();
 
-    await this.outboxMessages.markAbandonedDead({
+    const abandoned = await this.outboxMessages.markAbandonedDead({
       now,
       maxAttempts: this.options.maxAttempts,
     });
+
+    // The worker that died owed these their last rites; this tick pays them.
+    for (const message of abandoned) {
+      await this.deadLetter(message, abandonedError(message));
+    }
 
     const claimed = await this.outboxMessages.claimBatch({
       now,
@@ -135,22 +151,20 @@ export class OutboxDispatcher {
   private async process(message: OutboxMessage): Promise<void> {
     // A freshly claimed row always carries the claim's fencing token.
     const claimId = message.claimId ?? "";
-    const handler = this.handlers.get(message.type);
-    // Stays undefined if the payload never parsed — which is what gates
-    // `onDeadLetter`, since there is then nothing to hand it.
-    let payload: Record<string, unknown> | undefined;
 
     try {
+      const handler = this.handlers.get(message.type);
+
       if (handler === undefined) {
         throw new Error(`No outbox handler registered for message type "${message.type}".`);
       }
 
       // Re-parse what was actually stored — the payload crossed a jsonb
       // round-trip and possibly a deploy since it was enqueued.
-      payload = handler.message.payloadSchema.parse(message.payload);
+      const payload = handler.message.payloadSchema.parse(message.payload);
       await handler.handle(payload);
     } catch (error) {
-      await this.recordFailure({ message, claimId, error, handler, payload });
+      await this.recordFailure({ message, claimId, error });
       return;
     }
 
@@ -169,10 +183,7 @@ export class OutboxDispatcher {
 
   private async recordFailure(attempt: FailedAttempt): Promise<void> {
     const { message } = attempt;
-    const lastError =
-      attempt.error instanceof Error
-        ? (attempt.error.stack ?? attempt.error.message)
-        : String(attempt.error);
+    const lastError = describeError(attempt.error);
     // `message.attempts` already includes this attempt (incremented at claim).
     const dead = message.attempts >= this.options.maxAttempts;
     const backoffMs = Math.min(
@@ -196,31 +207,46 @@ export class OutboxDispatcher {
     }
 
     if (dead) {
-      await this.deadLetter(attempt, lastError);
+      await this.deadLetter(message, attempt.error);
     }
   }
 
-  // Runs only once the `dead` status is committed, so the handler's hook can
-  // fail without changing the message's outcome.
-  private async deadLetter(attempt: FailedAttempt, lastError: string): Promise<void> {
-    const { message, handler, payload } = attempt;
-
+  // Both roads to `dead` end here: the attempt that exhausted maxAttempts, and
+  // the reaper burying a worker that died holding one. It runs only once the
+  // status is committed, so the handler's hook can fail without changing the
+  // message's outcome — and it runs at most once per message, because each
+  // caller got here by being the one to move the row out of `processing`.
+  private async deadLetter(message: OutboxMessage, error: unknown): Promise<void> {
     console.error(
       `Outbox message ${message.id} (type "${message.type}") dead-lettered after ${String(
         message.attempts,
-      )} attempts: ${lastError}`,
+      )} attempts: ${describeError(error)}`,
     );
 
-    if (handler?.onDeadLetter === undefined || payload === undefined) {
+    const handler = this.handlers.get(message.type);
+
+    if (handler?.onDeadLetter === undefined) {
+      return;
+    }
+
+    // The stored payload is re-parsed here rather than handed down from the
+    // attempt: the reaper never had one, and a payload that no longer parses
+    // is nothing to hand a handler either way.
+    const payload = handler.message.payloadSchema.safeParse(message.payload);
+
+    if (!payload.success) {
+      console.error(
+        `Skipping onDeadLetter for outbox message ${message.id} (type "${message.type}"): its stored payload no longer parses.`,
+      );
       return;
     }
 
     try {
-      await handler.onDeadLetter(payload, attempt.error);
-    } catch (error) {
+      await handler.onDeadLetter(payload.data, error);
+    } catch (hookError) {
       console.error(
         `onDeadLetter for outbox message ${message.id} (type "${message.type}") threw:`,
-        error,
+        hookError,
       );
     }
   }

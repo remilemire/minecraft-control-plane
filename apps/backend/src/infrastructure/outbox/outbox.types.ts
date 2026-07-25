@@ -43,16 +43,19 @@ export interface OutboxHandler<
   readonly message: TDefinition;
   handle(payload: OutboxPayloadOf<TDefinition>): Promise<void>;
 
-  // Last rites: called once, after the attempt that exhausted the dispatcher's
-  // `maxAttempts` moved the message to `dead`. This is where a feature
-  // reconciles state it can no longer converge (flag the row, notify), knowing
-  // the message will never be handled again.
+  // Last rites: called once, when the message reaches `dead` — whether that is
+  // the attempt that exhausted the dispatcher's `maxAttempts` or a later tick
+  // burying the attempt whose worker died. This is where a feature reconciles
+  // state it can no longer converge (flag the row, notify), knowing the
+  // message will never be handled again.
+  //
+  // `error` is the failure that ended it: the handler's own on the first path,
+  // and a synthetic "abandoned mid-attempt" error (carrying whatever the last
+  // attempt recorded) on the second — a dead process reports nothing itself.
   //
   // Best-effort, not part of the outcome: it runs after the `dead` status is
   // already recorded, outside any transaction, and its own failure is only
-  // logged. It is also skipped in the two cases where the dispatcher has no
-  // payload to hand over — an unregistered message type, and a stored payload
-  // that no longer parses — and when a worker dies mid-attempt, since the row
-  // is then buried by `markAbandonedDead` with no process left to call it.
+  // logged. The dispatcher skips it only when it has no payload to hand over —
+  // an unregistered message type, or a stored payload that no longer parses.
   onDeadLetter?(payload: OutboxPayloadOf<TDefinition>, error: unknown): Promise<void>;
 }

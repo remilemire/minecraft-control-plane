@@ -127,9 +127,11 @@ export class OutboxMessageRepository {
 
   // Reaps the one case that can't record its own outcome: a worker that died
   // holding the final attempt leaves a `processing` row whose claim expired
-  // and whose attempts are spent — dead in effect, so say so. Returns how many
-  // rows were buried.
-  public async markAbandonedDead(input: MarkAbandonedDeadInput): Promise<number> {
+  // and whose attempts are spent — dead in effect, so say so. Returns the rows
+  // it buried (in creation order), because they still owe their handler an
+  // `onDeadLetter`; the UPDATE is what makes that exactly-once, since only the
+  // caller that moved a row out of `processing` sees it here.
+  public async markAbandonedDead(input: MarkAbandonedDeadInput): Promise<OutboxMessage[]> {
     const buried = await withDbErrors(() =>
       this.databaseProvider
         .get()
@@ -142,10 +144,11 @@ export class OutboxMessageRepository {
             lte(outboxMessages.claimExpiresAt, input.now),
           ),
         )
-        .returning({ id: outboxMessages.id }),
+        .returning(),
     );
 
-    return buried.length;
+    // UPDATE ... RETURNING has no defined row order.
+    return buried.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
   // Compare-and-set on the claim: false means the claim was lost (it expired

@@ -272,10 +272,76 @@ describe("OutboxMessageRepository", () => {
         attempts: 10,
       });
 
-      expect(await repository.markAbandonedDead({ now: NOW, maxAttempts: 10 })).toBe(1);
+      const buried = await repository.markAbandonedDead({ now: NOW, maxAttempts: 10 });
+
+      // The buried rows come back so the dispatcher can still run their
+      // onDeadLetter hooks.
+      expect(buried).toHaveLength(1);
+      expect(buried[0]).toMatchObject({ id: abandoned.id, status: "dead", claimExpiresAt: null });
 
       const [row] = await db.select().from(outboxMessages);
       expect(row).toMatchObject({ id: abandoned.id, status: "dead", claimExpiresAt: null });
+    });
+
+    it("hands a row to exactly one caller, so its last rites run once", async () => {
+      await createOutboxMessage({
+        nextAttemptAt: PAST,
+        status: "processing",
+        claimId: randomUUID(),
+        claimExpiresAt: PAST,
+        attempts: 10,
+      });
+
+      const [first, second] = await Promise.all([
+        repository.markAbandonedDead({ now: NOW, maxAttempts: 10 }),
+        repository.markAbandonedDead({ now: NOW, maxAttempts: 10 }),
+      ]);
+
+      expect([first!.length, second!.length].sort()).toEqual([0, 1]);
+    });
+
+    it("buries a worker that died mid-attempt, end to end", async () => {
+      // The whole sequence: a message is claimed, its worker dies without
+      // recording anything, and the claim quietly expires.
+      await createOutboxMessage({ nextAttemptAt: PAST });
+      const [claimed] = await repository.claimBatch({ ...CLAIM_DEFAULTS, maxAttempts: 1 });
+      expect(claimed).toMatchObject({ status: "processing", attempts: 1 });
+
+      const afterClaimExpired = new Date(CLAIM_UNTIL.getTime() + 1_000);
+
+      // Nothing is claimable in the meantime — the claim is still live.
+      expect(await repository.claimBatch({ ...CLAIM_DEFAULTS, maxAttempts: 1 })).toEqual([]);
+
+      const buried = await repository.markAbandonedDead({
+        now: afterClaimExpired,
+        maxAttempts: 1,
+      });
+
+      expect(buried.map((row) => row.id)).toEqual([claimed!.id]);
+      // Its last recorded error (none here) is all the dispatcher has to go on.
+      expect(buried[0]).toMatchObject({ status: "dead", attempts: 1, lastError: null });
+
+      // And it stays buried: no later tick claims it again.
+      expect(
+        await repository.claimBatch({ ...CLAIM_DEFAULTS, now: afterClaimExpired, maxAttempts: 1 }),
+      ).toEqual([]);
+    });
+
+    it("leaves a dead worker's message claimable while attempts remain", async () => {
+      await createOutboxMessage({
+        nextAttemptAt: PAST,
+        status: "processing",
+        claimId: randomUUID(),
+        claimExpiresAt: PAST,
+        attempts: 1,
+      });
+
+      expect(await repository.markAbandonedDead({ now: NOW, maxAttempts: 10 })).toEqual([]);
+
+      // The expired claim is what makes it claimable again; attempts keep
+      // counting up from where the dead worker left off.
+      const [reclaimed] = await repository.claimBatch(CLAIM_DEFAULTS);
+      expect(reclaimed).toMatchObject({ status: "processing", attempts: 2 });
     });
 
     it("leaves live claims, retryable messages, and terminal rows alone", async () => {
@@ -297,7 +363,7 @@ describe("OutboxMessageRepository", () => {
       await createOutboxMessage({ attempts: 10 });
       await createOutboxMessage({ status: "completed", completedAt: PAST, attempts: 10 });
 
-      expect(await repository.markAbandonedDead({ now: NOW, maxAttempts: 10 })).toBe(0);
+      expect(await repository.markAbandonedDead({ now: NOW, maxAttempts: 10 })).toEqual([]);
 
       const rows = await db.select().from(outboxMessages);
       expect(rows.map((row) => row.status).sort()).toEqual([

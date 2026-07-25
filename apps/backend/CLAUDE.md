@@ -177,6 +177,14 @@ To add an error code, update three places that must stay in sync:
   `db/index.js` barrel because they describe what the database _looks like_, not how to
   talk to it. **A new table is invisible to migrations until it is re-exported from
   `db/schemas.ts`.**
+- A `*.schema.ts` can only import **types** from `@minecraft-server/shared/*`, never
+  values: drizzle-kit loads schema modules through Node's **CommonJS** resolver (its
+  `resolveTsPaths` hook), which asks the shared package's ESM-only `exports` map for
+  a `require` condition it doesn't have, so `db:generate` dies with
+  `ERR_PACKAGE_PATH_NOT_EXPORTED` (drizzle-kit 0.31.10, the current latest — it ships
+  tsx but still resolves through that hook). A value that must match a shared one is
+  redeclared locally and pinned with `as const satisfies` against the imported type —
+  see `whitelistStatusEnum` in `minecraft/profiles/profiles.schema.ts`.
 - Which import to use for a table or row type: its own feature reaches it by relative
   path (`./users.schema.js`), and a parent feature reaches its sub-feature's by a
   descending one (`./sessions/sessions.schema.js`); everyone else goes through
@@ -236,13 +244,19 @@ handlers, with retries.
   can't stomp a newer claim's outcome. Failures retry with exponential backoff via
   `nextAttemptAt` until `maxAttempts`, then go `dead` (loud `console.error`). The one
   status no worker can record is a process that died mid-attempt: `tick()` opens with
-  `markAbandonedDead` (expired claim + attempts spent → `dead`).
+  `markAbandonedDead` (expired claim + attempts spent → `dead`), which returns the
+  rows it buried so they still get their last rites. A dead worker's message with
+  attempts left is simply re-claimed once its claim expires.
 - **`OutboxHandler.onDeadLetter`** (optional) is the handler's last rites — called
   once, after the `dead` status is committed, for features that need to reconcile
-  state they can no longer converge. Best-effort: it runs outside any transaction, a
-  throw is only logged, and it is skipped when the dispatcher has no parsed payload
-  to hand over (unknown type, unparsable payload) or when the row was buried by
-  `markAbandonedDead`. No handler implements it today.
+  state they can no longer converge. Both roads to `dead` call it: the attempt that
+  exhausted `maxAttempts` (with the handler's own error) and `markAbandonedDead`
+  (with a synthetic "abandoned mid-attempt" error carrying the last error the row
+  recorded). At-most-once falls out of the status: each caller gets there by being
+  the one that moved the row out of `processing`. Best-effort otherwise — it runs
+  outside any transaction, a throw is only logged, and it is skipped when there is no
+  parsed payload to hand over (unknown type, unparsable payload). No handler
+  implements it today.
 - **Ordering assumes ONE dispatcher instance** (the single backend process): chained
   non-overlapping ticks processing each batch sequentially in creation order give
   FIFO. More instances would stay safe (`FOR UPDATE SKIP LOCKED` + fencing) but
