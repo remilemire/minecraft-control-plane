@@ -1,7 +1,7 @@
 // apps/frontend/src/features/minecraft/profiles/ProfilesPanel.test.tsx
 
 import { ApiError } from "@/lib/apiClient";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createProfile, deleteProfile, fetchProfiles, type MinecraftProfile } from "./api";
@@ -23,6 +23,7 @@ function makeProfile(overrides: Partial<MinecraftProfile> = {}): MinecraftProfil
     username: "Steve",
     uuid: "22222222-2222-4222-8222-222222222222",
     online: false,
+    whitelistStatus: "whitelisted",
     ...overrides,
   };
 }
@@ -44,6 +45,77 @@ describe("ProfilesPanel", () => {
     expect(screen.getByText("Alex")).toBeInTheDocument();
     expect(screen.getByText("Online")).toBeInTheDocument();
     expect(screen.getByText("Offline")).toBeInTheDocument();
+  });
+
+  it("shows each profile's whitelist status", async () => {
+    listMock.mockResolvedValue([
+      makeProfile({ id: "11111111-1111-4111-8111-111111111111", username: "Steve" }),
+      makeProfile({
+        id: "33333333-3333-4333-8333-333333333333",
+        username: "Alex",
+        whitelistStatus: "pending",
+      }),
+      makeProfile({
+        id: "44444444-4444-4444-8444-444444444444",
+        username: "Notch",
+        whitelistStatus: "failed",
+      }),
+    ]);
+
+    render(<ProfilesPanel />);
+
+    expect(await screen.findByText("Whitelisted")).toBeInTheDocument();
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(screen.getByText("Failed")).toBeInTheDocument();
+  });
+
+  it("polls while a profile is pending and stops once it settles", async () => {
+    vi.useFakeTimers();
+    try {
+      listMock.mockResolvedValueOnce([makeProfile({ whitelistStatus: "pending" })]);
+      listMock.mockResolvedValue([makeProfile({ whitelistStatus: "whitelisted" })]);
+
+      render(<ProfilesPanel />);
+      // Flush the initial load without waitFor, which fake timers would stall.
+      await act(async () => {});
+      expect(screen.getByText("Pending")).toBeInTheDocument();
+      expect(listMock).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(3_000);
+      });
+      expect(listMock).toHaveBeenCalledTimes(2);
+      expect(screen.getByText("Whitelisted")).toBeInTheDocument();
+
+      // Nothing is pending any more, so the polling stops.
+      await act(async () => {
+        vi.advanceTimersByTime(30_000);
+      });
+      expect(listMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the list on screen while a poll is in flight", async () => {
+    vi.useFakeTimers();
+    try {
+      listMock.mockResolvedValue([makeProfile({ username: "Steve", whitelistStatus: "pending" })]);
+
+      render(<ProfilesPanel />);
+      await act(async () => {});
+
+      // The refetch is in flight — the previous rows stay, no loading swap.
+      act(() => {
+        vi.advanceTimersByTime(3_000);
+      });
+      expect(screen.getByText("Steve")).toBeInTheDocument();
+      expect(screen.queryByText(/Loading/)).not.toBeInTheDocument();
+
+      await act(async () => {});
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("shows the empty state when nothing is whitelisted", async () => {

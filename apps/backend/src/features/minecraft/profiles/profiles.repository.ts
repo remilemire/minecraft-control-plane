@@ -2,6 +2,7 @@
 
 import { withDbErrors, type DatabaseProvider } from "@/infrastructure/db/index.js";
 import { AppError } from "@/errors/app-error.js";
+import type { WhitelistStatus } from "@minecraft-server/shared/minecraft";
 import { eq } from "drizzle-orm";
 import { MINECRAFT_PROFILES_CONSTRAINTS } from "./profiles.constraints.js";
 import {
@@ -61,6 +62,24 @@ export class MinecraftProfileRepository {
     }
 
     return minecraftProfile;
+  }
+
+  // Returns null when the profile is gone (deleted between the read and this
+  // write), which the whitelist handlers treat as a no-op.
+  public async updateWhitelistStatus(
+    id: string,
+    whitelistStatus: WhitelistStatus,
+  ): Promise<MinecraftProfile | null> {
+    const [minecraftProfile] = await withDbErrors(() =>
+      this.databaseProvider
+        .get()
+        .update(minecraftProfiles)
+        .set({ whitelistStatus })
+        .where(eq(minecraftProfiles.id, id))
+        .returning(),
+    );
+
+    return minecraftProfile ?? null;
   }
 
   public async deleteById(id: string): Promise<MinecraftProfile | null> {

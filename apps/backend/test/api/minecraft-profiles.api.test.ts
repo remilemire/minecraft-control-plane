@@ -1,5 +1,8 @@
 // apps/backend/test/api/minecraft-profiles.api.test.ts
 
+import { db } from "@/infrastructure/db/index.js";
+import { outboxMessages } from "@/infrastructure/db/schemas.js";
+import { OUTBOX_DISPATCHER_DEFAULTS } from "@/infrastructure/outbox/index.js";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestApp, type TestApp } from "@test/helpers/create-test-app.js";
@@ -18,8 +21,11 @@ describe("GET /api/minecraft/profiles", () => {
     const { app, rconClient } = testApp;
     rconClient.respondTo("list", "There are 1 of a max of 20 players online: Steve");
     const auth = await authenticateUser();
-    const online = await createMinecraftProfile({ username: "Steve" });
-    const offline = await createMinecraftProfile({ username: "Alex" });
+    const online = await createMinecraftProfile({
+      username: "Steve",
+      whitelistStatus: "whitelisted",
+    });
+    const offline = await createMinecraftProfile({ username: "Alex", whitelistStatus: "failed" });
 
     const response = await request(app).get("/api/minecraft/profiles").set("Cookie", [auth.cookie]);
 
@@ -30,12 +36,14 @@ describe("GET /api/minecraft/profiles", () => {
       username: "Steve",
       uuid: online.uuid,
       online: true,
+      whitelistStatus: "whitelisted",
     });
     expect(response.body).toContainEqual({
       id: offline.id,
       username: "Alex",
       uuid: offline.uuid,
       online: false,
+      whitelistStatus: "failed",
     });
   });
 
@@ -64,13 +72,25 @@ describe("POST /api/minecraft/profiles", () => {
       .send({ username: "steve" });
 
     expect(response.status).toBe(201);
-    expect(response.body).toMatchObject({ username: "Steve", online: false });
+    expect(response.body).toMatchObject({
+      username: "Steve",
+      online: false,
+      whitelistStatus: "pending",
+    });
     expect(response.body.id).toBeDefined();
     // The response settles before any RCON runs; the dispatcher applies the
     // whitelist command afterwards.
     expect(rconClient.executed).toEqual([]);
     await outboxDispatcher.tick();
     expect(rconClient.executed).toEqual(["whitelist add Steve"]);
+
+    // ...and the profile is no longer pending once the command landed.
+    const afterTick = await request(app)
+      .get("/api/minecraft/profiles")
+      .set("Cookie", [auth.cookie]);
+    expect(afterTick.body).toEqual([
+      expect.objectContaining({ username: "Steve", whitelistStatus: "whitelisted" }),
+    ]);
   });
 
   it("still succeeds when RCON is down and retries the command with backoff", async () => {
@@ -96,6 +116,46 @@ describe("POST /api/minecraft/profiles", () => {
     // Backoff pushed the retry into the future: an immediate tick claims nothing.
     expect(await outboxDispatcher.tick()).toBe(0);
     expect(rconClient.executed).toEqual(["whitelist add Steve"]);
+
+    // Another attempt is still coming, so the profile stays pending.
+    const afterFailure = await request(app)
+      .get("/api/minecraft/profiles")
+      .set("Cookie", [auth.cookie]);
+    expect(afterFailure.body).toEqual([
+      expect.objectContaining({ username: "Steve", whitelistStatus: "pending" }),
+    ]);
+  });
+
+  it("marks the profile failed once the whitelist command is retried to exhaustion", async () => {
+    const { app, mojangClient, rconClient, outboxDispatcher } = testApp;
+    const auth = await authenticateUser();
+    const csrf = csrfPair();
+    mojangClient.setProfile({ username: "Steve", uuid: crypto.randomUUID() });
+    rconClient.failOn("whitelist add Steve");
+
+    await request(app)
+      .post("/api/minecraft/profiles")
+      .set("Cookie", [auth.cookie, csrf.cookie])
+      .set(csrf.headerName, csrf.headerValue)
+      .send({ username: "Steve" });
+
+    // Fast-forward the message to its final attempt (the alternative is
+    // sitting through nine exponential backoffs) and let it fail once more.
+    await db.update(outboxMessages).set({
+      attempts: OUTBOX_DISPATCHER_DEFAULTS.maxAttempts - 1,
+      nextAttemptAt: new Date(),
+    });
+    expect(await outboxDispatcher.tick()).toBe(1);
+
+    const [message] = await db.select().from(outboxMessages);
+    expect(message?.status).toBe("dead");
+
+    const afterDeadLetter = await request(app)
+      .get("/api/minecraft/profiles")
+      .set("Cookie", [auth.cookie]);
+    expect(afterDeadLetter.body).toEqual([
+      expect.objectContaining({ username: "Steve", whitelistStatus: "failed" }),
+    ]);
   });
 
   it("404s when Mojang does not know the username", async () => {

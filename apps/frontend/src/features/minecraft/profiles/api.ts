@@ -17,7 +17,8 @@ export function fetchProfiles(): Promise<MinecraftProfile[]> {
 }
 
 // The whitelist command applies asynchronously (outbox), moments after the
-// response — the profile comes back with `online: false`.
+// response — the profile comes back `online: false` and `whitelistStatus:
+// "pending"`, which is what ProfilesPanel polls on.
 export function createProfile(username: string): Promise<MinecraftProfile> {
   return apiRequest("POST", "/minecraft/profiles", {
     schema: minecraftProfileResponseSchema,

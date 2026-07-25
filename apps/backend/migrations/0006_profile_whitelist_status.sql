@@ -1,0 +1,2 @@
+CREATE TYPE "public"."whitelist_status" AS ENUM('pending', 'whitelisted', 'failed');--> statement-breakpoint
+ALTER TABLE "minecraft_profiles" ADD COLUMN "whitelist_status" "whitelist_status" DEFAULT 'pending' NOT NULL;

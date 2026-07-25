@@ -10,6 +10,18 @@ export const minecraftUsernameSchema = z
 
 export const minecraftProfileIdSchema = z.uuid();
 
+// How far a profile got towards actually being whitelisted on the server: the
+// whitelist command runs asynchronously (outbox), so a profile starts
+// `pending`, becomes `whitelisted` once the server accepted the command, and
+// only turns `failed` when the command was retried to exhaustion. Exported as
+// a tuple as well so the backend's Drizzle `pgEnum` is built from the same
+// values.
+export const WHITELIST_STATUSES = ["pending", "whitelisted", "failed"] as const;
+
+export const whitelistStatusSchema = z.enum(WHITELIST_STATUSES);
+
+export type WhitelistStatus = z.infer<typeof whitelistStatusSchema>;
+
 export const createMinecraftProfileSchema = z
   .object({
     username: minecraftUsernameSchema,
@@ -23,6 +35,7 @@ export const minecraftProfileResponseSchema = z.object({
   username: minecraftUsernameSchema,
   uuid: z.uuid(),
   online: z.boolean(),
+  whitelistStatus: whitelistStatusSchema,
 });
 
 export type MinecraftProfileResponse = z.infer<typeof minecraftProfileResponseSchema>;

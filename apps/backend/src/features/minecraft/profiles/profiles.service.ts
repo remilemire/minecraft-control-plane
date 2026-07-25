@@ -20,6 +20,7 @@ function withStatus(
     username: profile.username,
     uuid: profile.uuid,
     online: onlineUsernames.includes(profile.username),
+    whitelistStatus: profile.whitelistStatus,
   };
 }
 
@@ -43,8 +44,9 @@ export class MinecraftProfileService {
 
   // Resolves the username against Mojang and enqueues the whitelist command
   // atomically with the insert; the outbox dispatcher whitelists the account
-  // moments after the response. A just-added account can't already be online,
-  // so there's no need to query RCON just to fill in `online`.
+  // moments after the response. The row is created `pending` (the column's
+  // default) and the dispatcher settles it. A just-added account can't already
+  // be online, so there's no need to query RCON just to fill in `online`.
   public async create(input: CreateMinecraftProfileInput): Promise<MinecraftProfileWithStatus> {
     // Mojang resolution is an external read and stays outside the transaction.
     const mojangProfile = await this.resolveUsername(input.username);
@@ -101,5 +103,18 @@ export class MinecraftProfileService {
 
   public async findByUsername(username: string): Promise<MinecraftProfile | null> {
     return this.minecraftProfiles.findByUsername(username);
+  }
+
+  // Whitelist outcomes, recorded by the outbox handler: `whitelisted` once RCON
+  // accepted the command, `failed` only when the message dead-lettered (a
+  // profile with attempts left stays pending). Both are last-writer-wins on the
+  // current row and no-op when the profile is already gone, so a retried or
+  // out-of-order message can't resurrect state.
+  public async markWhitelisted(minecraftProfileId: string): Promise<void> {
+    await this.minecraftProfiles.updateWhitelistStatus(minecraftProfileId, "whitelisted");
+  }
+
+  public async markWhitelistFailed(minecraftProfileId: string): Promise<void> {
+    await this.minecraftProfiles.updateWhitelistStatus(minecraftProfileId, "failed");
   }
 }

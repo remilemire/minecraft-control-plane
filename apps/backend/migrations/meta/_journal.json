@@ -45,6 +45,13 @@
       "breakpoints": true
     },
     {
+      "idx": 6,
+      "version": "7",
+      "when": 1784955326370,
+      "tag": "0006_profile_whitelist_status",
+      "breakpoints": true
+    },
+    {
       "idx": 7,
       "version": "7",
       "when": 1784960217265,

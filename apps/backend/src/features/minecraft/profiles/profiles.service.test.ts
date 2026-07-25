@@ -17,6 +17,7 @@ function profile(overrides: Partial<MinecraftProfile> = {}): MinecraftProfile {
     id: PROFILE_ID,
     username: "Steve",
     uuid: randomUUID(),
+    whitelistStatus: "pending",
     ...overrides,
   };
 }
@@ -66,9 +67,13 @@ function neverRunsTransactionManager(): TransactionManager {
 
 describe("MinecraftProfileService", () => {
   describe("list", () => {
-    it("merges profiles with their online status", async () => {
-      const online = profile({ id: randomUUID(), username: "Steve" });
-      const offline = profile({ id: randomUUID(), username: "Alex" });
+    it("merges profiles with their online and whitelist status", async () => {
+      const online = profile({
+        id: randomUUID(),
+        username: "Steve",
+        whitelistStatus: "whitelisted",
+      });
+      const offline = profile({ id: randomUUID(), username: "Alex", whitelistStatus: "failed" });
       const service = new MinecraftProfileService(
         repositoryStub({ findAll: async () => [online, offline] }),
         new FakeMojangClient(),
@@ -78,8 +83,20 @@ describe("MinecraftProfileService", () => {
       );
 
       expect(await service.list()).toEqual([
-        { id: online.id, username: "Steve", uuid: online.uuid, online: true },
-        { id: offline.id, username: "Alex", uuid: offline.uuid, online: false },
+        {
+          id: online.id,
+          username: "Steve",
+          uuid: online.uuid,
+          online: true,
+          whitelistStatus: "whitelisted",
+        },
+        {
+          id: offline.id,
+          username: "Alex",
+          uuid: offline.uuid,
+          online: false,
+          whitelistStatus: "failed",
+        },
       ]);
     });
   });
@@ -110,7 +127,14 @@ describe("MinecraftProfileService", () => {
       const result = await service.create({ username: "steve" });
 
       expect(createInput).toEqual({ username: "Steve", uuid });
-      expect(result).toEqual({ id: created.id, username: "Steve", uuid, online: false });
+      // Whitelisting happens through the outbox, so a fresh profile is pending.
+      expect(result).toEqual({
+        id: created.id,
+        username: "Steve",
+        uuid,
+        online: false,
+        whitelistStatus: "pending",
+      });
       expect(outbox.enqueued).toEqual([
         {
           type: "minecraft.whitelistAdd",
@@ -199,6 +223,44 @@ describe("MinecraftProfileService", () => {
 
       expect(await service.findById(PROFILE_ID)).toEqual(existing);
       expect(await service.findByUsername("Ghost")).toBeNull();
+    });
+  });
+
+  describe("markWhitelisted / markWhitelistFailed", () => {
+    it("writes the outcome to the profile's whitelist status", async () => {
+      const updates: { id: unknown; status: unknown }[] = [];
+      const service = new MinecraftProfileService(
+        repositoryStub({
+          updateWhitelistStatus: async (id: unknown, status: unknown) => {
+            updates.push({ id, status });
+            return profile();
+          },
+        }),
+        new FakeMojangClient(),
+        serverServiceStub(),
+        neverRunsTransactionManager(),
+        outboxServiceRecorder().service,
+      );
+
+      await service.markWhitelisted(PROFILE_ID);
+      await service.markWhitelistFailed(PROFILE_ID);
+
+      expect(updates).toEqual([
+        { id: PROFILE_ID, status: "whitelisted" },
+        { id: PROFILE_ID, status: "failed" },
+      ]);
+    });
+
+    it("no-ops when the profile is already gone", async () => {
+      const service = new MinecraftProfileService(
+        repositoryStub({ updateWhitelistStatus: async () => null }),
+        new FakeMojangClient(),
+        serverServiceStub(),
+        neverRunsTransactionManager(),
+        outboxServiceRecorder().service,
+      );
+
+      await expect(service.markWhitelisted(PROFILE_ID)).resolves.toBeUndefined();
     });
   });
 });

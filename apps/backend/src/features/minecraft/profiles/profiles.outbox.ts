@@ -4,7 +4,11 @@
 // transaction as the profile write and executed by the OutboxDispatcher after
 // commit. Delivery is at-least-once and may run out of enqueue order (retries
 // + backoff), so both handlers converge to *current* profile state instead of
-// trusting the payload as a snapshot — a stale message becomes a no-op.
+// trusting the payload as a snapshot — a stale message becomes a no-op. The
+// add handler also owns the profile's `whitelistStatus`: it is the only place
+// that knows whether RCON accepted the command, and a profile stays `pending`
+// for as long as another attempt is coming — `failed` is written from
+// `onDeadLetter`, once the dispatcher has given up for good.
 import type { MinecraftProfileService } from "@/features/minecraft/profiles/profiles.service.js";
 import type { MinecraftServerService } from "@/features/minecraft/server/server.service.js";
 import {
@@ -58,7 +62,16 @@ export class WhitelistAddHandler implements OutboxHandler<typeof whitelistAddMes
     }
 
     // Whitelist what the row says now, not what the payload snapshotted.
+    // A throw here leaves the profile `pending` and the dispatcher retries.
     await this.minecraftServerService.addToWhitelist(profile.username);
+
+    await this.minecraftProfileService.markWhitelisted(profile.id);
+  }
+
+  // The retries are exhausted: nothing else will whitelist this account, so
+  // the profile stops being pending. No-ops if the profile is already gone.
+  public async onDeadLetter(payload: OutboxPayloadOf<typeof whitelistAddMessage>): Promise<void> {
+    await this.minecraftProfileService.markWhitelistFailed(payload.minecraftProfileId);
   }
 }
 

@@ -71,6 +71,11 @@ must be identity-stable (module-level fn); previous data stays visible while a
 reload is in flight. Mutations live in component handlers and call `reload()` on
 success — there's no cache/store.
 
+Backend state that settles asynchronously is polled by interval-calling `reload()`
+**only while something is unsettled** (`ProfilesPanel` does this while any profile's
+`whitelistStatus` is `pending`), and such a panel renders `<LoadingText />` only on
+the first load (`loading && data === null`) so polls don't blink the list away.
+
 ## Testing
 
 - Colocated `src/**/*.test.{ts,tsx}` (jsdom, globals on, `test/setup.ts` wires

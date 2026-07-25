@@ -15,7 +15,9 @@ describe("MinecraftProfileRepository", () => {
 
       const created = await repository.create({ username: "Steve", uuid });
 
-      expect(created).toMatchObject({ username: "Steve", uuid });
+      // Whitelisting runs through the outbox after commit, so a new row starts
+      // out pending.
+      expect(created).toMatchObject({ username: "Steve", uuid, whitelistStatus: "pending" });
       expect(created.id).toBeDefined();
     });
 
@@ -48,6 +50,15 @@ describe("MinecraftProfileRepository", () => {
 
     expect(await repository.findByUsername("Steve")).toEqual(created);
     expect(await repository.findByUsername("Ghost")).toBeNull();
+  });
+
+  it("updates the whitelist status, and returns null for a profile that is gone", async () => {
+    const created = await createMinecraftProfile();
+
+    const updated = await repository.updateWhitelistStatus(created.id, "whitelisted");
+
+    expect(updated).toMatchObject({ id: created.id, whitelistStatus: "whitelisted" });
+    expect(await repository.updateWhitelistStatus(randomUUID(), "failed")).toBeNull();
   });
 
   it("deletes by id and returns the removed profile", async () => {

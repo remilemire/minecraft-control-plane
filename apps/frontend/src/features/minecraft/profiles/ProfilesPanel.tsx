@@ -9,11 +9,35 @@ import { McInput } from "@/components/McInput";
 import { McPanel } from "@/components/McPanel";
 import { toApiError, type ApiError } from "@/lib/apiClient";
 import { useRequest } from "@/lib/useRequest";
-import { minecraftUsernameSchema } from "@minecraft-server/shared/minecraft";
-import { useState, type FormEvent } from "react";
-import { createProfile, deleteProfile, fetchProfiles } from "./api";
+import { minecraftUsernameSchema, type WhitelistStatus } from "@minecraft-server/shared/minecraft";
+import { useEffect, useState, type FormEvent } from "react";
+import { createProfile, deleteProfile, fetchProfiles, type MinecraftProfile } from "./api";
 
 const USERNAME_HINT = "Usernames are 3-16 characters: letters, numbers, and underscores.";
+
+// A pending profile is waiting on the server's whitelist command, which the
+// backend applies asynchronously — refetch until every profile has settled.
+const PENDING_POLL_MS = 3_000;
+
+const WHITELIST_STATUS_BADGES = {
+  pending: { label: "Pending", variant: "highlight" },
+  whitelisted: { label: "Whitelisted", variant: "success" },
+  failed: { label: "Failed", variant: "danger" },
+} as const satisfies Record<
+  WhitelistStatus,
+  { label: string; variant: "success" | "danger" | "highlight" }
+>;
+
+function isPending(profile: MinecraftProfile): boolean {
+  return profile.whitelistStatus === "pending";
+}
+
+// The one place a whitelist status becomes label + colour.
+function WhitelistBadge({ status }: { status: WhitelistStatus }) {
+  const { label, variant } = WHITELIST_STATUS_BADGES[status];
+
+  return <McBadge variant={variant}>{label}</McBadge>;
+}
 
 interface AddProfileFormProps {
   onAdded: () => void;
@@ -87,6 +111,22 @@ export function ProfilesPanel() {
   const [removing, setRemoving] = useState<string | null>(null);
   const [actionError, setActionError] = useState<ApiError | null>(null);
 
+  const hasPending = profiles?.some(isPending) ?? false;
+
+  // Only while something is pending: once every profile has settled there is
+  // nothing left for a refetch to reveal.
+  useEffect(() => {
+    if (!hasPending) {
+      return;
+    }
+
+    const timer = setInterval(reload, PENDING_POLL_MS);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [hasPending, reload]);
+
   async function handleRemove(minecraftProfileId: string) {
     setRemoving(minecraftProfileId);
     setActionError(null);
@@ -107,7 +147,9 @@ export function ProfilesPanel() {
       <AddProfileForm onAdded={reload} />
 
       <div className="mt-4">
-        {loading && <LoadingText />}
+        {/* Only the first load: a poll keeps the list on screen instead of
+            replacing it with "Loading..." every few seconds. */}
+        {loading && profiles === null && <LoadingText />}
 
         {profiles !== null && profiles.length === 0 && (
           <p className="text-muted">No profiles whitelisted yet. {USERNAME_HINT}</p>
@@ -124,6 +166,7 @@ export function ProfilesPanel() {
                   </p>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
+                  <WhitelistBadge status={profile.whitelistStatus} />
                   <McBadge variant={profile.online ? "success" : "muted"}>
                     {profile.online ? "Online" : "Offline"}
                   </McBadge>
