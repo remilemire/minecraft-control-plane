@@ -5,5 +5,5 @@
 // they follow the same explicit-name convention so a rename can't desync the
 // schema from the migrations.
 export const OUTBOX_MESSAGES_CONSTRAINTS = {
-  PENDING_INDEX: "outbox_messages_pending_index",
+  CLAIMABLE_INDEX: "outbox_messages_claimable_index",
 } as const;

@@ -18,6 +18,10 @@ export class OutboxService<
   // Call inside TransactionManager.run — the insert joins the caller's
   // ambient transaction (and throws MissingTransactionError outside one), so
   // the message commits or rolls back with the state change it belongs to.
+  //
+  // The message lands `pending` and due now; every status after that belongs
+  // to the dispatcher, so there is deliberately no way to enqueue a message in
+  // any other state.
   public async enqueue<TType extends keyof TDefinitions & string>(
     type: TType,
     payload: OutboxPayloadOf<TDefinitions[TType]>,

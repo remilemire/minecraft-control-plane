@@ -9,6 +9,7 @@ import {
 } from "./outbox.dispatcher.js";
 import type {
   ClaimBatchInput,
+  MarkAbandonedDeadInput,
   MarkCompletedInput,
   MarkFailedInput,
   OutboxMessageRepository,
@@ -37,6 +38,7 @@ function message(overrides: Partial<OutboxMessage> = {}): OutboxMessage {
     id: "00000000-0000-0000-0000-0000000000aa",
     type: "test.alpha",
     payload: { value: 1 },
+    status: "processing",
     attempts: 1,
     nextAttemptAt: NOW,
     claimId: "00000000-0000-0000-0000-0000000000cc",
@@ -59,10 +61,15 @@ function repositoryStub(
 // A recording repository whose claimBatch pops one batch per tick.
 function recordingRepository(batches: OutboxMessage[][]) {
   const claims: ClaimBatchInput[] = [];
+  const reaps: MarkAbandonedDeadInput[] = [];
   const completions: MarkCompletedInput[] = [];
   const failures: MarkFailedInput[] = [];
 
   const repository = repositoryStub({
+    markAbandonedDead: async (input: MarkAbandonedDeadInput) => {
+      reaps.push(input);
+      return 0;
+    },
     claimBatch: async (input: ClaimBatchInput) => {
       claims.push(input);
       return batches.shift() ?? [];
@@ -77,14 +84,15 @@ function recordingRepository(batches: OutboxMessage[][]) {
     },
   });
 
-  return { repository, claims, completions, failures };
+  return { repository, claims, reaps, completions, failures };
 }
 
 function handlerFor<TDefinition extends OutboxHandler["message"]>(
   definition: TDefinition,
   handle: (payload: unknown) => Promise<void> = async () => {},
+  onDeadLetter?: (payload: unknown, error: unknown) => Promise<void>,
 ): OutboxHandler {
-  return { message: definition, handle } as OutboxHandler;
+  return { message: definition, handle, onDeadLetter } as OutboxHandler;
 }
 
 describe("createOutboxHandlerRegistry", () => {
@@ -149,7 +157,7 @@ describe("OutboxDispatcher", () => {
       const handled: unknown[] = [];
       const first = message({ id: "00000000-0000-0000-0000-000000000001", payload: { value: 1 } });
       const second = message({ id: "00000000-0000-0000-0000-000000000002", payload: { value: 2 } });
-      const { repository, claims, completions } = recordingRepository([[first, second]]);
+      const { repository, claims, reaps, completions } = recordingRepository([[first, second]]);
 
       const dispatcher = new OutboxDispatcher(
         repository,
@@ -171,6 +179,9 @@ describe("OutboxDispatcher", () => {
           maxAttempts: OUTBOX_DISPATCHER_DEFAULTS.maxAttempts,
         },
       ]);
+      // Abandoned claims are buried on the same clock, before anything is
+      // claimed.
+      expect(reaps).toEqual([{ now: NOW, maxAttempts: OUTBOX_DISPATCHER_DEFAULTS.maxAttempts }]);
       expect(handled).toEqual([{ value: 1 }, { value: 2 }]);
       expect(completions).toEqual([
         { id: first.id, claimId: first.claimId, completedAt: NOW },
@@ -212,6 +223,7 @@ describe("OutboxDispatcher", () => {
       expect(failures[0]).toMatchObject({
         id: failing.id,
         claimId: failing.claimId,
+        status: "pending",
         nextAttemptAt: new Date(NOW.getTime() + 20_000),
       });
       expect(failures[0]?.lastError).toContain("RCON exploded");
@@ -276,10 +288,10 @@ describe("OutboxDispatcher", () => {
       expect(failures).toHaveLength(1);
     });
 
-    it("logs loudly when a message dead-letters on its final attempt", async () => {
+    it("marks a message dead and logs loudly on its final attempt", async () => {
       const error = vi.spyOn(console, "error").mockImplementation(() => {});
       const lastTry = message({ attempts: OUTBOX_DISPATCHER_DEFAULTS.maxAttempts });
-      const { repository } = recordingRepository([[lastTry]]);
+      const { repository, failures } = recordingRepository([[lastTry]]);
 
       const dispatcher = new OutboxDispatcher(
         repository,
@@ -293,7 +305,156 @@ describe("OutboxDispatcher", () => {
 
       await dispatcher.tick();
 
+      expect(failures[0]).toMatchObject({ id: lastTry.id, status: "dead" });
       expect(error).toHaveBeenCalledWith(expect.stringContaining("dead-lettered"));
+    });
+
+    it("calls the handler's onDeadLetter with the payload and the error", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const buried: { payload: unknown; error: unknown }[] = [];
+      const lastTry = message({
+        attempts: OUTBOX_DISPATCHER_DEFAULTS.maxAttempts,
+        payload: { value: 7 },
+      });
+      const { repository } = recordingRepository([[lastTry]]);
+      const failure = new Error("terminal");
+
+      const dispatcher = new OutboxDispatcher(
+        repository,
+        registryWith([
+          handlerFor(
+            alphaMessage,
+            async () => {
+              throw failure;
+            },
+            async (payload, error) => {
+              buried.push({ payload, error });
+            },
+          ),
+          handlerFor(betaMessage),
+        ]),
+      );
+
+      await dispatcher.tick();
+
+      expect(buried).toEqual([{ payload: { value: 7 }, error: failure }]);
+    });
+
+    it("leaves onDeadLetter alone while attempts remain", async () => {
+      const buried: unknown[] = [];
+      const retrying = message({ attempts: OUTBOX_DISPATCHER_DEFAULTS.maxAttempts - 1 });
+      const { repository, failures } = recordingRepository([[retrying]]);
+
+      const dispatcher = new OutboxDispatcher(
+        repository,
+        registryWith([
+          handlerFor(
+            alphaMessage,
+            async () => {
+              throw new Error("not yet terminal");
+            },
+            async (payload) => {
+              buried.push(payload);
+            },
+          ),
+          handlerFor(betaMessage),
+        ]),
+      );
+
+      await dispatcher.tick();
+
+      expect(failures[0]).toMatchObject({ status: "pending" });
+      expect(buried).toEqual([]);
+    });
+
+    it("skips onDeadLetter when the stored payload never parsed", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const buried: unknown[] = [];
+      const corrupt = message({
+        attempts: OUTBOX_DISPATCHER_DEFAULTS.maxAttempts,
+        payload: { value: "not-a-number" },
+      });
+      const { repository, failures } = recordingRepository([[corrupt]]);
+
+      const dispatcher = new OutboxDispatcher(
+        repository,
+        registryWith([
+          handlerFor(
+            alphaMessage,
+            async () => {},
+            async (payload) => {
+              buried.push(payload);
+            },
+          ),
+          handlerFor(betaMessage),
+        ]),
+      );
+
+      await dispatcher.tick();
+
+      expect(failures[0]).toMatchObject({ status: "dead" });
+      expect(buried).toEqual([]);
+    });
+
+    it("keeps the dead status when onDeadLetter itself throws", async () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const lastTry = message({ attempts: OUTBOX_DISPATCHER_DEFAULTS.maxAttempts });
+      const { repository, failures } = recordingRepository([[lastTry]]);
+
+      const dispatcher = new OutboxDispatcher(
+        repository,
+        registryWith([
+          handlerFor(
+            alphaMessage,
+            async () => {
+              throw new Error("terminal");
+            },
+            async () => {
+              throw new Error("hook exploded");
+            },
+          ),
+          handlerFor(betaMessage),
+        ]),
+      );
+
+      await expect(dispatcher.tick()).resolves.toBe(1);
+
+      expect(failures[0]).toMatchObject({ status: "dead" });
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining("onDeadLetter"),
+        expect.any(Error),
+      );
+    });
+
+    it("skips the dead-letter path when the failure was never recorded", async () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const buried: unknown[] = [];
+      const stale = message({ attempts: OUTBOX_DISPATCHER_DEFAULTS.maxAttempts });
+      const { repository } = recordingRepository([[stale]]);
+      (repository as { markFailed: unknown }).markFailed = async () => false;
+
+      const dispatcher = new OutboxDispatcher(
+        repository,
+        registryWith([
+          handlerFor(
+            alphaMessage,
+            async () => {
+              throw new Error("terminal");
+            },
+            async (payload) => {
+              buried.push(payload);
+            },
+          ),
+          handlerFor(betaMessage),
+        ]),
+      );
+
+      await dispatcher.tick();
+
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("re-claimed"));
+      expect(error).not.toHaveBeenCalled();
+      expect(buried).toEqual([]);
     });
 
     it("drops a superseded claim without completing it", async () => {
@@ -340,6 +501,7 @@ describe("OutboxDispatcher", () => {
       const error = vi.spyOn(console, "error").mockImplementation(() => {});
       const claims: ClaimBatchInput[] = [];
       const repository = repositoryStub({
+        markAbandonedDead: async () => 0,
         claimBatch: async (input: ClaimBatchInput) => {
           claims.push(input);
           if (claims.length === 1) {

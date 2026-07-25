@@ -2,13 +2,22 @@
 
 import { AppError } from "@/errors/app-error.js";
 import { withDbErrors, type DatabaseProvider } from "@/infrastructure/db/index.js";
-import { and, asc, eq, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
-import { outboxMessages, type OutboxMessage } from "./outbox.schema.js";
+import { and, asc, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import {
+  OUTBOX_CLAIMABLE_STATUSES,
+  outboxMessages,
+  type OutboxMessage,
+  type OutboxMessageStatus,
+} from "./outbox.schema.js";
 
 export interface EnqueueOutboxMessageInput {
   readonly type: string;
   readonly payload: Record<string, unknown>;
 }
+
+// Where a failed attempt leaves the message: back in the queue, or given up
+// on. Which one it is is the dispatcher's call (it owns `maxAttempts`).
+export type OutboxFailureStatus = Extract<OutboxMessageStatus, "pending" | "dead">;
 
 // The repository owns no clock: callers pass every timestamp explicitly, which
 // keeps claiming/backoff policy in the dispatcher and these queries
@@ -29,8 +38,14 @@ export interface MarkCompletedInput {
 export interface MarkFailedInput {
   readonly id: string;
   readonly claimId: string;
+  readonly status: OutboxFailureStatus;
   readonly nextAttemptAt: Date;
   readonly lastError: string;
+}
+
+export interface MarkAbandonedDeadInput {
+  readonly now: Date;
+  readonly maxAttempts: number;
 }
 
 export class OutboxMessageRepository {
@@ -42,8 +57,14 @@ export class OutboxMessageRepository {
   public async insert(input: EnqueueOutboxMessageInput): Promise<OutboxMessage> {
     const transaction = this.databaseProvider.require();
 
+    // Enqueueing is the only write that isn't the dispatcher's: it states the
+    // starting status rather than leaning on the column default, so the one
+    // place that creates messages names the state it creates them in.
     const [message] = await withDbErrors(() =>
-      transaction.insert(outboxMessages).values(input).returning(),
+      transaction
+        .insert(outboxMessages)
+        .values({ ...input, status: "pending" })
+        .returning(),
     );
 
     if (message === undefined) {
@@ -54,11 +75,12 @@ export class OutboxMessageRepository {
   }
 
   // Claims up to `limit` due messages in one statement: the CTE picks the
-  // oldest due rows under FOR UPDATE SKIP LOCKED, the UPDATE stamps a fresh
-  // `claimId` (the fencing token markCompleted/markFailed must present) and
-  // pushes `claimExpiresAt` to `claimUntil`. `attempts` increments at claim
-  // time, so a worker that dies mid-handler still consumed an attempt once the
-  // claim expires. Returns the claimed rows in creation order.
+  // oldest due rows under FOR UPDATE SKIP LOCKED, the UPDATE moves them to
+  // `processing`, stamps a fresh `claimId` (the fencing token
+  // markCompleted/markFailed must present) and pushes `claimExpiresAt` to
+  // `claimUntil`. `attempts` increments at claim time, so a worker that dies
+  // mid-handler still consumed an attempt once the claim expires. Returns the
+  // claimed rows in creation order.
   public async claimBatch(input: ClaimBatchInput): Promise<OutboxMessage[]> {
     const executor = this.databaseProvider.get();
 
@@ -68,7 +90,10 @@ export class OutboxMessageRepository {
         .from(outboxMessages)
         .where(
           and(
-            isNull(outboxMessages.completedAt),
+            inArray(outboxMessages.status, OUTBOX_CLAIMABLE_STATUSES),
+            // Redundant with the `dead` status for messages this dispatcher
+            // gave up on, but it still gates rows left behind by a larger
+            // `maxAttempts`.
             lt(outboxMessages.attempts, input.maxAttempts),
             lte(outboxMessages.nextAttemptAt, input.now),
             or(
@@ -87,6 +112,7 @@ export class OutboxMessageRepository {
         .with(claimable)
         .update(outboxMessages)
         .set({
+          status: "processing",
           claimId: sql`gen_random_uuid()`,
           claimExpiresAt: input.claimUntil,
           attempts: sql`${outboxMessages.attempts} + 1`,
@@ -99,6 +125,29 @@ export class OutboxMessageRepository {
     return claimed.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
+  // Reaps the one case that can't record its own outcome: a worker that died
+  // holding the final attempt leaves a `processing` row whose claim expired
+  // and whose attempts are spent — dead in effect, so say so. Returns how many
+  // rows were buried.
+  public async markAbandonedDead(input: MarkAbandonedDeadInput): Promise<number> {
+    const buried = await withDbErrors(() =>
+      this.databaseProvider
+        .get()
+        .update(outboxMessages)
+        .set({ status: "dead", claimExpiresAt: null })
+        .where(
+          and(
+            eq(outboxMessages.status, "processing"),
+            gte(outboxMessages.attempts, input.maxAttempts),
+            lte(outboxMessages.claimExpiresAt, input.now),
+          ),
+        )
+        .returning({ id: outboxMessages.id }),
+    );
+
+    return buried.length;
+  }
+
   // Compare-and-set on the claim: false means the claim was lost (it expired
   // and the message was re-claimed under a new claimId) and nothing changed.
   public async markCompleted(input: MarkCompletedInput): Promise<boolean> {
@@ -106,7 +155,7 @@ export class OutboxMessageRepository {
       this.databaseProvider
         .get()
         .update(outboxMessages)
-        .set({ completedAt: input.completedAt, claimExpiresAt: null })
+        .set({ status: "completed", completedAt: input.completedAt, claimExpiresAt: null })
         .where(this.claimGuard(input.id, input.claimId))
         .returning({ id: outboxMessages.id }),
     );
@@ -115,13 +164,16 @@ export class OutboxMessageRepository {
   }
 
   // Same fencing contract as markCompleted. Releases the claim and schedules
-  // the retry; gating is purely `nextAttemptAt` afterwards.
+  // the retry; back in `pending`, gating is purely `nextAttemptAt` afterwards.
+  // `status: "dead"` retires the message instead — `nextAttemptAt` is still
+  // recorded, but nothing claims a dead row.
   public async markFailed(input: MarkFailedInput): Promise<boolean> {
     const failed = await withDbErrors(() =>
       this.databaseProvider
         .get()
         .update(outboxMessages)
         .set({
+          status: input.status,
           nextAttemptAt: input.nextAttemptAt,
           lastError: input.lastError,
           claimExpiresAt: null,
@@ -133,11 +185,13 @@ export class OutboxMessageRepository {
     return failed.length > 0;
   }
 
+  // An outcome may only be recorded against the claim that is still holding
+  // the message — same id, same fencing token, and still `processing`.
   private claimGuard(id: string, claimId: string) {
     return and(
       eq(outboxMessages.id, id),
       eq(outboxMessages.claimId, claimId),
-      isNull(outboxMessages.completedAt),
+      eq(outboxMessages.status, "processing"),
     );
   }
 }

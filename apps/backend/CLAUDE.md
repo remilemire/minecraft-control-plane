@@ -225,14 +225,24 @@ handlers, with retries.
   `AppOutboxService` (from the registry) is the type feature services inject, giving
   `enqueue` per-type payload checking. Handlers are wired in `routes/index.ts`;
   `createOutboxHandlerRegistry` fails startup on a missing/duplicate/unknown handler.
-- **No status column** — `outbox_messages` state is derived: completed =
-  `completedAt` set (rows are kept as an audit trail); actively claimed =
-  `claimExpiresAt > now()`; due = not completed, `nextAttemptAt` passed, claim absent
-  or expired; dead-lettered = `attempts >= max` (loud `console.error`, `lastError`
-  kept). Claims are time-boxed (`claimExpiresAt`) and fenced: every claim stamps a
-  fresh `claimId`, and `markCompleted`/`markFailed` are compare-and-set on it, so an
-  expired claim's worker can't stomp a newer claim's outcome. Failures retry with
-  exponential backoff via `nextAttemptAt`.
+- **`status` is the lifecycle state** (`pending` → `processing` →
+  `completed`/`dead`), and the **dispatcher is its only writer** — enqueueing is the
+  one exception, and it can only produce `pending`. Due = `pending`/`processing` with
+  `nextAttemptAt` passed and the claim absent or expired; terminal rows
+  (`completed`/`dead`) are kept as an audit trail and never claimed again, with
+  `lastError` kept on the dead ones. Claims are time-boxed (`claimExpiresAt`) and
+  fenced: every claim stamps a fresh `claimId`, and `markCompleted`/`markFailed` are
+  compare-and-set on `(claimId, status = 'processing')`, so an expired claim's worker
+  can't stomp a newer claim's outcome. Failures retry with exponential backoff via
+  `nextAttemptAt` until `maxAttempts`, then go `dead` (loud `console.error`). The one
+  status no worker can record is a process that died mid-attempt: `tick()` opens with
+  `markAbandonedDead` (expired claim + attempts spent → `dead`).
+- **`OutboxHandler.onDeadLetter`** (optional) is the handler's last rites — called
+  once, after the `dead` status is committed, for features that need to reconcile
+  state they can no longer converge. Best-effort: it runs outside any transaction, a
+  throw is only logged, and it is skipped when the dispatcher has no parsed payload
+  to hand over (unknown type, unparsable payload) or when the row was buried by
+  `markAbandonedDead`. No handler implements it today.
 - **Ordering assumes ONE dispatcher instance** (the single backend process): chained
   non-overlapping ticks processing each batch sequentially in creation order give
   FIFO. More instances would stay safe (`FOR UPDATE SKIP LOCKED` + fencing) but

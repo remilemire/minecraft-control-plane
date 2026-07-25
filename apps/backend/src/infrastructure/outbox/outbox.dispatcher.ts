@@ -30,6 +30,17 @@ export type OutboxDispatcherOptions = Partial<typeof OUTBOX_DISPATCHER_DEFAULTS>
 
 export type OutboxHandlerRegistry = ReadonlyMap<string, OutboxHandler>;
 
+// What an attempt leaves behind when it throws. `handler`/`payload` are absent
+// for the failures that happen before there is either (unknown message type,
+// unparsable stored payload), which is why both are optional.
+interface FailedAttempt {
+  readonly message: OutboxMessage;
+  readonly claimId: string;
+  readonly error: unknown;
+  readonly handler: OutboxHandler | undefined;
+  readonly payload: Record<string, unknown> | undefined;
+}
+
 // Boot-time cross-check of handlers against the aggregated definitions, so a
 // missing or duplicate handler fails startup instead of dead-lettering
 // messages at runtime.
@@ -96,10 +107,16 @@ export class OutboxDispatcher {
     await this.activeTick;
   }
 
-  // One deterministic poll: claim a batch and process it sequentially in
-  // creation order. Returns how many messages were claimed.
+  // One deterministic poll: bury whatever a dead worker abandoned, then claim
+  // a batch and process it sequentially in creation order. Returns how many
+  // messages were claimed.
   public async tick(): Promise<number> {
     const now = new Date();
+
+    await this.outboxMessages.markAbandonedDead({
+      now,
+      maxAttempts: this.options.maxAttempts,
+    });
 
     const claimed = await this.outboxMessages.claimBatch({
       now,
@@ -118,20 +135,22 @@ export class OutboxDispatcher {
   private async process(message: OutboxMessage): Promise<void> {
     // A freshly claimed row always carries the claim's fencing token.
     const claimId = message.claimId ?? "";
+    const handler = this.handlers.get(message.type);
+    // Stays undefined if the payload never parsed — which is what gates
+    // `onDeadLetter`, since there is then nothing to hand it.
+    let payload: Record<string, unknown> | undefined;
 
     try {
-      const handler = this.handlers.get(message.type);
-
       if (handler === undefined) {
         throw new Error(`No outbox handler registered for message type "${message.type}".`);
       }
 
       // Re-parse what was actually stored — the payload crossed a jsonb
       // round-trip and possibly a deploy since it was enqueued.
-      const payload = handler.message.payloadSchema.parse(message.payload);
+      payload = handler.message.payloadSchema.parse(message.payload);
       await handler.handle(payload);
     } catch (error) {
-      await this.recordFailure(message, claimId, error);
+      await this.recordFailure({ message, claimId, error, handler, payload });
       return;
     }
 
@@ -148,13 +167,14 @@ export class OutboxDispatcher {
     }
   }
 
-  private async recordFailure(
-    message: OutboxMessage,
-    claimId: string,
-    error: unknown,
-  ): Promise<void> {
-    const lastError = error instanceof Error ? (error.stack ?? error.message) : String(error);
+  private async recordFailure(attempt: FailedAttempt): Promise<void> {
+    const { message } = attempt;
+    const lastError =
+      attempt.error instanceof Error
+        ? (attempt.error.stack ?? attempt.error.message)
+        : String(attempt.error);
     // `message.attempts` already includes this attempt (incremented at claim).
+    const dead = message.attempts >= this.options.maxAttempts;
     const backoffMs = Math.min(
       this.options.backoffBaseMs * 2 ** (message.attempts - 1),
       this.options.backoffCapMs,
@@ -162,7 +182,8 @@ export class OutboxDispatcher {
 
     const marked = await this.outboxMessages.markFailed({
       id: message.id,
-      claimId,
+      claimId: attempt.claimId,
+      status: dead ? "dead" : "pending",
       nextAttemptAt: new Date(Date.now() + backoffMs),
       lastError,
     });
@@ -174,11 +195,32 @@ export class OutboxDispatcher {
       return;
     }
 
-    if (message.attempts >= this.options.maxAttempts) {
+    if (dead) {
+      await this.deadLetter(attempt, lastError);
+    }
+  }
+
+  // Runs only once the `dead` status is committed, so the handler's hook can
+  // fail without changing the message's outcome.
+  private async deadLetter(attempt: FailedAttempt, lastError: string): Promise<void> {
+    const { message, handler, payload } = attempt;
+
+    console.error(
+      `Outbox message ${message.id} (type "${message.type}") dead-lettered after ${String(
+        message.attempts,
+      )} attempts: ${lastError}`,
+    );
+
+    if (handler?.onDeadLetter === undefined || payload === undefined) {
+      return;
+    }
+
+    try {
+      await handler.onDeadLetter(payload, attempt.error);
+    } catch (error) {
       console.error(
-        `Outbox message ${message.id} (type "${message.type}") dead-lettered after ${String(
-          message.attempts,
-        )} attempts: ${lastError}`,
+        `onDeadLetter for outbox message ${message.id} (type "${message.type}") threw:`,
+        error,
       );
     }
   }
