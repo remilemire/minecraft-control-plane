@@ -1,6 +1,6 @@
 // packages/shared/src/errors.ts
 
-import z from "zod";
+import { z } from "zod";
 import {
   commonErrorMeta,
   errorKindSchema,

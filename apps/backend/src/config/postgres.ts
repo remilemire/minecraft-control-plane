@@ -1,6 +1,6 @@
 // apps/backend/src/config/postgres.ts
 
-import z from "zod";
+import { z } from "zod";
 
 export const postgresEnvSchema = z
   .object({

@@ -1,6 +1,6 @@
 // packages/shared/src/features/minecraft/profiles/profiles.schemas.ts
 
-import z from "zod";
+import { z } from "zod";
 
 export const minecraftUsernameSchema = z
   .string()

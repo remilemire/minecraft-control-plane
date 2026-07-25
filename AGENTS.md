@@ -91,7 +91,10 @@ Gotchas:
 
 - **Wire format is camelCase**, defined once by the Zod schemas in `packages/shared`
   and shared by both apps. Don't hand-build request/response shapes — parse/serialize
-  through the shared schemas.
+  through the shared schemas. Those modules import zod as **`import { z } from "zod"`**,
+  never the default `import z from "zod"`: the default binding makes `tsc` emit
+  `z.z.core.$strip` into the `.d.ts`, which doesn't resolve outside the package, so
+  every `z.infer`'d object type silently degrades to `any` in both apps.
 - **Errors are a shared registry.** `packages/shared` defines every error `code` and
   its `kind` (the shared error metadata); the backend maps kinds to HTTP status and
   attaches the human messages (its per-feature error catalog). When you add or change an

@@ -1,6 +1,6 @@
 // packages/shared/src/common/errors.ts
 
-import z from "zod";
+import { z } from "zod";
 
 export const errorKindSchema = z.enum([
   "NOT_FOUND",

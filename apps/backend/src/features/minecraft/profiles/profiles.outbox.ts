@@ -20,7 +20,7 @@ import {
   minecraftProfileIdSchema,
   minecraftUsernameSchema,
 } from "@minecraft-server/shared/minecraft";
-import z from "zod";
+import { z } from "zod";
 
 export const whitelistAddMessage = defineOutboxMessage({
   type: "minecraft.whitelistAdd",

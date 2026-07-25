@@ -2,7 +2,7 @@
 
 import type { PrimitiveScalar } from "@/lib/types.js";
 import type { ValidationIssueData } from "@/errors/validation-issues.js";
-import type z from "zod";
+import type { z } from "zod";
 
 export function toIssues(error: z.ZodError): ValidationIssueData[] {
   return error.issues.flatMap(toIssue);

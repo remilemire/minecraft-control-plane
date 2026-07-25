@@ -3,7 +3,7 @@
 import { AppError } from "@/errors/app-error.js";
 import type { MojangApi, MojangProfile } from "@/features/minecraft/minecraft.types.js";
 import { minecraftUsernameSchema } from "@minecraft-server/shared/minecraft";
-import z from "zod";
+import { z } from "zod";
 
 const MOJANG_API_BASE = "https://api.mojang.com";
 

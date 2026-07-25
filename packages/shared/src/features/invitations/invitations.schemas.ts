@@ -1,7 +1,7 @@
 // packages/shared/src/features/invitations/invitations.schemas.ts
 
 import { emailSchema } from "@/common/index.js";
-import z from "zod";
+import { z } from "zod";
 
 export const invitationIdSchema = z.uuid();
 
