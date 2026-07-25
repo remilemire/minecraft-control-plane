@@ -11,7 +11,7 @@ of files by role (not all features have every file):
 
 | File                 | Role                                                                                   |
 | -------------------- | -------------------------------------------------------------------------------------- |
-| `*.routes.ts`        | Builds an Express `Router`; applies `requireAuth` / `requireAdmin` / `requireCsrf`.    |
+| `*.routes.ts`        | Builds an Express `Router`; applies `requireAuth` / `requireCsrf`.                     |
 | `*.controller.ts`    | Class of request handlers: parse input, call the service, serialize the response.      |
 | `*.service.ts`       | Class holding business logic; throws `AppError` on domain failures.                    |
 | `*.repository.ts`    | Class of Drizzle queries; executor from `DatabaseProvider`, wrapped in `withDbErrors`. |
@@ -23,8 +23,8 @@ of files by role (not all features have every file):
 | `*.outbox.ts`        | The feature's outbox message definitions (type + payload schema) and their handlers.   |
 
 Features: `auth` (with `auth/oauth-identities`, `auth/sessions`, `auth/clients/`),
-`users`, `invitations`, `minecraft` (with `minecraft/players`, `minecraft/server`,
-`minecraft/profiles`, and `minecraft/clients/`). Cross-cutting code sits outside
+`users`, `invitations`, `minecraft` (with `minecraft/profiles`, `minecraft/server`,
+and `minecraft/clients/`). Cross-cutting code sits outside
 `features/`: `config/`, `infrastructure/` (`infrastructure/db/`,
 `infrastructure/outbox/`), `errors/`, `http/`, `validation/`, `openapi/`,
 `middleware/`, `lib/`, `routes/`.
@@ -45,7 +45,7 @@ The parent's `*.error-catalog.ts` **aggregates** its sub-features' catalogs (spr
 them alongside its own codes) so `errors/catalog.ts` has one entry per top-level
 feature; `auth.error-catalog.ts` and `minecraft.error-catalog.ts` both do this.
 
-Several sub-features are partial exceptions to the file-role layout above — all are
+Two sub-features are partial exceptions to the file-role layout above — both are
 internal-only (`*.service.ts` + `*.repository.ts`, no
 `*.routes.ts`/`*.controller.ts`/`*.openapi.ts`), reached only through their service:
 
@@ -54,11 +54,11 @@ internal-only (`*.service.ts` + `*.repository.ts`, no
   `OAuthIdentityService`, never on `OAuthIdentityRepository`.
 - `auth/sessions` owns the `sessions` table and the token lifecycle, plus the
   `SESSION_NOT_FOUND` / `INVALID_SESSION` codes. `AuthService` is its only consumer.
-- `minecraft/profiles` owns the `minecraft_profiles` table (a user's linked
-  username/uuid) and adds a `*.error-catalog.ts`; `minecraft/players` is the
-  HTTP-facing feature that composes `MinecraftProfileService` with
-  `MinecraftServerService` to merge profile data with live online status and drive
-  the whitelist.
+
+`minecraft/profiles` is the HTTP-facing whitelist sub-feature: it owns the
+`minecraft_profiles` table (standalone whitelist entries — username/uuid, not tied
+to users), and its service composes the Mojang seam, `MinecraftServerService`
+(online status), the `TransactionManager`, and the outbox to drive the whitelist.
 
 Path alias: `@/*` → `src/*` (and `@test/*` → `test/*`). Use `.js` extensions on
 relative/alias imports (ESM). Imports never use `../`; same-directory `./` imports
@@ -144,26 +144,22 @@ To add an error code, update three places that must stay in sync:
   the caller's provider (today just `google`) from its `OAuthClients` registry, verifies
   the credential via that client, then looks up `oauth_identities` by
   `(provider, providerSubject)` (`OAuthIdentityService.findBySubjectWithUser`). Found
-  → that user. Not found → `registerInvited`: the admin check
-  (`email === env.ADMIN_EMAIL`) and, for non-admins, the
-  `InvitationService.findPending(email)` lookup (else `NOT_INVITED`) run **before**
-  the transaction; inside it (`TransactionManager.run`), the user is created (or
-  `bootstrapAdmin`'d), its first `oauth_identities` row is inserted, and the
-  invitation is marked accepted by that user — one unit of work. Session creation
-  happens after, outside the transaction.
+  → that user. Not found → `registerInvited`: the bootstrap check
+  (`email === env.BOOTSTRAP_EMAIL`, which skips **only** the invitation requirement)
+  and, for everyone else, the `InvitationService.findPending(email)` lookup (else
+  `NOT_INVITED`) run **before** the transaction; inside it
+  (`TransactionManager.run`), the user is created, its first `oauth_identities` row
+  is inserted, and the invitation is marked accepted by that user — one unit of
+  work. Session creation happens after, outside the transaction.
 - **Sessions:** opaque random token in an httponly `session_token` cookie; only its
   **sha256 hash** (`lib/tokens.ts`) is stored in the `sessions` table. Cookie helpers
   in `http/session/`, base cookie options in `config/cookies.ts`.
 - **CSRF:** double-submit. `requireCsrf` (`http/csrf/`) checks the non-httponly
   `csrf_token` cookie against the `x-csrf-token` header; applied to mutating routes.
 - **Authorization:** `createRequireAuth(authService)` loads `req.user`/`req.session`
-  from the session cookie; `requireAdmin` checks `req.user.isAdmin`. Admin-gated:
-  invitations, the user list (`GET /users`), the players roster
-  (`GET /minecraft/players`), unlinking a player
-  (`DELETE /minecraft/players/:userId`), server power. Linking your own Minecraft
-  player (`PUT /minecraft/players/me`) is self-service; unlinking someone (yourself
-  included) is admin-only — there's no self-service delete. Note: nothing sets
-  `isAdmin=true` yet (`ADMIN_EMAIL` is unwired) — see root guide.
+  from the session cookie. There are **no roles** — every authenticated user has
+  full access; mutating routes additionally require the CSRF pair. 403s can only
+  mean `INVALID_CSRF_TOKEN`.
 
 ## Database & migrations (Drizzle)
 
@@ -204,7 +200,7 @@ To add an error code, update three places that must stay in sync:
   `run`, resolved before it; external **side effects** (RCON, email) that must follow
   a commit are not called after `run` — they are **enqueued as outbox messages inside
   it** and executed by the dispatcher after commit (see
-  `MinecraftPlayerService.setByUserId` and the next section).
+  `MinecraftProfileService.create` and the next section).
 - Migrations are SQL under `migrations/`, generated by `drizzle-kit`. Config
   (`drizzle.config.ts`) forces `host=localhost`, so run these from the **host** with
   the `db` service up:
@@ -223,7 +219,7 @@ handlers, with retries.
 
 - **Ownership mirrors tables**: a feature declares its message types, zod payload
   schemas, and handlers in `<feature>.outbox.ts` (see
-  `features/minecraft/players/players.outbox.ts`); `outbox.registry.ts` only
+  `features/minecraft/profiles/profiles.outbox.ts`); `outbox.registry.ts` only
   **aggregates** the definitions (spread pattern, like `errorMeta`). The registry
   stays outside the outbox barrel — it imports the features, which import the barrel.
   `AppOutboxService` (from the registry) is the type feature services inject, giving
@@ -286,9 +282,8 @@ before any `src` import (hence the `setup-env.ts` / `zod-extend.ts` ordering).
 
 ## Backend gaps (structural)
 
-- **Admin promotion** is unwired: `ADMIN_EMAIL` is validated in `config/env.ts` but
-  no code sets `is_admin`.
 - **`invitations.invitedByUserId`** is `NOT NULL` but its FK is `ON DELETE SET NULL`
-  — deleting the inviting user will violate the not-null constraint instead of
-  cleanly nulling it out. Needs a decision (nullable column vs. restrict/no-op the
-  delete) rather than a one-line fix, since there's only ever one admin today.
+  — deleting the inviting user would violate the not-null constraint instead of
+  cleanly nulling it out. Harmless today (no user-deletion path exists), but it must
+  be resolved (nullable column vs. restrict/no-op the delete) **before** building
+  the planned user-deletion feature.

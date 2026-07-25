@@ -9,18 +9,21 @@ detail lives closer to the code:
 
 ## What this is
 
-A self-hosted admin panel for a personal, **invite-only** Minecraft server, run on a
-home Linux box via Docker Compose. There is a **single admin**.
+A self-hosted panel for a personal, **invite-only** Minecraft server, run on a
+home Linux box via Docker Compose. Every signed-in user has **full access** —
+there are no roles.
 
-- The admin **invites** players by email. A player signs in with **Google**; login
-  only succeeds if their email has a valid, unaccepted invitation (or they already
-  have an account).
-- Signed-in users link their own **Minecraft player** (username → UUID, resolved via
-  Mojang), which self-service adds them to the **whitelist** over **RCON**; only the
-  admin can unlink a player (self or anyone else), which removes them again. The
-  admin can view the roster (linked players + online status) and all registered
-  users, and controls the server via **docker compose** (start/stop/restart the
-  container).
+- Users **invite** players by email. A player signs in with **Google**; login only
+  succeeds if their email has a valid, unaccepted invitation (or they already have
+  an account). The env-configured **bootstrap email** (`BOOTSTRAP_EMAIL`) may always
+  register without an invitation — that's how the first account is created — but
+  gets no special powers.
+- The **whitelist** is a list of standalone **Minecraft profiles** (username → UUID,
+  resolved via Mojang), decoupled from users and addressed by their own id. Any
+  signed-in user adds or removes profiles, which whitelists/unwhitelists them over
+  **RCON** — applied asynchronously via the backend's transactional outbox. Everyone
+  can view the whitelist (profiles + online status) and all registered users, and
+  controls the server via **docker compose** (start/stop/restart the container).
 - A firewall / IP-access layer in front of the server is a **planned future**
   addition — it does not exist yet. Access is the Minecraft whitelist for now.
 
@@ -68,7 +71,7 @@ Three gitignored `.env` files (each has a committed `.env.example`):
   (`MINECRAFT_RCON_*`), `APP_ENV` (`dev`|`prod`).
 - **`apps/backend/.env`** — app settings: `SESSION_SECRET`, `CORS_ALLOWED_ORIGINS`,
   `*_TTL_DAYS`, `GOOGLE_CLIENT_ID`, `MINECRAFT_COMPOSE_FILE`/`MINECRAFT_SERVICE_NAME`,
-  `ADMIN_EMAIL`.
+  `BOOTSTRAP_EMAIL`.
 - **`apps/frontend/.env`** — `BACKEND_ORIGIN` (Vite dev-server `/api` proxy target;
   `compose.yaml` overrides it to `http://backend:8000` inside the network) and
   `VITE_GOOGLE_CLIENT_ID` (Google sign-in button; same client as the backend's
@@ -119,7 +122,8 @@ Gotchas:
 
 ## Not built yet — don't assume it exists
 
-- **Admin promotion**: `ADMIN_EMAIL` is read from env but nothing yet sets a user's
-  `is_admin`. Treat "who is admin" as unresolved wiring, not an implemented rule.
+- **User deletion**: users can only be listed; there is no delete endpoint or UI
+  action yet (planned — note the `invitations.invitedByUserId` FK gap in the
+  backend guide before building it).
 - **Production**: same-origin SPA serving from the backend, and the firewall /
   IP-access layer.

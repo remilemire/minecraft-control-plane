@@ -1,20 +1,22 @@
 # minecraft-server
 
-A self-hosted admin panel for a private, **invite-only** Minecraft server, run on a
+A self-hosted panel for a private, **invite-only** Minecraft server, run on a
 home Linux box via Docker Compose.
 
-There is a single **admin**. The admin invites players by email; a player signs in
-with **Google**, and the login only succeeds if their email has a valid, unaccepted
-invitation. Once in, a player links their own **Minecraft player** (username → UUID),
-which self-service adds/removes them from the Minecraft **whitelist** over RCON. The
-admin can view the roster (linked players + online status) and controls the server:
-starting/stopping/restarting the Minecraft container.
+Every signed-in user has **full access** — there are no roles. Users invite players
+by email; a player signs in with **Google**, and the login only succeeds if their
+email has a valid, unaccepted invitation (the env-configured **bootstrap email** may
+always register without one, so the first user can ever sign in). The **whitelist**
+is a list of standalone **Minecraft profiles** (username → UUID, resolved via
+Mojang): any user can add or remove profiles, which whitelists/unwhitelists them on
+the server over RCON — applied asynchronously through a transactional outbox.
+Everyone can view the whitelist with online status, the registered users, and
+start/stop/restart the Minecraft container.
 
-> **Status: active development.** The backend is substantially built — features,
-> layering, error handling, auth/session/CSRF, OpenAPI docs, and a three-layer test
-> suite. The **frontend is an empty skeleton**, admin promotion is **not wired yet**,
-> and production (serving the SPA from the backend) is not in place. See
-> [Current State](#current-state).
+> **Status: active development.** The backend and the SPA dashboard are built —
+> features, layering, error handling, auth/session/CSRF, OpenAPI docs, a
+> transactional outbox, and a multi-layer test suite. Production (serving the SPA
+> from the backend) is not in place. See [Current State](#current-state).
 
 ## Tech Stack
 
@@ -28,7 +30,7 @@ Single **pnpm** workspace monorepo, TypeScript throughout (ESM, strict).
 - OpenAPI via `@asteasolutions/zod-to-openapi` + `swagger-ui-express`
 - `tsx` (dev), `drizzle-kit` (migrations), Vitest (unit / integration / api)
 
-**Frontend** (`apps/frontend`) — *skeleton*
+**Frontend** (`apps/frontend`)
 - React 19 + Vite
 - Tailwind CSS v4 (via `@tailwindcss/vite`; no config file — configured in CSS)
 - React Router
@@ -56,10 +58,11 @@ Single **pnpm** workspace monorepo, TypeScript throughout (ESM, strict).
 │   │   ├── drizzle.config.ts
 │   │   ├── migrations/       # drizzle-kit SQL migrations
 │   │   ├── src/
-│   │   │   ├── app.ts        # createApp(deps): middleware + routers
-│   │   │   ├── server.ts     # composition root (wires real clients)
+│   │   │   ├── app.ts        # createApp(router): HTTP assembly
+│   │   │   ├── backend.ts    # createBackend(deps): wiring + app + outbox
+│   │   │   ├── server.ts     # composition root (real clients, shutdown)
 │   │   │   ├── config/       # env parsing, postgres, cookies
-│   │   │   ├── db/           # drizzle client, schema/, error mapping
+│   │   │   ├── infrastructure/ # db (drizzle, ambient tx) + outbox
 │   │   │   ├── errors/       # AppError, translator, error catalog glue
 │   │   │   ├── http/         # cookie / csrf / session helpers
 │   │   │   ├── middleware/   # error handler
@@ -186,7 +189,7 @@ root `.env` and `apps/backend/.env` (via `compose.yaml`'s `env_file`).
 | `GOOGLE_CLIENT_ID`       | `xxx.apps.googleusercontent.com`     | Google OAuth client ID used to verify sign-in credentials. |
 | `MINECRAFT_COMPOSE_FILE` | `/home/you/minecraft-server/compose.yaml` | Compose file the backend shells out to for server power control. |
 | `MINECRAFT_SERVICE_NAME` | `minecraft`                          | Compose service name of the Minecraft container. |
-| `ADMIN_EMAIL`            | `admin@domain.com`                   | Intended admin account (promotion **not wired yet** — see Current State). |
+| `BOOTSTRAP_EMAIL`        | `owner@domain.com`                   | The one email allowed to register without an invitation (so the first user can sign in). No special powers. |
 
 ### `apps/frontend/.env`
 
@@ -206,10 +209,11 @@ Feature-first, class-based, with explicit dependency injection. Details live in
 
 - **Layering:** `routes → controller → service → repository → db`. Each feature owns
   a folder under `src/features/` with those files plus `*.openapi.ts` and
-  `*.error-meta.ts`.
-- **Dependency injection:** `createApp(deps)` / `createRouter(deps)` receive the
-  external boundaries (`db`, Google verifier, Mojang / RCON / process clients) as
-  interfaces. `server.ts` wires the real ones; tests substitute fakes.
+  `*.error-catalog.ts`.
+- **Dependency injection:** `createBackend(deps)` composes `createRouter(deps)` (the
+  wired dependency graph + outbox dispatcher) with `createApp(router)` (HTTP
+  assembly). The external boundaries (`db`, Google verifier, Mojang / RCON / process
+  clients) are interfaces; `server.ts` wires the real ones, tests substitute fakes.
 - **Validation & wire format:** Zod schemas from `packages/shared` validate input via
   `parseOrThrow` and shape responses. The wire is camelCase.
 - **Errors:** code throws `AppError(code)` / `ValidationError(issues)`; a single
@@ -224,31 +228,31 @@ Feature-first, class-based, with explicit dependency injection. Details live in
 - **Google OAuth, invite-only.** The frontend obtains a Google credential; the
   backend verifies it with `google-auth-library`. If no user exists for that Google
   identity, one is created **only if** the email has a valid, unaccepted invitation
-  (`NOT_INVITED` otherwise).
+  (`NOT_INVITED` otherwise). The `BOOTSTRAP_EMAIL` may always register without an
+  invitation — that's how the first account is created — but becomes a regular user
+  like everyone else.
 - **Sessions:** a random token is set in an httponly `session_token` cookie; only its
   SHA-256 hash is stored in the `sessions` table. Expires after `SESSION_TTL_DAYS`.
 - **CSRF:** double-submit — a non-httponly `csrf_token` cookie must match the
   `x-csrf-token` header on unsafe requests (`requireCsrf`).
-- **Authorization:** `requireAuth` loads the session's user; `requireAdmin` gates
-  admin-only routes (invitations, the players roster, unlinking a player, server
-  power). Linking your own Minecraft player is self-service; unlinking (yours or
-  anyone else's) is admin-only.
+- **Authorization:** `requireAuth` loads the session's user; every authenticated user
+  has full access — there are no roles. Mutations additionally require the CSRF pair.
 
 ## API
 
 All routes are mounted under `/api`. Current surface:
 
 - `POST /api/auth/google`, `POST /api/auth/logout`
-- `GET /api/users/me`
-- `GET/POST /api/invitations`, `DELETE /api/invitations/:invitationId` (admin)
-- `GET /api/minecraft/players` (admin), `GET/PUT /api/minecraft/players/me`,
-  `DELETE /api/minecraft/players/:userId` (admin)
-- `GET /api/minecraft/server/status` (admin),
-  `POST /api/minecraft/server/start|stop|restart` (admin)
+- `GET /api/users`, `GET /api/users/me`
+- `GET/POST /api/invitations`, `DELETE /api/invitations/:invitationId`
+- `GET/POST /api/minecraft/profiles`,
+  `DELETE /api/minecraft/profiles/:minecraftProfileId`
+- `GET /api/minecraft/server/status`,
+  `POST /api/minecraft/server/start|stop|restart`
 
-A player object is addressed and returned by the owning `userId`. The
-`minecraft_profiles` row's internal surrogate primary key is never exposed in API
-responses.
+A profile is a standalone whitelist entry addressed by its own
+`minecraftProfileId` — profiles are not tied to users. Whitelist commands run
+asynchronously via the transactional outbox, moments after the response.
 
 Browse the live, generated spec at `/docs`.
 
@@ -279,16 +283,16 @@ access is controlled through the Minecraft whitelist over RCON.
 
 Implemented:
 - pnpm monorepo + Docker Compose dev stack (db, backend, frontend, minecraft)
-- Backend features: auth (Google OAuth), users, sessions, invitations, Minecraft
-  players (profile + whitelist over RCON), Minecraft server control (power via
-  docker compose)
+- Backend features: auth (Google OAuth, invite-only + bootstrap email), users,
+  sessions, invitations, Minecraft profiles (the whitelist over RCON, applied via a
+  transactional outbox), Minecraft server control (power via docker compose)
 - Layered feature architecture with DI, shared Zod schemas, and a shared error catalog
 - Centralized error handling + generated OpenAPI docs (Swagger UI)
 - Drizzle schema + migrations; three-layer Vitest suite
+- The SPA dashboard: whitelist management, server controls, invitations, users
 
 Not yet implemented:
-- The frontend application (`App.tsx` renders nothing; router/providers are stubs)
-- **Admin promotion** — `ADMIN_EMAIL` is read from env but nothing sets `is_admin`
+- User deletion (the users table in the UI is read-only for now)
 - Production deployment / serving the SPA from the backend
 - The firewall / IP-access layer in front of the Minecraft server
 

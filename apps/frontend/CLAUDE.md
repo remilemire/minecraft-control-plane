@@ -15,14 +15,14 @@ Aliases: `@/*` → `src/*`, `@test/*` → `test/*`. Unlike the backend, imports 
 ```
 src/
   app/         router.tsx, providers/ (AuthProvider + auth-context), guards/
-               (RequireAuth / RequireAdmin / RequireGuest — Outlet-based)
+               (RequireAuth / RequireGuest — Outlet-based)
   components/  Minecraft-styled primitives: McPanel, McButton, McInput, McBadge,
                McConfirmButton (two-click destructive confirm), ErrorText,
-               LoadingText, AppLayout (authed shell: header/nav/logout)
+               LoadingText, AppLayout (authed shell: header/logout)
   features/    feature-first, mirrors the backend: <feature>/api.ts (fetchers)
-               + components; minecraft splits into players/ and server/
+               + components; minecraft splits into profiles/ and server/
   lib/         apiClient.ts (fetch wrapper), cookies.ts, useRequest.ts, format.ts
-  pages/       route compositions: HomePage, AdminDashboardPage, NotFoundPage
+  pages/       route compositions: HomePage (the whole dashboard), NotFoundPage
   assets/      bundled Monocraft font (OFL) + generated background.svg tile
   index.css    the whole theme: @theme tokens + mc-raised/mc-inset utilities
 ```
@@ -36,8 +36,8 @@ src/
 - **Everything goes through `apiRequest`** (`lib/apiClient.ts`): same-origin `/api`,
   cookies sent, and every non-GET request echoes the `csrf_token` cookie into the
   `x-csrf-token` header (double-submit). Failures throw `ApiError`
-  (`{ kind, code, message, issues? }`) — branch on `code`
-  (e.g. PlayerCard treats `MINECRAFT_PROFILE_NOT_FOUND` as "not linked yet").
+  (`{ kind, code, message, issues? }`) — branch on `code` when a failure has UI
+  meaning (e.g. ProfilesPanel surfaces `MINECRAFT_USERNAME_TAKEN` inline).
 - **Request bodies are parsed through the shared input schemas before sending**, and
   forms `safeParse` the same schemas for inline errors (with `noValidate` so the
   browser's native validation doesn't preempt ours).
@@ -46,7 +46,8 @@ src/
 
 - `AuthProvider` probes `GET /users/me` on mount → `loading` | `authenticated` |
   `unauthenticated`; `login(credential)` posts to `/auth/google`. Guards redirect:
-  RequireAuth → `/login`, RequireAdmin → `/`, RequireGuest → `/`.
+  RequireAuth → `/login`, RequireGuest → `/`. There are no roles — every
+  authenticated user sees the same single-page dashboard.
 - Google sign-in loads the GIS script lazily (`features/auth/googleIdentity.ts`) and
   needs `VITE_GOOGLE_CLIENT_ID` (same OAuth client as the backend's
   `GOOGLE_CLIENT_ID`).
