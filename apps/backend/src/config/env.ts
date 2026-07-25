@@ -28,7 +28,9 @@ const envSchema = z.object({
   MINECRAFT_SERVICE_NAME: z.string().min(1),
 
   SESSION_SECRET: z.string().min(1),
-  ADMIN_EMAIL: z.string().min(1),
+  // The one email allowed to register without an invitation (so the first
+  // user can ever sign in). Grants no other special treatment.
+  BOOTSTRAP_EMAIL: z.string().min(1),
 });
 
 const parsedEnv = envSchema.parse(process.env);

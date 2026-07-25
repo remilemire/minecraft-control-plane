@@ -20,10 +20,3 @@ export function createRequireAuth(authService: AuthService): RequestHandler {
     next();
   };
 }
-
-export function requireAdmin(req: Request, _res: Response, next: NextFunction): void {
-  if (!req.user?.isAdmin) {
-    throw new AppError("ADMIN_REQUIRED");
-  }
-  next();
-}

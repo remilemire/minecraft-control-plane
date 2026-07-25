@@ -2,11 +2,10 @@
 
 import { openApiRegistry } from "@/openapi/openapi.registry.js";
 import {
-  adminOrCsrfResponse,
-  adminRequiredResponse,
   baseErrorResponses,
   conflictErrorResponse,
   createErrorResponseSchema,
+  csrfErrorResponse,
   jsonResponse,
   openApiInvitationSchema,
   SESSION_AND_CSRF_SECURITY,
@@ -36,14 +35,12 @@ openApiRegistry.registerPath({
   path: "/invitations",
   tags: ["Invitations"],
   summary: "List all invitations",
-  description: "Admin only.",
   operationId: "listInvitations",
   security: SESSION_SECURITY,
   responses: {
     ...baseErrorResponses,
     200: jsonResponse("All invitations.", z.array(openApiInvitationSchema)),
     401: unauthenticatedResponse,
-    403: adminRequiredResponse,
   },
 });
 
@@ -53,7 +50,7 @@ openApiRegistry.registerPath({
   tags: ["Invitations"],
   summary: "Invite a user by email",
   description:
-    "Admin only. Creates an invitation that allows the email to register via Google login until it expires.",
+    "Creates an invitation that allows the email to register via Google login until it expires.",
   operationId: "createInvitation",
   security: SESSION_AND_CSRF_SECURITY,
   request: {
@@ -66,7 +63,7 @@ openApiRegistry.registerPath({
     ...baseErrorResponses,
     201: jsonResponse("The created invitation.", openApiInvitationSchema),
     401: unauthenticatedResponse,
-    403: adminOrCsrfResponse,
+    403: csrfErrorResponse,
     409: conflictErrorResponse,
     422: validationErrorResponse,
   },
@@ -77,7 +74,6 @@ openApiRegistry.registerPath({
   path: "/invitations/{invitationId}",
   tags: ["Invitations"],
   summary: "Delete an invitation",
-  description: "Admin only.",
   operationId: "deleteInvitation",
   security: SESSION_AND_CSRF_SECURITY,
   request: {
@@ -87,7 +83,7 @@ openApiRegistry.registerPath({
     ...baseErrorResponses,
     200: jsonResponse("The deleted invitation.", openApiInvitationSchema),
     401: unauthenticatedResponse,
-    403: adminOrCsrfResponse,
+    403: csrfErrorResponse,
     404: jsonResponse("No invitation with this id exists.", invitationNotFoundErrorSchema),
     422: validationErrorResponse,
   },

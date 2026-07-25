@@ -107,19 +107,9 @@ export const unauthenticatedErrorSchema = openApiRegistry.register(
   createErrorResponseSchema("UNAUTHORIZED", ["UNAUTHENTICATED", "INVALID_SESSION"]),
 );
 
-export const adminRequiredErrorSchema = openApiRegistry.register(
-  "AdminRequiredError",
-  createErrorResponseSchema("FORBIDDEN", ["ADMIN_REQUIRED"]),
-);
-
 export const csrfErrorSchema = openApiRegistry.register(
   "CsrfError",
   createErrorResponseSchema("FORBIDDEN", ["INVALID_CSRF_TOKEN"]),
-);
-
-export const adminOrCsrfErrorSchema = openApiRegistry.register(
-  "AdminOrCsrfError",
-  createErrorResponseSchema("FORBIDDEN", ["ADMIN_REQUIRED", "INVALID_CSRF_TOKEN"]),
 );
 
 export const conflictErrorSchema = openApiRegistry.register(
@@ -152,17 +142,7 @@ export const unauthenticatedResponse = jsonResponse(
   unauthenticatedErrorSchema,
 );
 
-export const adminRequiredResponse = jsonResponse(
-  "Admin privileges required.",
-  adminRequiredErrorSchema,
-);
-
 export const csrfErrorResponse = jsonResponse("CSRF token missing or invalid.", csrfErrorSchema);
-
-export const adminOrCsrfResponse = jsonResponse(
-  "Admin privileges required, or the CSRF token is missing or invalid.",
-  adminOrCsrfErrorSchema,
-);
 
 export const validationErrorResponse = jsonResponse(
   "The request failed validation.",

@@ -64,7 +64,6 @@ describe("POST /api/auth/google", () => {
     expect(response.body).toMatchObject({
       email: "newplayer@example.com",
       fullName: "New Player",
-      isAdmin: false,
     });
     expect(response.body.id).toBeDefined();
     expect(findSetCookie(response, SESSION_COOKIE)).toBeDefined();
@@ -91,6 +90,23 @@ describe("POST /api/auth/google", () => {
 
     expect(laterResponse.status).toBe(200);
     expect(laterResponse.body.id).toBe(response.body.id);
+  });
+
+  it("registers the bootstrap email without an invitation", async () => {
+    const { app, googleOauthClient } = testApp;
+    // setup-env.ts sets BOOTSTRAP_EMAIL for every worker; issuing a token for
+    // it exercises the one path allowed to skip the invitation requirement.
+    const bootstrapEmail = process.env.BOOTSTRAP_EMAIL ?? "";
+    const credential = googleOauthClient.issueToken({
+      email: bootstrapEmail,
+      sub: "google-bootstrap",
+    });
+
+    const response = await request(app).post("/api/auth/google").send({ credential });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ email: bootstrapEmail });
+    expect(findSetCookie(response, SESSION_COOKIE)).toBeDefined();
   });
 
   it("rejects an invalid Google credential", async () => {

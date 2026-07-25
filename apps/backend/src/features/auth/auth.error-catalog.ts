@@ -12,7 +12,6 @@ import { sessionErrorCatalog } from "./sessions/sessions.error-catalog.js";
 const ownErrorCatalog = {
   UNAUTHENTICATED: { message: "Authentication required." },
   NOT_INVITED: { message: "Invite only." },
-  ADMIN_REQUIRED: { message: "You do not have permission to perform this action." },
   INVALID_CSRF_TOKEN: { message: "Invalid CSRF token." },
 } as const satisfies ErrorCatalog<AuthErrorCode>;
 

@@ -62,10 +62,13 @@ export class AuthService {
 
   private async registerInvited(identity: ExternalIdentity): Promise<User> {
     const { email, provider, providerSubject } = identity;
-    const isAdmin = email === env.ADMIN_EMAIL;
+    // The bootstrap email skips the invitation requirement (someone has to be
+    // able to sign in before any invitations exist) but registers as a
+    // regular user like everyone else.
+    const isBootstrap = email === env.BOOTSTRAP_EMAIL;
 
-    const invitation = isAdmin ? null : await this.invitationService.findPending(email);
-    if (!isAdmin && invitation === null) {
+    const invitation = isBootstrap ? null : await this.invitationService.findPending(email);
+    if (!isBootstrap && invitation === null) {
       throw new AppError("NOT_INVITED");
     }
 
@@ -78,9 +81,7 @@ export class AuthService {
     // consuming their invitation is a single unit of work: either all of it
     // happened afterward or none of it did.
     return await this.transactionManager.run(async () => {
-      const user = isAdmin
-        ? await this.userService.bootstrapAdmin(input)
-        : await this.userService.create(input);
+      const user = await this.userService.create(input);
 
       await this.oauthIdentityService.create({
         userId: user.id,

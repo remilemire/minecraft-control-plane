@@ -23,7 +23,6 @@ function user(overrides: Partial<User> = {}): User {
     id: USER_ID,
     email: "steve@example.com",
     fullName: null,
-    isAdmin: false,
     createdAt: new Date(),
     ...overrides,
   };
@@ -128,9 +127,6 @@ describe("AuthService", () => {
           create: async () => {
             throw new Error("existing users must not be re-created");
           },
-          bootstrapAdmin: async () => {
-            throw new Error("existing users must not be re-created");
-          },
         }),
         sessionServiceStub({
           create: async ({ userId }: { userId: string }) => {
@@ -229,35 +225,32 @@ describe("AuthService", () => {
       expect(callOrder).toEqual(["create-user", "create-identity", "accept-invitation"]);
     });
 
-    it("bootstraps the configured ADMIN_EMAIL as an admin, bypassing the invite check", async () => {
+    it("registers the BOOTSTRAP_EMAIL without an invitation, as a regular user", async () => {
       const googleOauthClient = new FakeGoogleOauthClient();
       const credential = googleOauthClient.issueToken({
-        email: env.ADMIN_EMAIL,
-        sub: "google-admin",
+        email: env.BOOTSTRAP_EMAIL,
+        sub: "google-bootstrap",
       });
-      const created = user({ email: env.ADMIN_EMAIL, isAdmin: true });
+      const created = user({ email: env.BOOTSTRAP_EMAIL });
 
-      let bootstrapInput: unknown;
+      let createInput: unknown;
       let identityInput: unknown;
       const service = new AuthService(
         userServiceStub({
-          bootstrapAdmin: async (input: unknown) => {
-            bootstrapInput = input;
+          create: async (input: unknown) => {
+            createInput = input;
             return created;
-          },
-          create: async () => {
-            throw new Error("the admin email must not go through the normal create path");
           },
         }),
         sessionServiceStub({ create: async () => issuedSession }),
-        // findPending throwing proves the admin bootstrap path skips the
-        // invitation check entirely, rather than happening to pass it.
+        // findPending throwing proves the bootstrap path skips the invitation
+        // check entirely, rather than happening to pass it.
         invitationServiceStub({
           findPending: async () => {
-            throw new Error("the admin email must not be checked against invitations");
+            throw new Error("the bootstrap email must not be checked against invitations");
           },
           markAccepted: async () => {
-            throw new Error("the admin bootstrap must not consume an invitation");
+            throw new Error("the bootstrap registration must not consume an invitation");
           },
         }),
         { google: googleOauthClient },
@@ -274,45 +267,14 @@ describe("AuthService", () => {
       const result = await service.authenticateWithOAuth({ credential, provider: "google" });
 
       expect(result).toEqual({ user: created, sessionToken: "session-token" });
-      expect(bootstrapInput).toEqual({ email: env.ADMIN_EMAIL });
+      // A plain create: the bootstrap email gets no special treatment beyond
+      // skipping the invitation requirement.
+      expect(createInput).toEqual({ email: env.BOOTSTRAP_EMAIL });
       expect(identityInput).toEqual({
         userId: created.id,
         provider: "google",
-        subject: "google-admin",
+        subject: "google-bootstrap",
       });
-    });
-
-    it("does not bootstrap admin for a non-admin invited email", async () => {
-      const googleOauthClient = new FakeGoogleOauthClient();
-      const credential = googleOauthClient.issueToken({
-        email: "invited@example.com",
-        sub: "google-invited",
-      });
-      const created = user({ email: "invited@example.com" });
-
-      const service = new AuthService(
-        userServiceStub({
-          create: async () => created,
-          bootstrapAdmin: async () => {
-            throw new Error("non-admin emails must not be bootstrapped as admin");
-          },
-        }),
-        sessionServiceStub({ create: async () => issuedSession }),
-        invitationServiceStub({
-          findPending: async () => invitation({ email: "invited@example.com" }),
-          markAccepted: async () => invitation(),
-        }),
-        { google: googleOauthClient },
-        oauthIdentityServiceStub({
-          findBySubjectWithUser: async () => null,
-          create: async () => oauthIdentity(),
-        }),
-        transactionManagerStub(),
-      );
-
-      const result = await service.authenticateWithOAuth({ credential, provider: "google" });
-
-      expect(result).toEqual({ user: created, sessionToken: "session-token" });
     });
 
     it("rejects an uninvited email with NOT_INVITED, without creating an identity or opening a transaction", async () => {

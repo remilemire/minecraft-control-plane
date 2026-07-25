@@ -22,7 +22,6 @@ export const userResponseSchema = z.object({
   id: z.uuid(),
   email: emailSchema,
   fullName: nameSchema.nullable(),
-  isAdmin: z.boolean(),
   createdAt: z.date(),
 });
 

@@ -20,7 +20,3 @@ export async function authenticateUser(
 
   return { user, sessionToken, cookie: sessionCookie(sessionToken) };
 }
-
-export function authenticateAdmin(overrides: Partial<NewUser> = {}): Promise<AuthenticatedUser> {
-  return authenticateUser({ isAdmin: true, ...overrides });
-}

@@ -4,7 +4,7 @@ import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestApp, type TestApp } from "@test/helpers/create-test-app.js";
 import { createMinecraftProfile } from "@test/helpers/factories/minecraft-profile.factory.js";
-import { authenticateAdmin, authenticateUser } from "@test/helpers/test-auth.js";
+import { authenticateUser } from "@test/helpers/test-auth.js";
 import { csrfPair } from "@test/helpers/test-cookies.js";
 
 let testApp: TestApp;
@@ -17,7 +17,7 @@ describe("GET /api/minecraft/players", () => {
   it("lists every linked player with their online status", async () => {
     const { app, rconClient } = testApp;
     rconClient.respondTo("list", "There are 1 of a max of 20 players online: Steve");
-    const admin = await authenticateAdmin();
+    const admin = await authenticateUser();
     const online = await createMinecraftProfile({ username: "Steve" });
     const offline = await createMinecraftProfile({ username: "Alex" });
 
@@ -37,16 +37,6 @@ describe("GET /api/minecraft/players", () => {
       uuid: offline.uuid,
       online: false,
     });
-  });
-
-  it("rejects non-admin users", async () => {
-    const { app } = testApp;
-    const auth = await authenticateUser();
-
-    const response = await request(app).get("/api/minecraft/players").set("Cookie", [auth.cookie]);
-
-    expect(response.status).toBe(403);
-    expect(response.body).toMatchObject({ kind: "FORBIDDEN", code: "ADMIN_REQUIRED" });
   });
 
   it("rejects requests without a session", async () => {
@@ -269,7 +259,7 @@ describe("PUT /api/minecraft/players/me", () => {
       .put("/api/minecraft/players/me")
       .set("Cookie", [auth.cookie, csrf.cookie])
       .set(csrf.headerName, csrf.headerValue)
-      .send({ username: "Steve", isAdmin: true });
+      .send({ username: "Steve", uuid: "not-allowed" });
 
     expect(response.status).toBe(422);
     expect(response.body).toMatchObject({ kind: "VALIDATION", code: "VALIDATION_FAILED" });
@@ -279,7 +269,7 @@ describe("PUT /api/minecraft/players/me", () => {
 describe("DELETE /api/minecraft/players/:userId", () => {
   it("removes the target user's profile and unwhitelists it via the outbox", async () => {
     const { app, rconClient, outboxDispatcher } = testApp;
-    const admin = await authenticateAdmin();
+    const admin = await authenticateUser();
     const csrf = csrfPair();
     const target = await authenticateUser();
     await createMinecraftProfile({ userId: target.user.id, username: "Notch" });
@@ -302,7 +292,7 @@ describe("DELETE /api/minecraft/players/:userId", () => {
 
   it("404s when the target user has no profile", async () => {
     const { app, rconClient, outboxDispatcher } = testApp;
-    const admin = await authenticateAdmin();
+    const admin = await authenticateUser();
     const csrf = csrfPair();
     const target = await authenticateUser();
 
@@ -319,7 +309,7 @@ describe("DELETE /api/minecraft/players/:userId", () => {
 
   it("422s when the userId is not a uuid", async () => {
     const { app } = testApp;
-    const admin = await authenticateAdmin();
+    const admin = await authenticateUser();
     const csrf = csrfPair();
 
     const response = await request(app)
@@ -331,26 +321,9 @@ describe("DELETE /api/minecraft/players/:userId", () => {
     expect(response.body).toMatchObject({ kind: "VALIDATION", code: "VALIDATION_FAILED" });
   });
 
-  it("rejects a non-admin even for their own profile", async () => {
-    const { app, rconClient, outboxDispatcher } = testApp;
-    const auth = await authenticateUser();
-    const csrf = csrfPair();
-    await createMinecraftProfile({ userId: auth.user.id, username: "Notch" });
-
-    const response = await request(app)
-      .delete(`/api/minecraft/players/${auth.user.id}`)
-      .set("Cookie", [auth.cookie, csrf.cookie])
-      .set(csrf.headerName, csrf.headerValue);
-
-    expect(response.status).toBe(403);
-    expect(response.body).toMatchObject({ code: "ADMIN_REQUIRED" });
-    await outboxDispatcher.tick();
-    expect(rconClient.executed).toEqual([]);
-  });
-
   it("rejects mutations without the CSRF pair", async () => {
     const { app } = testApp;
-    const admin = await authenticateAdmin();
+    const admin = await authenticateUser();
     const target = await authenticateUser();
 
     const response = await request(app)

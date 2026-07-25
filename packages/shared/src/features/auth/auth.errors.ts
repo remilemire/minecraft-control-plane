@@ -8,7 +8,6 @@ import type { ErrorMeta } from "@/common/index.js";
 export const authErrorMeta = {
   UNAUTHENTICATED: { kind: "UNAUTHORIZED" },
   NOT_INVITED: { kind: "FORBIDDEN" },
-  ADMIN_REQUIRED: { kind: "FORBIDDEN" },
   INVALID_CSRF_TOKEN: { kind: "FORBIDDEN" },
 } as const satisfies ErrorMeta;
 

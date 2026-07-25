@@ -1,7 +1,7 @@
 // apps/backend/src/features/users/users.schema.ts
 
 import { sql } from "drizzle-orm";
-import { boolean, check, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { USERS_CONSTRAINTS } from "./users.constraints.js";
 
 export const users = pgTable(
@@ -12,8 +12,6 @@ export const users = pgTable(
     email: text("email").notNull().unique(USERS_CONSTRAINTS.EMAIL_UNIQUE),
 
     fullName: text("full_name"),
-
-    isAdmin: boolean("is_admin").notNull().default(false),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

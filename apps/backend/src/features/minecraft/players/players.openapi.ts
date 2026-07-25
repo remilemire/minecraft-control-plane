@@ -2,8 +2,6 @@
 
 import { openApiRegistry } from "@/openapi/openapi.registry.js";
 import {
-  adminOrCsrfResponse,
-  adminRequiredResponse,
   baseErrorResponses,
   conflictErrorResponse,
   createErrorResponseSchema,
@@ -62,14 +60,12 @@ openApiRegistry.registerPath({
   path: "/minecraft/players",
   tags: ["Minecraft Players"],
   summary: "List every linked player and their online status",
-  description: "Admin only.",
   operationId: "listMinecraftPlayers",
   security: SESSION_SECURITY,
   responses: {
     ...baseErrorResponses,
     200: jsonResponse("All linked players.", z.array(openApiMinecraftPlayerSchema)),
     401: unauthenticatedResponse,
-    403: adminRequiredResponse,
     503: minecraftServerUnavailableResponse,
   },
 });
@@ -126,7 +122,7 @@ openApiRegistry.registerPath({
   path: "/minecraft/players/{userId}",
   tags: ["Minecraft Players"],
   summary: "Unlink a user's Minecraft account",
-  description: "Admin only. Removes the profile and the username from the whitelist.",
+  description: "Removes the profile and the username from the whitelist.",
   operationId: "deleteMinecraftPlayer",
   security: SESSION_AND_CSRF_SECURITY,
   request: {
@@ -136,7 +132,7 @@ openApiRegistry.registerPath({
     ...baseErrorResponses,
     204: emptyResponse("Profile removed and username unwhitelisted."),
     401: unauthenticatedResponse,
-    403: adminOrCsrfResponse,
+    403: csrfErrorResponse,
     404: jsonResponse("The user has no Minecraft profile.", minecraftProfileNotFoundErrorSchema),
     422: validationErrorResponse,
     503: minecraftServerUnavailableResponse,

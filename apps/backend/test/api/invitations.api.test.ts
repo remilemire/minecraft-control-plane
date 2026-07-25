@@ -4,7 +4,7 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createTestApp } from "@test/helpers/create-test-app.js";
 import { createInvitation } from "@test/helpers/factories/invitation.factory.js";
-import { authenticateAdmin, authenticateUser } from "@test/helpers/test-auth.js";
+import { authenticateUser } from "@test/helpers/test-auth.js";
 import { csrfPair } from "@test/helpers/test-cookies.js";
 
 const { app } = createTestApp();
@@ -17,17 +17,8 @@ describe("GET /api/invitations", () => {
     expect(response.body).toMatchObject({ kind: "UNAUTHORIZED", code: "UNAUTHENTICATED" });
   });
 
-  it("rejects non-admin users", async () => {
+  it("lists invitations for any authenticated user", async () => {
     const auth = await authenticateUser();
-
-    const response = await request(app).get("/api/invitations").set("Cookie", [auth.cookie]);
-
-    expect(response.status).toBe(403);
-    expect(response.body).toMatchObject({ kind: "FORBIDDEN", code: "ADMIN_REQUIRED" });
-  });
-
-  it("lists invitations for the admin", async () => {
-    const auth = await authenticateAdmin();
     const invitation = await createInvitation({ email: "steve@example.com" });
 
     const response = await request(app).get("/api/invitations").set("Cookie", [auth.cookie]);
@@ -42,7 +33,7 @@ describe("GET /api/invitations", () => {
 
 describe("POST /api/invitations", () => {
   it("rejects mutations without the CSRF pair", async () => {
-    const auth = await authenticateAdmin();
+    const auth = await authenticateUser();
 
     const response = await request(app)
       .post("/api/invitations")
@@ -53,8 +44,8 @@ describe("POST /api/invitations", () => {
     expect(response.body).toMatchObject({ code: "INVALID_CSRF_TOKEN" });
   });
 
-  it("creates an invitation for the admin", async () => {
-    const auth = await authenticateAdmin();
+  it("creates an invitation", async () => {
+    const auth = await authenticateUser();
     const csrf = csrfPair();
 
     const response = await request(app)
@@ -70,7 +61,7 @@ describe("POST /api/invitations", () => {
   });
 
   it("rejects an invalid email with a validation error", async () => {
-    const auth = await authenticateAdmin();
+    const auth = await authenticateUser();
     const csrf = csrfPair();
 
     const response = await request(app)

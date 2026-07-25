@@ -22,7 +22,3 @@ export async function createUser(overrides: Partial<NewUser> = {}): Promise<User
 
   return user;
 }
-
-export function createAdmin(overrides: Partial<NewUser> = {}): Promise<User> {
-  return createUser({ isAdmin: true, ...overrides });
-}

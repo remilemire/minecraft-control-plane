@@ -5,14 +5,14 @@ import { describe, expect, it } from "vitest";
 import { createTestApp } from "@test/helpers/create-test-app.js";
 import { createSession } from "@test/helpers/factories/session.factory.js";
 import { createUser } from "@test/helpers/factories/user.factory.js";
-import { authenticateAdmin, authenticateUser } from "@test/helpers/test-auth.js";
+import { authenticateUser } from "@test/helpers/test-auth.js";
 import { sessionCookie } from "@test/helpers/test-cookies.js";
 
 const { app } = createTestApp();
 
 describe("GET /api/users", () => {
-  it("returns every user's public shape for an admin", async () => {
-    const auth = await authenticateAdmin();
+  it("returns every user's public shape for any authenticated user", async () => {
+    const auth = await authenticateUser();
     const other = await createUser({ fullName: "Alex Builder" });
 
     const response = await request(app).get("/api/users").set("Cookie", [auth.cookie]);
@@ -20,30 +20,18 @@ describe("GET /api/users", () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: auth.user.id, isAdmin: true }),
+        expect.objectContaining({ id: auth.user.id }),
         expect.objectContaining({
           id: other.id,
           email: other.email,
           fullName: "Alex Builder",
-          isAdmin: false,
         }),
       ]),
     );
     // The response schema must not leak internal columns.
     for (const user of response.body) {
-      expect(Object.keys(user).sort()).toEqual(
-        ["id", "email", "fullName", "isAdmin", "createdAt"].sort(),
-      );
+      expect(Object.keys(user).sort()).toEqual(["id", "email", "fullName", "createdAt"].sort());
     }
-  });
-
-  it("rejects non-admin users", async () => {
-    const auth = await authenticateUser();
-
-    const response = await request(app).get("/api/users").set("Cookie", [auth.cookie]);
-
-    expect(response.status).toBe(403);
-    expect(response.body).toMatchObject({ kind: "FORBIDDEN", code: "ADMIN_REQUIRED" });
   });
 
   it("rejects requests without a session", async () => {
@@ -56,7 +44,7 @@ describe("GET /api/users", () => {
 
 describe("GET /api/users/me", () => {
   it("returns the authenticated user's public shape", async () => {
-    const auth = await authenticateUser({ fullName: "Steve Miner", isAdmin: true });
+    const auth = await authenticateUser({ fullName: "Steve Miner" });
 
     const response = await request(app).get("/api/users/me").set("Cookie", [auth.cookie]);
 
@@ -65,12 +53,11 @@ describe("GET /api/users/me", () => {
       id: auth.user.id,
       email: auth.user.email,
       fullName: "Steve Miner",
-      isAdmin: true,
     });
     expect(response.body.createdAt).toBeDefined();
     // The response schema must not leak internal columns.
     expect(Object.keys(response.body).sort()).toEqual(
-      ["id", "email", "fullName", "isAdmin", "createdAt"].sort(),
+      ["id", "email", "fullName", "createdAt"].sort(),
     );
   });
 

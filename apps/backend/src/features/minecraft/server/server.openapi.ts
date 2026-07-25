@@ -2,9 +2,8 @@
 
 import { openApiRegistry } from "@/openapi/openapi.registry.js";
 import {
-  adminOrCsrfResponse,
-  adminRequiredResponse,
   baseErrorResponses,
+  csrfErrorResponse,
   emptyResponse,
   jsonResponse,
   openApiMinecraftServerStatusSchema,
@@ -18,7 +17,6 @@ openApiRegistry.registerPath({
   path: "/minecraft/server/status",
   tags: ["Minecraft Server"],
   summary: "Get the Minecraft server status",
-  description: "Admin only.",
   operationId: "getServerStatus",
   security: SESSION_SECURITY,
   responses: {
@@ -28,7 +26,6 @@ openApiRegistry.registerPath({
       openApiMinecraftServerStatusSchema,
     ),
     401: unauthenticatedResponse,
-    403: adminRequiredResponse,
   },
 });
 
@@ -37,14 +34,14 @@ openApiRegistry.registerPath({
   path: "/minecraft/server/start",
   tags: ["Minecraft Server"],
   summary: "Start the Minecraft server",
-  description: "Admin only. Starts the server container.",
+  description: "Starts the server container.",
   operationId: "startServer",
   security: SESSION_AND_CSRF_SECURITY,
   responses: {
     ...baseErrorResponses,
     204: emptyResponse("Server started."),
     401: unauthenticatedResponse,
-    403: adminOrCsrfResponse,
+    403: csrfErrorResponse,
   },
 });
 
@@ -53,14 +50,14 @@ openApiRegistry.registerPath({
   path: "/minecraft/server/stop",
   tags: ["Minecraft Server"],
   summary: "Stop the Minecraft server",
-  description: "Admin only. Stops the server container.",
+  description: "Stops the server container.",
   operationId: "stopServer",
   security: SESSION_AND_CSRF_SECURITY,
   responses: {
     ...baseErrorResponses,
     204: emptyResponse("Server stopped."),
     401: unauthenticatedResponse,
-    403: adminOrCsrfResponse,
+    403: csrfErrorResponse,
   },
 });
 
@@ -69,13 +66,13 @@ openApiRegistry.registerPath({
   path: "/minecraft/server/restart",
   tags: ["Minecraft Server"],
   summary: "Restart the Minecraft server",
-  description: "Admin only. Restarts the server container.",
+  description: "Restarts the server container.",
   operationId: "restartServer",
   security: SESSION_AND_CSRF_SECURITY,
   responses: {
     ...baseErrorResponses,
     204: emptyResponse("Server restarted."),
     401: unauthenticatedResponse,
-    403: adminOrCsrfResponse,
+    403: csrfErrorResponse,
   },
 });

@@ -111,7 +111,7 @@ describe("OpenAPI document", () => {
     expect(me?.security).toEqual([{ sessionCookie: [] }]);
   });
 
-  it("documents the admin list and player set endpoints", () => {
+  it("documents the list and player set endpoints", () => {
     expect(document.paths?.["/users"]?.get?.operationId).toBe("listUsers");
     expect(document.paths?.["/invitations"]?.get?.operationId).toBe("listInvitations");
     expect(document.paths?.["/minecraft/players"]?.get?.operationId).toBe("listMinecraftPlayers");
@@ -154,10 +154,7 @@ describe("OpenAPI document", () => {
       "UNAUTHENTICATED",
       "INVALID_SESSION",
     ]);
-    expect(schemas["AdminOrCsrfError"]?.properties?.code?.enum).toEqual([
-      "ADMIN_REQUIRED",
-      "INVALID_CSRF_TOKEN",
-    ]);
+    expect(schemas["CsrfError"]?.properties?.code?.enum).toEqual(["INVALID_CSRF_TOKEN"]);
     // Kind-wide components pick up every catalog code of their kind.
     expect(schemas["ConflictError"]?.properties?.code?.enum).toEqual(
       expect.arrayContaining([
