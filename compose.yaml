@@ -41,6 +41,7 @@ services:
       TYPE: "${MINECRAFT_TYPE}"
       DIFFICULTY: "${MINECRAFT_DIFFICULTY}"
       MODE: "${MINECRAFT_MODE}"
+      MEMORY: "${MINECRAFT_MEMORY}"
 
   minecraft-controller:
     build:

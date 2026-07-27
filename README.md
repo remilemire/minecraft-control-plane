@@ -180,6 +180,7 @@ root `.env` and `apps/backend/.env` (via `compose.yaml`'s `env_file`).
 | `MINECRAFT_TYPE`          | `VANILLA`              | Server type/loader (`itzg/minecraft-server` `TYPE`). |
 | `MINECRAFT_DIFFICULTY`    | `HARD`                 | World difficulty (`itzg/minecraft-server` `DIFFICULTY`). |
 | `MINECRAFT_MODE`          | `SURVIVAL`             | Game mode (`itzg/minecraft-server` `MODE`). |
+| `MINECRAFT_MEMORY`        | `2G`                   | JVM heap size (`itzg/minecraft-server` `MEMORY`). |
 | `MINECRAFT_COMPOSE_PROJECT` | `minecraft-control-plane` | Compose project name (pinned via `name:`); the controller finds the minecraft container by its compose labels. |
 | `MINECRAFT_CONTROLLER_PORT` | `8001`               | Loopback-only host port for the controller; a host-run controller also listens on it. |
 | `MINECRAFT_CONTROLLER_TOKEN` | *(generate one)*    | Bearer token the backend must present to the controller. Lives only in this file. |
