@@ -8,8 +8,8 @@ import {
 } from "@/http/session/session.cookies.js";
 import { generateRandomSecret } from "@/lib/tokens.js";
 import { parseOrThrow } from "@/validation/parse.js";
-import { oauthLoginSchema } from "@minecraft-server/shared/auth";
-import { userResponseSchema } from "@minecraft-server/shared/users";
+import { oauthLoginSchema } from "@minecraft-control-plane/shared/auth";
+import { userResponseSchema } from "@minecraft-control-plane/shared/users";
 import type { Request, Response } from "express";
 import type { AuthService } from "./auth.service.js";
 

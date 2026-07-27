@@ -1,5 +1,5 @@
 {
-  "name": "@minecraft-server/shared",
+  "name": "@minecraft-control-plane/shared",
   "private": true,
   "type": "module",
   "exports": {

@@ -9,7 +9,7 @@ import { McInput } from "@/components/McInput";
 import { McPanel } from "@/components/McPanel";
 import { toApiError, type ApiError } from "@/lib/apiClient";
 import { useRequest } from "@/lib/useRequest";
-import { minecraftUsernameSchema, type WhitelistStatus } from "@minecraft-server/shared/minecraft";
+import { minecraftUsernameSchema, type WhitelistStatus } from "@minecraft-control-plane/shared/minecraft";
 import { useEffect, useState, type FormEvent } from "react";
 import { createProfile, deleteProfile, fetchProfiles, type MinecraftProfile } from "./api";
 

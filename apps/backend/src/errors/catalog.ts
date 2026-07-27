@@ -4,7 +4,7 @@ import { authErrorCatalog } from "@/features/auth/auth.error-catalog.js";
 import { invitationErrorCatalog } from "@/features/invitations/invitations.error-catalog.js";
 import { minecraftErrorCatalog } from "@/features/minecraft/minecraft.error-catalog.js";
 import { userErrorCatalog } from "@/features/users/users.error-catalog.js";
-import type { CommonErrorCode } from "@minecraft-server/shared/common";
+import type { CommonErrorCode } from "@minecraft-control-plane/shared/common";
 import type { ErrorCatalog } from "./catalog-contracts.js";
 
 const commonErrorCatalog = {

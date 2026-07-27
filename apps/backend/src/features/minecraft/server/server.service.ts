@@ -1,7 +1,7 @@
 // apps/backend/src/features/minecraft/server/server.service.ts
 
 import type { ProcessApi, RconApi } from "@/features/minecraft/minecraft.types.js";
-import type { MinecraftServerStatus } from "@minecraft-server/shared/minecraft";
+import type { MinecraftServerStatus } from "@minecraft-control-plane/shared/minecraft";
 
 // Vanilla's `list` command replies with a fixed sentence (itzg/minecraft-server
 // runs vanilla, not Paper/Spigot, which word it differently), e.g.:

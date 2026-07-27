@@ -4,18 +4,18 @@ import { ERROR_KIND_TO_HTTP_STATUS } from "@/errors/http-status.js";
 import { CSRF_COOKIE, CSRF_HEADER } from "@/http/csrf/csrf.constants.js";
 import { SESSION_COOKIE } from "@/http/session/session.constants.js";
 import type { ResponseConfig } from "@asteasolutions/zod-to-openapi";
-import type { ErrorKind } from "@minecraft-server/shared/common";
+import type { ErrorKind } from "@minecraft-control-plane/shared/common";
 import {
   errorMeta,
   validationIssueCodeSchema,
   type ErrorCodeForKind,
-} from "@minecraft-server/shared/errors";
-import { invitationResponseSchema } from "@minecraft-server/shared/invitations";
+} from "@minecraft-control-plane/shared/errors";
+import { invitationResponseSchema } from "@minecraft-control-plane/shared/invitations";
 import {
   minecraftProfileResponseSchema,
   minecraftServerStatusResponseSchema,
-} from "@minecraft-server/shared/minecraft";
-import { userResponseSchema } from "@minecraft-server/shared/users";
+} from "@minecraft-control-plane/shared/minecraft";
+import { userResponseSchema } from "@minecraft-control-plane/shared/users";
 import { z, type ZodType } from "zod";
 import { openApiRegistry } from "./openapi.registry.js";
 

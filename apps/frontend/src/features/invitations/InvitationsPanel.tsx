@@ -10,7 +10,7 @@ import { McPanel } from "@/components/McPanel";
 import { toApiError, type ApiError } from "@/lib/apiClient";
 import { formatDate } from "@/lib/format";
 import { useRequest } from "@/lib/useRequest";
-import { createInvitationSchema } from "@minecraft-server/shared/invitations";
+import { createInvitationSchema } from "@minecraft-control-plane/shared/invitations";
 import { useState, type FormEvent } from "react";
 import { createInvitation, deleteInvitation, fetchInvitations, type Invitation } from "./api";
 

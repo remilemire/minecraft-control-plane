@@ -4,7 +4,7 @@ import type Dockerode from "dockerode";
 import { describe, expect, it, vi } from "vitest";
 import { ContainerNotFoundError, DockerClient } from "./docker.js";
 
-const PROJECT = "minecraft-server";
+const PROJECT = "minecraft-control-plane";
 const SERVICE = "minecraft";
 const CONTAINER_ID = "abc123";
 

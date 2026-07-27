@@ -1,6 +1,6 @@
 // apps/backend/src/features/minecraft/server/server.controller.ts
 
-import { minecraftServerStatusResponseSchema } from "@minecraft-server/shared/minecraft";
+import { minecraftServerStatusResponseSchema } from "@minecraft-control-plane/shared/minecraft";
 import type { Request, Response } from "express";
 import type { MinecraftServerService } from "./server.service.js";
 

@@ -1,6 +1,6 @@
 // apps/backend/src/errors/app-error.ts
 
-import type { ErrorCode } from "@minecraft-server/shared/errors";
+import type { ErrorCode } from "@minecraft-control-plane/shared/errors";
 
 export interface AppErrorOptions extends ErrorOptions {
   readonly message?: string;

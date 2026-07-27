@@ -1,6 +1,6 @@
 // apps/minecraft-controller/src/app.test.ts
 
-import type { MinecraftServerStatus } from "@minecraft-server/shared/minecraft";
+import type { MinecraftServerStatus } from "@minecraft-control-plane/shared/minecraft";
 import supertest from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
@@ -83,7 +83,7 @@ describe("createApp", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const docker = new FakeMinecraftDocker();
     docker.getStatus = async () => {
-      throw new ContainerNotFoundError("minecraft-server", "minecraft");
+      throw new ContainerNotFoundError("minecraft-control-plane", "minecraft");
     };
 
     const response = await supertest(createTestApp(docker))

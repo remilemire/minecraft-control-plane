@@ -1,7 +1,7 @@
 // apps/backend/src/infrastructure/db/errors.ts
 
 import { AppError } from "@/errors/app-error.js";
-import type { ErrorCode } from "@minecraft-server/shared/errors";
+import type { ErrorCode } from "@minecraft-control-plane/shared/errors";
 import { DatabaseError } from "pg";
 
 // SQLSTATE classes where the database could not do the work at all: it was

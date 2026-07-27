@@ -5,7 +5,7 @@ import {
   createMinecraftProfileSchema,
   minecraftProfileResponseSchema,
   type MinecraftProfileResponse,
-} from "@minecraft-server/shared/minecraft";
+} from "@minecraft-control-plane/shared/minecraft";
 import { z } from "zod";
 
 export type MinecraftProfile = MinecraftProfileResponse;

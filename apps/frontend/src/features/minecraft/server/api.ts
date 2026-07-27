@@ -4,7 +4,7 @@ import { apiRequest } from "@/lib/apiClient";
 import {
   minecraftServerStatusResponseSchema,
   type MinecraftServerStatus,
-} from "@minecraft-server/shared/minecraft";
+} from "@minecraft-control-plane/shared/minecraft";
 
 export type { MinecraftServerStatus };
 

@@ -1,11 +1,11 @@
 // apps/frontend/src/lib/apiClient.ts
 
-import type { ErrorKind } from "@minecraft-server/shared/common";
+import type { ErrorKind } from "@minecraft-control-plane/shared/common";
 import {
   errorResponseSchema,
   type ErrorCode,
   type ValidationIssue,
-} from "@minecraft-server/shared/errors";
+} from "@minecraft-control-plane/shared/errors";
 import type { ZodType } from "zod";
 import { readCookie } from "./cookies";
 

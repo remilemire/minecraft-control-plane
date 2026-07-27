@@ -5,7 +5,7 @@ import {
   createMinecraftProfileSchema,
   minecraftProfileIdSchema,
   minecraftProfileResponseSchema,
-} from "@minecraft-server/shared/minecraft";
+} from "@minecraft-control-plane/shared/minecraft";
 import type { Request, Response } from "express";
 import type { MinecraftProfileService } from "./profiles.service.js";
 

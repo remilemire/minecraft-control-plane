@@ -10,7 +10,7 @@ export function AppLayout() {
   return (
     <div className="min-h-screen">
       <header className="bg-panel mc-raised flex flex-wrap items-center gap-4 px-6 py-4">
-        <h1 className="text-xl font-bold">Minecraft Server</h1>
+        <h1 className="text-xl font-bold">Minecraft Panel</h1>
 
         <div className="ml-auto flex items-center gap-4">
           <span className="text-muted">{user?.email}</span>

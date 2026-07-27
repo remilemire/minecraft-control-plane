@@ -1,7 +1,7 @@
 // apps/backend/src/features/invitations/invitations.error-catalog.ts
 
 import type { ErrorCatalog } from "@/errors/catalog-contracts.js";
-import type { InvitationErrorCode } from "@minecraft-server/shared/invitations";
+import type { InvitationErrorCode } from "@minecraft-control-plane/shared/invitations";
 
 export const invitationErrorCatalog = {
   INVITATION_NOT_FOUND: { message: "Invitation not found." },

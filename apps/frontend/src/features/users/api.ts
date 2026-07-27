@@ -1,7 +1,7 @@
 // apps/frontend/src/features/users/api.ts
 
 import { apiRequest } from "@/lib/apiClient";
-import { userResponseSchema } from "@minecraft-server/shared/users";
+import { userResponseSchema } from "@minecraft-control-plane/shared/users";
 import { z } from "zod";
 
 // The shared response schemas type timestamps as Date (the backend serializes

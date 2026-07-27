@@ -1,6 +1,6 @@
 // apps/backend/src/errors/http-status.ts
 
-import type { ErrorKind } from "@minecraft-server/shared/common";
+import type { ErrorKind } from "@minecraft-control-plane/shared/common";
 
 export const ERROR_KIND_TO_HTTP_STATUS = {
   CONFLICT: 409,

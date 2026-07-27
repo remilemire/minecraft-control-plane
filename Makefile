@@ -7,7 +7,7 @@ PNPM    := pnpm
 # Scope workspace scripts to one package with `pkg=`, e.g. `make test pkg=backend`.
 # With no pkg, scripts run across every workspace; `--no-bail` means one failing
 # workspace does not stop the others (all failures are reported at the end).
-SEL := $(if $(pkg),--filter @minecraft-server/$(pkg),-r)
+SEL := $(if $(pkg),--filter @minecraft-control-plane/$(pkg),-r)
 RUN  = $(PNPM) $(SEL) --no-bail --if-present run
 
 .DEFAULT_GOAL := help
@@ -61,7 +61,7 @@ nuke: ## Stop, remove volumes/orphans, and rebuild from scratch
 	$(COMPOSE) build --no-cache
 
 migrate: ## Apply pending DB migrations inside the running backend container
-	$(COMPOSE) exec backend pnpm --filter @minecraft-server/backend db:migrate
+	$(COMPOSE) exec backend pnpm --filter @minecraft-control-plane/backend db:migrate
 
 # ---- Node / workspaces (add `pkg=backend` to scope any of these) ------------
 

@@ -1,4 +1,4 @@
-# minecraft-server
+# Minecraft Control Plane
 
 A self-hosted panel for a private, **invite-only** Minecraft server, run on a
 home Linux box via Docker Compose.
@@ -38,7 +38,7 @@ Single **pnpm** workspace monorepo, TypeScript throughout (ESM, strict).
 
 **Shared** (`packages/shared`)
 - Zod schemas and a shared error catalog consumed by both apps, exposed as subpath
-  exports (`@minecraft-server/shared/auth`, `/users`, `/errors`, …)
+  exports (`@minecraft-control-plane/shared/auth`, `/users`, `/errors`, …)
 
 **Tooling**
 - Docker Compose (dev stack)
@@ -129,8 +129,8 @@ Migrations run from the **host** via `drizzle-kit` (its config points at
 `localhost`, so the `db` service must be up and its port published):
 
 ```bash
-pnpm --filter @minecraft-server/backend db:generate   # generate SQL from schema changes
-pnpm --filter @minecraft-server/backend db:migrate     # apply pending migrations
+pnpm --filter @minecraft-control-plane/backend db:generate   # generate SQL from schema changes
+pnpm --filter @minecraft-control-plane/backend db:migrate     # apply pending migrations
 ```
 
 ### Other useful commands
@@ -151,9 +151,9 @@ make nuke                    # down -v --remove-orphans + rebuild --no-cache
 Backend test layers can be run individually:
 
 ```bash
-pnpm --filter @minecraft-server/backend test:unit
-pnpm --filter @minecraft-server/backend test:integration
-pnpm --filter @minecraft-server/backend test:api
+pnpm --filter @minecraft-control-plane/backend test:unit
+pnpm --filter @minecraft-control-plane/backend test:integration
+pnpm --filter @minecraft-control-plane/backend test:api
 ```
 
 ## Environment Variables
@@ -180,7 +180,7 @@ root `.env` and `apps/backend/.env` (via `compose.yaml`'s `env_file`).
 | `MINECRAFT_TYPE`          | `VANILLA`              | Server type/loader (`itzg/minecraft-server` `TYPE`). |
 | `MINECRAFT_DIFFICULTY`    | `HARD`                 | World difficulty (`itzg/minecraft-server` `DIFFICULTY`). |
 | `MINECRAFT_MODE`          | `SURVIVAL`             | Game mode (`itzg/minecraft-server` `MODE`). |
-| `MINECRAFT_COMPOSE_PROJECT` | `minecraft-server`   | Compose project name (pinned via `name:`); the controller finds the minecraft container by its compose labels. |
+| `MINECRAFT_COMPOSE_PROJECT` | `minecraft-control-plane` | Compose project name (pinned via `name:`); the controller finds the minecraft container by its compose labels. |
 | `MINECRAFT_CONTROLLER_PORT` | `8001`               | Loopback-only host port for the controller; a host-run controller also listens on it. |
 | `MINECRAFT_CONTROLLER_TOKEN` | *(generate one)*    | Bearer token the backend must present to the controller. Lives only in this file. |
 

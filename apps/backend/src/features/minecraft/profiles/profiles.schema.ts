@@ -3,7 +3,7 @@
 // A standalone whitelist entry: a Mojang account (username + uuid) allowed on
 // the server. Profiles are not tied to users — any authenticated user can add
 // or remove them.
-import type { WhitelistStatus } from "@minecraft-server/shared/minecraft";
+import type { WhitelistStatus } from "@minecraft-control-plane/shared/minecraft";
 import { sql } from "drizzle-orm";
 import { check, pgEnum, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { MINECRAFT_PROFILES_CONSTRAINTS } from "./profiles.constraints.js";

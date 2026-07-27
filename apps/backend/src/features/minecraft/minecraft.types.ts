@@ -1,6 +1,6 @@
 // apps/backend/src/features/minecraft/minecraft.types.ts
 
-import type { MinecraftServerStatus } from "@minecraft-server/shared/minecraft";
+import type { MinecraftServerStatus } from "@minecraft-control-plane/shared/minecraft";
 
 export type MojangProfile = {
   readonly uuid: string;

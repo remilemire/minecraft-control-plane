@@ -1,6 +1,6 @@
 // apps/minecraft-controller/src/routes.ts
 
-import { minecraftServerStatusResponseSchema } from "@minecraft-server/shared/minecraft";
+import { minecraftServerStatusResponseSchema } from "@minecraft-control-plane/shared/minecraft";
 import { Router, type RequestHandler } from "express";
 import { timingSafeEqual } from "node:crypto";
 import type { MinecraftDockerApi } from "./docker.js";

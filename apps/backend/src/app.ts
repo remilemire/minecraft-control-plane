@@ -2,7 +2,7 @@
 
 // Must stay the first import: zod v4 copies base methods onto schemas at
 // construction, so .openapi() has to exist before any schema module (notably
-// @minecraft-server/shared via the controllers) is evaluated.
+// @minecraft-control-plane/shared via the controllers) is evaluated.
 import "./openapi/zod-extend.js";
 
 import cookieParser from "cookie-parser";

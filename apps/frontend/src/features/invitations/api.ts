@@ -4,7 +4,7 @@ import { apiRequest } from "@/lib/apiClient";
 import {
   createInvitationSchema,
   invitationResponseSchema,
-} from "@minecraft-server/shared/invitations";
+} from "@minecraft-control-plane/shared/invitations";
 import { z } from "zod";
 
 // Wire timestamps arrive as ISO strings; coerce them back into Dates.

@@ -5,7 +5,7 @@ import type { MojangApi, MojangProfile } from "@/features/minecraft/minecraft.ty
 import type { MinecraftServerService } from "@/features/minecraft/server/server.service.js";
 import type { TransactionManager } from "@/infrastructure/db/index.js";
 import type { AppOutboxService } from "@/infrastructure/outbox/outbox.registry.js";
-import type { CreateMinecraftProfileInput } from "@minecraft-server/shared/minecraft";
+import type { CreateMinecraftProfileInput } from "@minecraft-control-plane/shared/minecraft";
 import { whitelistAddMessage, whitelistRemoveMessage } from "./profiles.outbox.js";
 import type { MinecraftProfileRepository } from "./profiles.repository.js";
 import type { MinecraftProfile } from "./profiles.schema.js";

@@ -6,7 +6,7 @@ import {
   createInvitationSchema,
   invitationIdSchema,
   invitationResponseSchema,
-} from "@minecraft-server/shared/invitations";
+} from "@minecraft-control-plane/shared/invitations";
 import type { Request, Response } from "express";
 import type { InvitationService } from "./invitations.service.js";
 

@@ -8,7 +8,7 @@ import type {
   MinecraftClientErrorCode,
   MinecraftProfileErrorCode,
   MinecraftServerErrorCode,
-} from "@minecraft-server/shared/minecraft";
+} from "@minecraft-control-plane/shared/minecraft";
 
 export const minecraftErrorCatalog = {
   ...minecraftClientErrorCatalog,

@@ -17,7 +17,7 @@ import {
 import {
   createMinecraftProfileSchema,
   minecraftProfileIdSchema,
-} from "@minecraft-server/shared/minecraft";
+} from "@minecraft-control-plane/shared/minecraft";
 import { z } from "zod";
 
 const minecraftProfileNotFoundErrorSchema = openApiRegistry.register(

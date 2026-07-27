@@ -2,7 +2,7 @@
 
 import { env } from "@/config/env.js";
 import type { Invitation } from "./invitations.schema.js";
-import type { AcceptInvitationInput } from "@minecraft-server/shared/invitations";
+import type { AcceptInvitationInput } from "@minecraft-control-plane/shared/invitations";
 import type { InvitationRepository } from "./invitations.repository.js";
 import type { CreateInvitationData } from "./invitations.types.js";
 import { AppError } from "@/errors/app-error.js";

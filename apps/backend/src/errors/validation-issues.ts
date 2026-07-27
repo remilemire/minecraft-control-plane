@@ -1,7 +1,7 @@
 // apps/backend/src/errors/validation-issues.ts
 
 import type { PrimitiveScalar } from "@/lib/types.js";
-import type { ValidationIssue, ValidationIssueCode } from "@minecraft-server/shared/errors";
+import type { ValidationIssue, ValidationIssueCode } from "@minecraft-control-plane/shared/errors";
 
 export type ValidationIssueCatalog = {
   readonly [C in ValidationIssueCode]: { createMessage: (ctx?: ValidationIssueContext) => string };

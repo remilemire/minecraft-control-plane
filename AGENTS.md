@@ -67,7 +67,7 @@ across workspaces; scope any workspace target to one package with `pkg=` (e.g.
 `make migrate` runs `pnpm db:migrate` via `docker compose exec backend`, so it needs
 the stack up (`make up`) and picks up `POSTGRES_HOST=db` from the container's env.
 Other single test layers are still pnpm scripts, not Make targets — run them with
-`pnpm --filter @minecraft-server/backend <script>` (see the backend guide).
+`pnpm --filter @minecraft-control-plane/backend <script>` (see the backend guide).
 
 ## Environment
 
@@ -122,7 +122,7 @@ Gotchas:
   it to real relative paths in the emitted `dist/`; `packages/shared`'s
   `vitest.config.ts` mirrors the alias so colocated tests resolve it too. It builds
   to `dist/` with `composite: true`; if consumers see stale types, rebuild it
-  (`pnpm --filter @minecraft-server/shared build`).
+  (`pnpm --filter @minecraft-control-plane/shared build`).
 - **Cross-feature access goes service-to-service only.** A feature reaches another
   feature exclusively through that feature's **service** module, and only from its own
   **service** — services are the sole cross-feature boundary. A controller depends on

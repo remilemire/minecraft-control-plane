@@ -1,5 +1,5 @@
 {
-  "name": "minecraft-server",
+  "name": "minecraft-control-plane",
   "version": "0.0.0",
   "type": "module",
   "private": true,

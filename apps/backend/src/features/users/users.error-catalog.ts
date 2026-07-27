@@ -1,7 +1,7 @@
 // apps/backend/src/features/users/users.error-catalog.ts
 
 import type { ErrorCatalog } from "@/errors/catalog-contracts.js";
-import type { UserErrorCode } from "@minecraft-server/shared/users";
+import type { UserErrorCode } from "@minecraft-control-plane/shared/users";
 
 export const userErrorCatalog = {
   USER_NOT_FOUND: { message: "User not found." },

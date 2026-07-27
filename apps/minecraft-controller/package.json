@@ -1,5 +1,5 @@
 {
-  "name": "@minecraft-server/minecraft-controller",
+  "name": "@minecraft-control-plane/minecraft-controller",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@minecraft-server/shared": "workspace:*",
+    "@minecraft-control-plane/shared": "workspace:*",
     "dockerode": "^4.0.9",
     "express": "^5.2.1",
     "zod": "^4.4.3"

@@ -2,7 +2,7 @@
 
 import { withDbErrors, type DatabaseProvider } from "@/infrastructure/db/index.js";
 import { AppError } from "@/errors/app-error.js";
-import type { WhitelistStatus } from "@minecraft-server/shared/minecraft";
+import type { WhitelistStatus } from "@minecraft-control-plane/shared/minecraft";
 import { eq } from "drizzle-orm";
 import { MINECRAFT_PROFILES_CONSTRAINTS } from "./profiles.constraints.js";
 import {

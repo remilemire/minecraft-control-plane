@@ -5,7 +5,7 @@ import type { ProcessApi } from "@/features/minecraft/minecraft.types.js";
 import {
   minecraftServerStatusResponseSchema,
   type MinecraftServerStatus,
-} from "@minecraft-server/shared/minecraft";
+} from "@minecraft-control-plane/shared/minecraft";
 
 // Status is a quick container inspect; commands block while the controller
 // waits out the container's 30s graceful-stop window, so their bound must

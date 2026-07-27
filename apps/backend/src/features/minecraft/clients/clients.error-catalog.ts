@@ -1,7 +1,7 @@
 // apps/backend/src/features/minecraft/clients/clients.error-catalog.ts
 
 import type { ErrorCatalog } from "@/errors/catalog-contracts.js";
-import type { MinecraftClientErrorCode } from "@minecraft-server/shared/minecraft";
+import type { MinecraftClientErrorCode } from "@minecraft-control-plane/shared/minecraft";
 
 export const minecraftClientErrorCatalog = {
   MOJANG_CLIENT_ERROR: { message: "Failed to reach Mojang's servers." },

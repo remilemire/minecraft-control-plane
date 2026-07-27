@@ -5,7 +5,7 @@ import type {
   AuthClientErrorCode,
   AuthErrorCode,
   SessionErrorCode,
-} from "@minecraft-server/shared/auth";
+} from "@minecraft-control-plane/shared/auth";
 import { authClientErrorCatalog } from "./clients/clients.error-catalog.js";
 import { sessionErrorCatalog } from "./sessions/sessions.error-catalog.js";
 

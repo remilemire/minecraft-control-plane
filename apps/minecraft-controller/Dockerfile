@@ -30,8 +30,8 @@ CMD ["npm", "run", "dev"]
 
 FROM base AS builder
 COPY . .
-RUN pnpm --filter @minecraft-server/shared build \
-  && pnpm --filter @minecraft-server/minecraft-controller build
+RUN pnpm --filter @minecraft-control-plane/shared build \
+  && pnpm --filter @minecraft-control-plane/minecraft-controller build
 
 # ================================
 # ---------- Production ----------

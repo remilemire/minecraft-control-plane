@@ -1,7 +1,7 @@
 // apps/backend/src/features/users/users.service.ts
 
 import type { User } from "./users.schema.js";
-import type { CreateUserInput } from "@minecraft-server/shared/users";
+import type { CreateUserInput } from "@minecraft-control-plane/shared/users";
 import type { UserRepository } from "./users.repository.js";
 
 export class UserService {

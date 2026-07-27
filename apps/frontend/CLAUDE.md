@@ -30,7 +30,7 @@ src/
 ## Contracts with the backend
 
 - **Responses are parsed through the shared schemas**
-  (`@minecraft-server/shared/<feature>`). Wire timestamps are ISO strings while the
+  (`@minecraft-control-plane/shared/<feature>`). Wire timestamps are ISO strings while the
   shared schemas type them as `Date`, so feature `api.ts` modules extend response
   schemas with `z.coerce.date()` (see `features/users/api.ts`).
 - **Everything goes through `apiRequest`** (`lib/apiClient.ts`): same-origin `/api`,

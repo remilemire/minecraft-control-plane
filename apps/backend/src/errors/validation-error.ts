@@ -1,6 +1,6 @@
 // apps/backend/src/errors/validation-error.ts
 
-import type { ErrorCodeForKind } from "@minecraft-server/shared/errors";
+import type { ErrorCodeForKind } from "@minecraft-control-plane/shared/errors";
 import { AppError, type AppErrorOptions } from "./app-error.js";
 import type { ValidationIssueData } from "./validation-issues.js";
 

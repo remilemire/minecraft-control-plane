@@ -1,7 +1,7 @@
 // apps/backend/test/fakes/fake-process.client.ts
 
 import type { ProcessApi } from "@/features/minecraft/minecraft.types.js";
-import type { MinecraftServerStatus } from "@minecraft-server/shared/minecraft";
+import type { MinecraftServerStatus } from "@minecraft-control-plane/shared/minecraft";
 
 // In-memory stand-in for docker compose process control. Tracks the calls
 // made and mutates status the way the real container lifecycle would.

@@ -1,6 +1,6 @@
 // apps/minecraft-controller/src/docker.ts
 
-import type { MinecraftServerStatus } from "@minecraft-server/shared/minecraft";
+import type { MinecraftServerStatus } from "@minecraft-control-plane/shared/minecraft";
 import type Dockerode from "dockerode";
 
 const STOP_TIMEOUT_S = 30;

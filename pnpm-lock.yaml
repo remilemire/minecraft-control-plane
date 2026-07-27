@@ -45,12 +45,12 @@ importers:
       '@asteasolutions/zod-to-openapi':
         specifier: ^8.5.0
         version: 8.5.0(zod@4.4.3)
+      '@minecraft-control-plane/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@minecraft-js/rcon':
         specifier: ^1.1.0
         version: 1.1.0
-      '@minecraft-server/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
@@ -121,7 +121,7 @@ importers:
 
   apps/frontend:
     dependencies:
-      '@minecraft-server/shared':
+      '@minecraft-control-plane/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       react:
@@ -209,7 +209,7 @@ importers:
 
   apps/minecraft-controller:
     dependencies:
-      '@minecraft-server/shared':
+      '@minecraft-control-plane/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       dockerode:

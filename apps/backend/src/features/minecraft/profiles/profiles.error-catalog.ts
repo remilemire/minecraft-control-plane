@@ -1,7 +1,7 @@
 // apps/backend/src/features/minecraft/profiles/profiles.error-catalog.ts
 
 import type { ErrorCatalog } from "@/errors/catalog-contracts.js";
-import type { MinecraftProfileErrorCode } from "@minecraft-server/shared/minecraft";
+import type { MinecraftProfileErrorCode } from "@minecraft-control-plane/shared/minecraft";
 
 export const minecraftProfileErrorCatalog = {
   MINECRAFT_PROFILE_NOT_FOUND: { message: "Minecraft profile not found." },

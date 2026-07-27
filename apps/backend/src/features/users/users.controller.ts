@@ -1,7 +1,7 @@
 // apps/backend/src/features/users/users.controller.ts
 
 import { getAuthenticatedUser } from "@/features/auth/auth.helpers.js";
-import { userResponseSchema } from "@minecraft-server/shared/users";
+import { userResponseSchema } from "@minecraft-control-plane/shared/users";
 import type { Request, Response } from "express";
 import type { UserService } from "./users.service.js";
 

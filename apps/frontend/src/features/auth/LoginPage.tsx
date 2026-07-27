@@ -23,7 +23,7 @@ export function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
       <McPanel className="w-full max-w-md text-center">
-        <h1 className="mb-2 text-2xl font-bold">Minecraft Server</h1>
+        <h1 className="mb-2 text-2xl font-bold">Minecraft Panel</h1>
         <p className="text-muted mb-6">
           Sign in with Google to join. New players need an invitation.
         </p>

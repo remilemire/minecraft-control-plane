@@ -1,6 +1,6 @@
 // apps/backend/src/features/minecraft/profiles/profiles.types.ts
 
-import type { WhitelistStatus } from "@minecraft-server/shared/minecraft";
+import type { WhitelistStatus } from "@minecraft-control-plane/shared/minecraft";
 
 export type MinecraftProfileWithStatus = {
   readonly id: string;
