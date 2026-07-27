@@ -2,6 +2,7 @@
   "name": "@minecraft-control-plane/shared",
   "private": true,
   "type": "module",
+  "files": ["dist"],
   "exports": {
     "./errors": {
       "types": "./dist/errors.d.ts",

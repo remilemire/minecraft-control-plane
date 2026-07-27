@@ -1,10 +1,14 @@
 # apps/frontend/Dockerfile
 
+# Dev-only image: in prod the SPA is built inside the backend's image (see
+# apps/backend/Dockerfile) and served same-origin — there is no frontend
+# container.
+
 # ================================
 # ------------- Base -------------
 # ================================
 
-FROM node:23-alpine AS base
+FROM node:22-alpine AS base
 
 WORKDIR /app
 
@@ -23,18 +27,3 @@ RUN corepack enable && pnpm install --frozen-lockfile
 FROM base AS dev
 WORKDIR /app/apps/frontend
 CMD ["npm", "run", "dev"]
-
-# ================================
-# ----------- Builder ------------
-# ================================
-
-FROM base AS builder
-COPY . .
-RUN npm run build
-
-# ================================
-# ---------- Production ----------
-# ================================
-
-FROM nginx:alpine AS prod
-COPY --from=builder /app/apps/frontend/dist /usr/share/nginx/html

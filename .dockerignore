@@ -4,6 +4,7 @@
 .git
 .gitignore
 compose.yaml
+data
 **/Dockerfile
 **/node_modules
 **/.env*
