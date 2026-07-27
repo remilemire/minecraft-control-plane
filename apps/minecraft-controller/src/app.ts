@@ -1,6 +1,6 @@
 // apps/minecraft-controller/src/app.ts
 
-import express, { type ErrorRequestHandler, type Router } from "express";
+import express, { type ErrorRequestHandler, type Express, type Router } from "express";
 import { ContainerNotFoundError } from "./docker.js";
 import { createRequireBearerToken } from "./routes.js";
 
@@ -25,7 +25,9 @@ export interface CreateAppOptions {
 
 // Pure HTTP assembly: the auth gate, the wired routes, then the terminal error
 // handler. Wiring lives in server.ts. No express.json() — no route takes a body.
-export function createApp({ router, token }: CreateAppOptions) {
+// The explicit return type keeps the declaration emit portable (TS2883 under a
+// clean build, where the inferred type must reference express internals).
+export function createApp({ router, token }: CreateAppOptions): Express {
   const app = express();
 
   app.use(createRequireBearerToken(token));
