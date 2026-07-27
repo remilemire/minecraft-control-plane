@@ -10,3 +10,6 @@ data
 **/.env*
 **/.DS_STORE
 **/dist
+# Host build residue: without dist/ in the context, a copied-in tsbuildinfo
+# makes the image's tsc skip emitting entirely.
+**/*.tsbuildinfo
