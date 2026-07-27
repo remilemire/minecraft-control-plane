@@ -15,8 +15,9 @@ start/stop/restart the Minecraft container.
 
 > **Status: active development.** The backend and the SPA dashboard are built —
 > features, layering, error handling, auth/session/CSRF, OpenAPI docs, a
-> transactional outbox, and a multi-layer test suite. Production (serving the SPA
-> from the backend) is not in place. See [Current State](#current-state).
+> transactional outbox, and a multi-layer test suite — and the production path
+> (the backend serving the SPA same-origin behind Caddy TLS) is in place. See
+> [Deployment](#deployment) and [Current State](#current-state).
 
 ## Tech Stack
 
@@ -48,7 +49,10 @@ Single **pnpm** workspace monorepo, TypeScript throughout (ESM, strict).
 
 ```
 .
-├── compose.yaml              # Dev stack: db, backend, frontend, minecraft
+├── compose.yaml              # Shared stack config (db, minecraft, controller, backend)
+├── compose.override.yaml     # Dev additions (auto-loaded): bind mounts, frontend
+├── compose.prod.yaml         # Prod additions: prod targets, restart policies, caddy
+├── caddy/Caddyfile           # Prod TLS termination (ACME) → backend
 ├── Makefile                  # Root tasks (compose lifecycle + pnpm fan-out)
 ├── pnpm-workspace.yaml
 ├── .env.example              # Compose-level env (ports, Postgres, RCON)
@@ -165,7 +169,7 @@ root `.env` and `apps/backend/.env` (via `compose.yaml`'s `env_file`).
 
 | Variable                  | Example                | Purpose |
 | ------------------------- | ---------------------- | ------- |
-| `APP_ENV`                 | `dev`                  | `dev` or `prod`. `dev` enables debug mode (`secure` cookies off, `trust proxy` off). |
+| `APP_ENV`                 | `dev`                  | `dev` or `prod`. Picks the compose file set (`make` adds `compose.prod.yaml` under `prod`, else the dev override) and, in the backend, `dev` enables debug mode (`secure` cookies off, `trust proxy` off, `/docs` served). |
 | `BACKEND_PORT`            | `8000`                 | Backend listen port + host mapping. |
 | `FRONTEND_PORT`           | `5173`                 | Frontend host port. |
 | `POSTGRES_PORT`           | `5432`                 | Postgres port (see caveat). |
@@ -181,29 +185,30 @@ root `.env` and `apps/backend/.env` (via `compose.yaml`'s `env_file`).
 | `MINECRAFT_DIFFICULTY`    | `HARD`                 | World difficulty (`itzg/minecraft-server` `DIFFICULTY`). |
 | `MINECRAFT_MODE`          | `SURVIVAL`             | Game mode (`itzg/minecraft-server` `MODE`). |
 | `MINECRAFT_MEMORY`        | `2G`                   | JVM heap size (`itzg/minecraft-server` `MEMORY`). |
+| `GOOGLE_CLIENT_ID`        | `xxx.apps.googleusercontent.com` | Google OAuth client id (public — it ships in the SPA bundle). Verifies sign-ins in the backend and is baked into the prod image's frontend build as `VITE_GOOGLE_CLIENT_ID`. |
+| `CADDY_SITE_ADDRESS`      | `mc.example.com`       | Prod only: the public hostname of the panel — must match its DNS record and the Google console's authorized JavaScript origin. |
 | `MINECRAFT_COMPOSE_PROJECT` | `minecraft-control-plane` | Compose project name (pinned via `name:`); the controller finds the minecraft container by its compose labels. |
-| `MINECRAFT_CONTROLLER_PORT` | `8001`               | Loopback-only host port for the controller; a host-run controller also listens on it. |
+| `MINECRAFT_CONTROLLER_PORT` | `8001`               | Loopback-only host port for the controller (dev); a host-run controller also listens on it. |
 | `MINECRAFT_CONTROLLER_TOKEN` | *(generate one)*    | Bearer token the backend must present to the controller. Lives only in this file. |
 
 ### `apps/backend/.env` (application settings)
 
 | Variable                 | Example                              | Purpose |
 | ------------------------ | ------------------------------------ | ------- |
-| `SESSION_SECRET`         | `secret`                             | Secret for session-related signing. |
+| `SESSION_SECRET`         | `secret`                             | Required by `config/env.ts` but currently unused (sessions store hashed random tokens, no signing). |
 | `CORS_ALLOWED_ORIGINS`   | `http://localhost:5173`              | Comma-separated allowed origins (parsed into `ALLOWED_ORIGINS`). |
 | `COOKIE_DOMAIN`          | *(empty)*                            | Optional cookie domain; empty for host-only cookies. |
 | `SESSION_TTL_DAYS`       | `7`                                  | Session lifetime (days). |
 | `CSRF_TTL_DAYS`          | `7`                                  | CSRF cookie lifetime (days). |
 | `INVITATION_TTL_DAYS`    | `7`                                  | Invitation lifetime (days). |
-| `GOOGLE_CLIENT_ID`       | `xxx.apps.googleusercontent.com`     | Google OAuth client ID used to verify sign-in credentials. |
 | `MINECRAFT_CONTROLLER_URL` | `http://localhost:8001`             | Minecraft-controller base URL (host-dev default; compose overrides it to `http://minecraft-controller:8000`). |
 | `BOOTSTRAP_EMAIL`        | `owner@domain.com`                   | The one email allowed to register without an invitation (so the first user can sign in). No special powers. |
 
 ### `apps/frontend/.env`
 
-| Variable         | Example                 | Purpose |
-| ---------------- | ----------------------- | ------- |
-| `BACKEND_ORIGIN` | `http://localhost:8000` | Backend origin for the frontend (not consumed yet). |
+| Variable                | Example                          | Purpose |
+| ----------------------- | -------------------------------- | ------- |
+| `VITE_GOOGLE_CLIENT_ID` | `xxx.apps.googleusercontent.com` | Google sign-in button (host dev; same client as the root `GOOGLE_CLIENT_ID`, which supplies it for prod builds). |
 
 > **Caveat:** keep `POSTGRES_PORT=5432`. The Postgres container always listens on
 > `5432` internally, and the backend connects to `${POSTGRES_HOST}:${POSTGRES_PORT}`
@@ -262,7 +267,8 @@ A profile is a standalone whitelist entry addressed by its own
 `minecraftProfileId` — profiles are not tied to users. Whitelist commands run
 asynchronously via the transactional outbox, moments after the response.
 
-Browse the live, generated spec at `/docs`.
+Browse the live, generated spec at `/docs` (dev only — the OpenAPI routes are not
+mounted in prod).
 
 ## Testing
 
@@ -277,15 +283,64 @@ Vitest, three layers (backend):
 Integration and API tests require the Compose `db` service reachable on
 `localhost:5432`.
 
-## Deployment (Planned)
+## Deployment
 
-> Not implemented. Only the local development stack above is runnable today.
+A single self-hosted Linux machine runs the same Compose stack with `APP_ENV=prod`:
+the **backend serves the built SPA same-origin** (no separate web server, no
+cross-origin cookies), behind a **Caddy** edge that terminates TLS. The stack is
+publicly reachable — players connect to Minecraft from anywhere and users reach the
+panel from anywhere — while everything else stays private.
 
-The intended target is a single self-hosted Linux machine running the Compose stack,
-with the **backend serving the built SPA itself** (same-origin), removing the need for
-a separate web server and cross-origin cookie configuration. A separate **firewall /
-IP-access layer** in front of the Minecraft server is a planned future addition; today,
-access is controlled through the Minecraft whitelist over RCON.
+Published ports: **80/443** (Caddy) and **25565** (Minecraft). The database, the
+backend (`:8000`), RCON, the docker socket, and the minecraft-controller have no
+published ports and are reachable only inside the compose networks.
+
+### Prerequisites
+
+1. **Public DNS**: an A record for the panel hostname (`CADDY_SITE_ADDRESS`)
+   pointing at the connection's WAN IP. If the IP is dynamic, set up DDNS (your
+   registrar's DDNS endpoint or a small updater — outside this stack).
+2. **Router/firewall port forwarding**: TCP **80 + 443** → this machine (Caddy:
+   ACME challenges, redirect, panel) and TCP **25565** → this machine (Minecraft).
+3. **Google console**: add `https://<CADDY_SITE_ADDRESS>` to the OAuth client's
+   **authorized JavaScript origins** (raw IPs are rejected — a real domain is
+   required anyway for TLS).
+
+### Running
+
+```bash
+# root .env: set APP_ENV=prod, GOOGLE_CLIENT_ID, CADDY_SITE_ADDRESS
+make up
+```
+
+`make` reads `APP_ENV` from the root `.env` and swaps the dev override for
+`compose.prod.yaml` — always drive the prod stack through `make` (bare
+`docker compose` would silently auto-load the dev override). On boot the backend
+applies pending migrations itself (`drizzle-orm` migrator over `migrations/`), so
+there is no separate migrate step; `make migrate` refuses under prod. Caddy obtains
+and renews publicly trusted certificates automatically once DNS and the forwards
+are live (`make caddy-logs` to watch).
+
+For a local dry-run without DNS, set `CADDY_SITE_ADDRESS=localhost` — Caddy falls
+back to its internal CA on its own — and browse `https://localhost` (expect the
+self-signed warning; `curl -k`).
+
+### If the connection is CGNAT'd / can't port-forward
+
+If inbound forwarding isn't possible (carrier-grade NAT, ISP policy), the stack
+itself is unchanged — route ingress through a relay instead:
+
+- **Recommended**: a cheap VPS with a public IP + a WireGuard tunnel from this
+  machine; DNAT TCP 80/443/25565 on the VPS through the tunnel and point DNS at
+  the VPS. Caddy's ACME keeps working since real inbound 80/443 exist at the VPS.
+  (Client IPs then appear as the tunnel address — cosmetic today.)
+- Alternative: Cloudflare Tunnel for the panel plus a TCP tunnel service (e.g.
+  playit.gg) for 25565 — no VPS, but split ingress and a third party in the
+  panel's TLS path.
+
+A separate **firewall / IP-access layer** in front of the Minecraft server is still
+a planned future addition; today, access is controlled through the Minecraft
+whitelist over RCON (`ENFORCE_WHITELIST=true`).
 
 ## Current State
 
@@ -295,13 +350,14 @@ Implemented:
   sessions, invitations, Minecraft profiles (the whitelist over RCON, applied via a
   transactional outbox), Minecraft server control (power via docker compose)
 - Layered feature architecture with DI, shared Zod schemas, and a shared error catalog
-- Centralized error handling + generated OpenAPI docs (Swagger UI)
+- Centralized error handling + generated OpenAPI docs (Swagger UI, dev only)
 - Drizzle schema + migrations; three-layer Vitest suite
 - The SPA dashboard: whitelist management, server controls, invitations, users
+- Production deployment: same-origin SPA from the backend, prod images
+  (`pnpm deploy`), Caddy TLS edge, migrate-on-boot ([Deployment](#deployment))
 
 Not yet implemented:
 - User deletion (the users table in the UI is read-only for now)
-- Production deployment / serving the SPA from the backend
 - The firewall / IP-access layer in front of the Minecraft server
 
 ## License

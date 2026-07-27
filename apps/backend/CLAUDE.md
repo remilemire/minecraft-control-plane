@@ -81,7 +81,12 @@ Composition is explicit DI:
   returns `{ router, outboxDispatcher }`. **This is where wiring lives** — add new
   features here.
 - `createApp(router)` (`app.ts`) is pure HTTP assembly: middleware, the OpenAPI
-  routes, the wired router under `/api`, then the error handler.
+  routes (dev only — not mounted in prod), the wired router under `/api`, the
+  `apiNotFound` middleware (unmatched `/api/*` → `ROUTE_NOT_FOUND` envelope), the
+  SPA routes when `SPA_DIR` is set (`spa/spa.routes.ts` — static files with
+  immutable caching for hashed `/assets`, history-API fallback to `index.html`;
+  the prod image sets `SPA_DIR`, dev/tests leave it unset), then the error
+  handler (which always logs 5xx; everything only in debug).
 - `AppDeps` are the external boundaries: `{ db, googleTokenVerifier, mojangClient,
 rconClient, processClient }`, each an **interface**. `server.ts` (the production
   composition root) injects the real clients, starts the dispatcher's poll loop, and
@@ -172,8 +177,8 @@ To add an error code, update three places that must stay in sync:
 
 - The module lives in `src/infrastructure/db/`. Import it through its barrel,
   `@/infrastructure/db/index.js` — that is the drizzle client (`database.ts`, exported
-  as `db`/`pool`), `DatabaseProvider`, `TransactionManager`, `withDbErrors`, and the
-  `Db`/`Tx`/`DatabaseExecutor` types. Modules _inside_ `infrastructure/db/` must not
+  as `db`/`pool`), `DatabaseProvider`, `TransactionManager`, `withDbErrors`,
+  `runMigrations`, and the `Db`/`Tx`/`DatabaseExecutor` types. Modules _inside_ `infrastructure/db/` must not
   import the barrel — that would be a cycle. Tables use `uuid` PKs (`defaultRandom()`)
   and `timestamp(..., { withTimezone: true })`.
 - **Features (and infrastructure modules) own their tables.** An owner declares its
@@ -222,6 +227,13 @@ To add an error code, update three places that must stay in sync:
   - `pnpm --filter @minecraft-control-plane/backend db:generate` (from schema diffs)
   - `pnpm --filter @minecraft-control-plane/backend db:migrate`
   - `db:studio` for the Drizzle Studio UI.
+- **Prod applies migrations on boot** instead: `server.ts` awaits
+  `runMigrations(db)` (`db/migrate.ts`, the `drizzle-orm` runtime migrator over
+  `migrations/`) before the dispatcher starts and the server listens, when
+  `!env.DEBUG`. A failure crashes the boot; compose's db healthcheck +
+  `restart: unless-stopped` handle ordering and retries. The prod image ships
+  `migrations/` next to `dist/` (see the backend `package.json` `files` field) —
+  no drizzle-kit in prod.
 
 ## Transactional outbox
 

@@ -49,10 +49,14 @@ src/
   RequireAuth → `/login`, RequireGuest → `/`. There are no roles — every
   authenticated user sees the same single-page dashboard.
 - Google sign-in loads the GIS script lazily (`features/auth/googleIdentity.ts`) and
-  needs `VITE_GOOGLE_CLIENT_ID` (same OAuth client as the backend's
-  `GOOGLE_CLIENT_ID`).
-- The Vite dev server proxies `/api` to `BACKEND_ORIGIN` (compose overrides it to
-  `http://backend:8000` inside the network), so dev is same-origin — no CORS.
+  needs `VITE_GOOGLE_CLIENT_ID` — from `apps/frontend/.env` in host dev, and baked
+  in at build time from the root `GOOGLE_CLIENT_ID` (build arg) for prod images.
+- The Vite dev server proxies `/api` to `BACKEND_ORIGIN` (defaulted to
+  `http://localhost:8000` in vite.config; the compose dev override injects
+  `http://backend:8000`), so dev is same-origin — no CORS.
+- **Prod has no frontend container**: the backend image runs `vite build` and
+  serves `dist/` same-origin (its `SPA_DIR`), with a history-API fallback to
+  `index.html` — deep links and the client-rendered 404 both work.
 
 ## Minecraft GUI conventions
 

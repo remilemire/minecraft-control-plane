@@ -42,10 +42,21 @@ apps/minecraft-controller  Dockerode sidecar (server power control over HTTP)
 packages/shared            Zod schemas + error catalog (shared by the apps)
 ```
 
-Top level: `compose.yaml` (dev stack: db, backend, frontend, minecraft,
-minecraft-controller), root
-`Makefile` (task runner), shared TS/ESLint/Prettier base configs
+Top level: three compose files — `compose.yaml` (shared: db, minecraft,
+minecraft-controller, backend), `compose.override.yaml` (dev additions,
+auto-loaded: bind mounts, dev targets, the frontend service, host publishes) and
+`compose.prod.yaml` (prod additions: prod targets, restart policies, the `caddy`
+TLS edge) — plus `caddy/Caddyfile`, the root `Makefile` (task runner; picks the
+compose file set from `APP_ENV` in the root `.env`, so always drive the stack
+through `make`), and shared TS/ESLint/Prettier base configs
 (`tsconfig.base.json`, `eslint.config.base.ts`, `prettier.config.ts`).
+
+**Production** (`APP_ENV=prod`): the backend image builds the SPA and serves it
+same-origin (`SPA_DIR`), applies migrations on boot (no `make migrate`), and sits
+behind Caddy (ACME TLS; publishes 80/443 + minecraft 25565 only). `/docs` and
+`/openapi.json` are dev-only. Prod images are flattened prod-only installs via
+`pnpm deploy --legacy` — the `files` fields in the deployed packages' package.json
+are what carry `dist/` (and the backend's `migrations/`) past `.gitignore`.
 
 ## Commands
 
@@ -57,7 +68,7 @@ across workspaces; scope any workspace target to one package with `pkg=` (e.g.
 | ---------------------------------------------------- | -------------------------------------------------------------- |
 | Start / stop / restart stack                         | `make up` / `make down` / `make restart`                       |
 | Rebuild from scratch                                 | `make nuke`                                                    |
-| Apply DB migrations (inside the `backend` container) | `make migrate`                                                 |
+| Apply DB migrations (dev; prod migrates on boot)     | `make migrate`                                                 |
 | Tail logs                                            | `make logs` (or `backend-logs` / `db-logs` / `minecraft-logs`) |
 | Dev servers (all)                                    | `make dev`                                                     |
 | Build / test / lint / format                         | `make build` / `test` / `lint` / `format`                      |
@@ -74,19 +85,24 @@ Other single test layers are still pnpm scripts, not Make targets — run them w
 Three gitignored `.env` files (each has a committed `.env.example`):
 
 - **root `.env`** — compose-level: ports, Postgres (`POSTGRES_*`), RCON
-  (`MINECRAFT_RCON_*`), `APP_ENV` (`dev`|`prod`), the compose project name
-  (`MINECRAFT_COMPOSE_PROJECT` — interpolated into compose's top-level `name:`
-  and used by the controller's label-based container lookup), and the controller
-  (`MINECRAFT_CONTROLLER_PORT`, `MINECRAFT_CONTROLLER_TOKEN` — the token lives
-  **only** here; backend host dev reads it via `--env-file-if-exists=../../.env`).
-- **`apps/backend/.env`** — app settings: `SESSION_SECRET`, `CORS_ALLOWED_ORIGINS`,
-  `*_TTL_DAYS`, `GOOGLE_CLIENT_ID`, `MINECRAFT_CONTROLLER_URL` (host-dev default
-  `http://localhost:8001`; compose overrides it to `http://minecraft-controller:8000`),
-  `BOOTSTRAP_EMAIL`.
-- **`apps/frontend/.env`** — `BACKEND_ORIGIN` (Vite dev-server `/api` proxy target;
-  `compose.yaml` overrides it to `http://backend:8000` inside the network) and
-  `VITE_GOOGLE_CLIENT_ID` (Google sign-in button; same client as the backend's
-  `GOOGLE_CLIENT_ID`).
+  (`MINECRAFT_RCON_*`), `APP_ENV` (`dev`|`prod` — picks the compose file set and
+  the backend's debug mode), `GOOGLE_CLIENT_ID` (public; read by the backend and
+  baked into the prod frontend build as `VITE_GOOGLE_CLIENT_ID`),
+  `CADDY_SITE_ADDRESS` (prod: the panel's public hostname), the compose project
+  name (`MINECRAFT_COMPOSE_PROJECT` — interpolated into compose's top-level
+  `name:` and used by the controller's label-based container lookup), and the
+  controller (`MINECRAFT_CONTROLLER_PORT`, `MINECRAFT_CONTROLLER_TOKEN` — the
+  token lives **only** here; backend host dev reads it via
+  `--env-file-if-exists=../../.env`).
+- **`apps/backend/.env`** — app settings: `SESSION_SECRET` (required but currently
+  unused), `CORS_ALLOWED_ORIGINS`, `*_TTL_DAYS`, `MINECRAFT_CONTROLLER_URL`
+  (host-dev default `http://localhost:8001`; compose overrides it to
+  `http://minecraft-controller:8000`), `BOOTSTRAP_EMAIL`.
+- **`apps/frontend/.env`** — `VITE_GOOGLE_CLIENT_ID` (Google sign-in button in
+  host dev; same client as the root `GOOGLE_CLIENT_ID`, which supplies the prod
+  build). `BACKEND_ORIGIN` (the Vite dev-server `/api` proxy target) is not in the
+  file — vite.config defaults it to `http://localhost:8000` and the dev override
+  injects `http://backend:8000` inside the compose network.
 
 Gotchas:
 
@@ -139,5 +155,4 @@ Gotchas:
 - **User deletion**: users can only be listed; there is no delete endpoint or UI
   action yet (planned — note the `invitations.invitedByUserId` FK gap in the
   backend guide before building it).
-- **Production**: same-origin SPA serving from the backend, and the firewall /
-  IP-access layer.
+- **The firewall / IP-access layer** in front of the Minecraft server.
