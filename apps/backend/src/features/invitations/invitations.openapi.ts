@@ -14,7 +14,10 @@ import {
   validationErrorResponse,
 } from "@/openapi/openapi.schemas.js";
 import { emailSchema } from "@minecraft-control-plane/shared/common";
-import { createInvitationSchema, invitationIdSchema } from "@minecraft-control-plane/shared/invitations";
+import {
+  createInvitationSchema,
+  invitationIdSchema,
+} from "@minecraft-control-plane/shared/invitations";
 import { z } from "zod";
 
 const invitationNotFoundErrorSchema = openApiRegistry.register(

@@ -10,6 +10,7 @@ import cors from "cors";
 import express from "express";
 import type { Router } from "express";
 
+import { apiNotFound } from "./middleware/api-not-found.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { env } from "./config/env.js";
 import { createOpenApiRoutes } from "./openapi/openapi.routes.js";
@@ -25,6 +26,7 @@ export function createApp(apiRouter: Router) {
   app.use(cookieParser());
   app.use(createOpenApiRoutes());
   app.use("/api", apiRouter);
+  app.use("/api", apiNotFound);
   app.use(errorHandler);
 
   app.set("trust proxy", env.DEBUG ? false : 1);

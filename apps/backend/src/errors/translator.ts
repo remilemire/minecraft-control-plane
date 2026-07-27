@@ -1,6 +1,10 @@
 // apps/backend/src/errors/translator.ts
 
-import { errorMeta, type ErrorCode, type ErrorResponse } from "@minecraft-control-plane/shared/errors";
+import {
+  errorMeta,
+  type ErrorCode,
+  type ErrorResponse,
+} from "@minecraft-control-plane/shared/errors";
 import { AppError } from "./app-error.js";
 import { ERROR_KIND_TO_HTTP_STATUS, type HttpErrorStatus } from "./http-status.js";
 import { errorCatalog } from "./catalog.js";

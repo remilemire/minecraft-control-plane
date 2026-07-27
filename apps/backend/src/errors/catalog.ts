@@ -9,6 +9,7 @@ import type { ErrorCatalog } from "./catalog-contracts.js";
 
 const commonErrorCatalog = {
   INTERNAL: { message: "Something went wrong." },
+  ROUTE_NOT_FOUND: { message: "No such API route." },
   SERVICE_UNAVAILABLE: { message: "The service is temporarily unavailable." },
   VALIDATION_FAILED: { message: "Validation failed." },
 } as const satisfies ErrorCatalog<CommonErrorCode>;

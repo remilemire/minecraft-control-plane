@@ -20,6 +20,7 @@ export type ErrorMeta = {
 
 export const commonErrorMeta = {
   INTERNAL: { kind: "INTERNAL" },
+  ROUTE_NOT_FOUND: { kind: "NOT_FOUND" },
   VALIDATION_FAILED: { kind: "VALIDATION" },
   SERVICE_UNAVAILABLE: { kind: "SERVICE_UNAVAILABLE" },
 } as const satisfies ErrorMeta;
