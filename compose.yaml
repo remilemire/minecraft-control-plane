@@ -19,9 +19,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DATABASE}
 
     # Gates the backend's boot (depends_on: service_healthy) so prod's
-    # migrate-on-boot never races the database's first start.
+    # migrate-on-boot never races the database's first start. $$-escaped so
+    # the CONTAINER's env expands them — where the name is POSTGRES_DB.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DATABASE}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 10
