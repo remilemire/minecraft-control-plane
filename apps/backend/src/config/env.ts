@@ -15,6 +15,10 @@ const envSchema = z.object({
   CORS_ALLOWED_ORIGINS: z.string().default(""),
   COOKIE_DOMAIN: z.string().exactOptional(),
 
+  // Path of the built SPA to serve same-origin (set by the prod image);
+  // unset → no static serving (dev uses the Vite dev server).
+  SPA_DIR: z.string().exactOptional(),
+
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(7),
   CSRF_TTL_DAYS: z.coerce.number().int().positive().default(7),
   INVITATION_TTL_DAYS: z.coerce.number().int().positive().default(7),

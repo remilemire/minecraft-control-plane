@@ -14,19 +14,26 @@ import { apiNotFound } from "./middleware/api-not-found.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { env } from "./config/env.js";
 import { createOpenApiRoutes } from "./openapi/openapi.routes.js";
+import { createSpaRoutes } from "./spa/spa.routes.js";
 
-// Pure HTTP assembly: middleware, the OpenAPI routes, the already-wired api
-// router, and the error handler. Wiring lives in routes/index.ts; the two are
-// combined by createBackend (backend.ts).
+// Pure HTTP assembly: middleware, the OpenAPI routes (dev only — not
+// publicly visible in prod), the already-wired api router, the SPA (when
+// configured), and the error handler. Wiring lives in routes/index.ts; the
+// two are combined by createBackend (backend.ts).
 export function createApp(apiRouter: Router) {
   const app = express();
 
   app.use(cors({ origin: env.ALLOWED_ORIGINS, credentials: true }));
   app.use(express.json());
   app.use(cookieParser());
-  app.use(createOpenApiRoutes());
+  if (env.DEBUG) {
+    app.use(createOpenApiRoutes());
+  }
   app.use("/api", apiRouter);
   app.use("/api", apiNotFound);
+  if (env.SPA_DIR !== undefined) {
+    app.use(createSpaRoutes(env.SPA_DIR));
+  }
   app.use(errorHandler);
 
   app.set("trust proxy", env.DEBUG ? false : 1);
