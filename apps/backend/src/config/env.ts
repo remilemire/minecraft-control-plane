@@ -25,8 +25,8 @@ const envSchema = z.object({
   MINECRAFT_RCON_PORT: z.coerce.number().int().positive(),
   MINECRAFT_RCON_PASSWORD: z.string().min(1),
 
-  MINECRAFT_COMPOSE_FILE: z.string().min(1),
-  MINECRAFT_CONTAINER: z.string().min(1),
+  MINECRAFT_CONTROLLER_URL: z.url(),
+  MINECRAFT_CONTROLLER_TOKEN: z.string().min(1),
 
   SESSION_SECRET: z.string().min(1),
   // The one email allowed to register without an invitation (so the first

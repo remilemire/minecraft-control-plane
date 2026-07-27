@@ -1,81 +1,113 @@
 // apps/backend/src/features/minecraft/clients/process.client.test.ts
 
-// Unit-testing the real client means mocking child_process.execFile
-// (vi.mock("child_process")) — never run real docker commands in tests.
+// Unit-testing the real client means stubbing global fetch (vi.stubGlobal) —
+// never reach a real controller in tests.
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ProcessClient } from "./process.client.js";
 
-// The source promisifies the mocked execFile at import time. Our mock lacks
-// the util.promisify.custom symbol, so promisify resolves with the single
-// value we hand the callback — hence callback(null, { stdout, stderr }).
-const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }));
+const BASE_URL = "http://minecraft-controller:8000";
+const TOKEN = "test-token";
 
-vi.mock("child_process", () => ({ execFile: execFileMock }));
+interface FakeResponseInit {
+  readonly status: number;
+  readonly json?: () => Promise<unknown>;
+}
 
-const { ProcessClient } = await import("./process.client.js");
+function fakeResponse({ status, json }: FakeResponseInit): Response {
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    json: json ?? (async () => ({})),
+  } as unknown as Response;
+}
 
-const COMPOSE_FILE = "/test/compose.yml";
-const SERVICE = "mc";
+function stubFetch(response: Response) {
+  const fetchMock = vi.fn<(url: URL, init: RequestInit) => Promise<Response>>(async () => response);
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
 
-function resolveStdout(stdout: string) {
-  execFileMock.mockImplementation(
-    (_file: string, _args: string[], callback: (err: unknown, result: unknown) => void) => {
-      callback(null, { stdout, stderr: "" });
-    },
-  );
+function lastCall(fetchMock: ReturnType<typeof stubFetch>): [URL, RequestInit] {
+  return fetchMock.mock.lastCall as [URL, RequestInit];
 }
 
 function client() {
-  return new ProcessClient({ composeFile: COMPOSE_FILE, serviceName: SERVICE });
+  return new ProcessClient({ baseUrl: BASE_URL, token: TOKEN });
 }
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe("ProcessClient", () => {
-  beforeEach(() => {
-    execFileMock.mockReset();
-    resolveStdout("");
+  it.each([
+    ["start", "/start"],
+    ["stop", "/stop"],
+    ["restart", "/restart"],
+  ] as const)(
+    "%s posts to the controller with the bearer token and a timeout",
+    async (method, path) => {
+      const fetchMock = stubFetch(fakeResponse({ status: 204 }));
+
+      await client()[method]();
+
+      const [url, init] = lastCall(fetchMock);
+      expect(url.href).toBe(`${BASE_URL}${path}`);
+      expect(init.method).toBe("POST");
+      expect(init.headers).toEqual({ authorization: `Bearer ${TOKEN}` });
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+    },
+  );
+
+  it("throws PROCESS_CLIENT_ERROR when a command does not return 204", async () => {
+    stubFetch(fakeResponse({ status: 500 }));
+
+    await expect(client().stop()).rejects.toMatchObject({ code: "PROCESS_CLIENT_ERROR" });
   });
 
-  it("invokes docker compose start/stop/restart with the configured file and service", async () => {
-    const process = client();
-
-    await process.start();
-    expect(execFileMock).toHaveBeenLastCalledWith(
-      "docker",
-      ["compose", "--file", COMPOSE_FILE, "start", SERVICE],
-      expect.any(Function),
+  it("returns the status the controller reports", async () => {
+    const fetchMock = stubFetch(
+      fakeResponse({ status: 200, json: async () => ({ status: "RUNNING" }) }),
     );
 
-    await process.stop();
-    expect(execFileMock).toHaveBeenLastCalledWith(
-      "docker",
-      ["compose", "--file", COMPOSE_FILE, "stop", "--timeout", "30", SERVICE],
-      expect.any(Function),
-    );
+    expect(await client().getStatus()).toBe("RUNNING");
 
-    await process.restart();
-    expect(execFileMock).toHaveBeenLastCalledWith(
-      "docker",
-      ["compose", "--file", COMPOSE_FILE, "restart", "--timeout", "30", SERVICE],
-      expect.any(Function),
-    );
+    const [url, init] = lastCall(fetchMock);
+    expect(url.href).toBe(`${BASE_URL}/status`);
+    expect(init.method).toBe("GET");
+    expect(init.headers).toEqual({ authorization: `Bearer ${TOKEN}` });
+    expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it("reports RUNNING when compose ps lists the service", async () => {
-    resolveStdout("3f2a1b\n");
-    const process = client();
+  it("throws PROCESS_CLIENT_ERROR when the status request does not return 200", async () => {
+    stubFetch(fakeResponse({ status: 401 }));
 
-    expect(await process.getStatus()).toBe("RUNNING");
-    expect(execFileMock).toHaveBeenLastCalledWith(
-      "docker",
-      ["compose", "--file", COMPOSE_FILE, "ps", "--status", "running", "--quiet", SERVICE],
-      expect.any(Function),
-    );
+    await expect(client().getStatus()).rejects.toMatchObject({ code: "PROCESS_CLIENT_ERROR" });
   });
 
-  it("reports STOPPED when compose ps output is empty", async () => {
-    resolveStdout("   \n");
-    const process = client();
+  it("throws PROCESS_CLIENT_ERROR when the status body is unexpected", async () => {
+    stubFetch(fakeResponse({ status: 200, json: async () => ({ status: "nope" }) }));
 
-    expect(await process.getStatus()).toBe("STOPPED");
+    await expect(client().getStatus()).rejects.toMatchObject({ code: "PROCESS_CLIENT_ERROR" });
+  });
+
+  it("throws PROCESS_CLIENT_ERROR when the controller is unreachable", async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError("fetch failed");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(client().start()).rejects.toMatchObject({ code: "PROCESS_CLIENT_ERROR" });
+  });
+
+  it("throws PROCESS_CLIENT_ERROR when the request times out", async () => {
+    // AbortSignal.timeout rejects fetch with a DOMException named TimeoutError.
+    const fetchMock = vi.fn(async () => {
+      throw new DOMException("The operation timed out.", "TimeoutError");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(client().getStatus()).rejects.toMatchObject({ code: "PROCESS_CLIENT_ERROR" });
   });
 });

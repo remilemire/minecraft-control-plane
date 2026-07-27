@@ -21,7 +21,7 @@ help: ## Show this help
 
 # ---- Docker -----------------------------------------------------------------
 
-.PHONY: up down restart ps logs db-logs backend-logs frontend-logs minecraft-logs nuke migrate
+.PHONY: up down restart ps logs db-logs backend-logs frontend-logs minecraft-logs minecraft-controller-logs nuke migrate
 
 up: ## Build and start the stack (detached)
 	$(COMPOSE) up --build -d
@@ -50,6 +50,9 @@ frontend-logs: ## Tail frontend logs
 
 minecraft-logs: ## Tail minecraft logs
 	$(COMPOSE) logs -f minecraft
+
+minecraft-controller-logs: ## Tail minecraft-controller logs
+	$(COMPOSE) logs -f minecraft-controller
 
 # END TODO
 

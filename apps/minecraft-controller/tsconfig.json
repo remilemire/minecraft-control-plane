@@ -1,0 +1,12 @@
+// apps/minecraft-controller/tsconfig.json
+
+{
+  "extends": ["../../tsconfig.base.json"],
+  "compilerOptions": {
+    "paths": { "@/*": ["./src/*"] },
+    "types": ["node"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
+  },
+  "include": ["src", "*.config.ts"]
+}

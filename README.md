@@ -99,8 +99,8 @@ cp apps/frontend/.env.example apps/frontend/.env
 ```
 
 Fill in the values that have no working default — notably `GOOGLE_CLIENT_ID`,
-`SESSION_SECRET`, and (for server control) `MINECRAFT_COMPOSE_FILE` /
-`MINECRAFT_CONTAINER`. See [Environment Variables](#environment-variables).
+`SESSION_SECRET`, and (for server control) `MINECRAFT_CONTROLLER_TOKEN`. See
+[Environment Variables](#environment-variables).
 
 ### 2. Start the stack
 
@@ -110,7 +110,7 @@ make logs      # tail all service logs
 make down      # stop
 ```
 
-This starts four services:
+This starts five services:
 
 | Service   | Default URL / port                        | Notes |
 | --------- | ----------------------------------------- | ----- |
@@ -118,9 +118,10 @@ This starts four services:
 | frontend  | http://localhost:5173 (`FRONTEND_PORT`)   | Vite dev server |
 | db        | localhost:5432 (`POSTGRES_PORT`)          | PostgreSQL 18 |
 | minecraft | internal only (RCON, `expose: 25565`)     | `itzg/minecraft-server` |
+| minecraft-controller | http://127.0.0.1:8001 (`MINECRAFT_CONTROLLER_PORT`, loopback only) | Docker-socket sidecar for server power control; bearer-token auth, backend-only compose network |
 
-The repo is bind-mounted into the backend and frontend containers, so changes reload
-live.
+The repo is bind-mounted into the backend, frontend, and minecraft-controller
+containers, so changes reload live.
 
 ### 3. Initialize the database
 
@@ -175,6 +176,9 @@ root `.env` and `apps/backend/.env` (via `compose.yaml`'s `env_file`).
 | `MINECRAFT_RCON_HOST`     | `minecraft`            | RCON host (the compose service name). |
 | `MINECRAFT_RCON_PORT`     | `25575`                | RCON port. |
 | `MINECRAFT_RCON_PASSWORD` | `password`             | RCON password (also passed to the minecraft container). |
+| `MINECRAFT_COMPOSE_PROJECT` | `minecraft-server`   | Compose project name (pinned via `name:`); the controller finds the minecraft container by its compose labels. |
+| `MINECRAFT_CONTROLLER_PORT` | `8001`               | Loopback-only host port for the controller; a host-run controller also listens on it. |
+| `MINECRAFT_CONTROLLER_TOKEN` | *(generate one)*    | Bearer token the backend must present to the controller. Lives only in this file. |
 
 ### `apps/backend/.env` (application settings)
 
@@ -187,8 +191,7 @@ root `.env` and `apps/backend/.env` (via `compose.yaml`'s `env_file`).
 | `CSRF_TTL_DAYS`          | `7`                                  | CSRF cookie lifetime (days). |
 | `INVITATION_TTL_DAYS`    | `7`                                  | Invitation lifetime (days). |
 | `GOOGLE_CLIENT_ID`       | `xxx.apps.googleusercontent.com`     | Google OAuth client ID used to verify sign-in credentials. |
-| `MINECRAFT_COMPOSE_FILE` | `/home/you/minecraft-server/compose.yaml` | Compose file the backend shells out to for server power control. |
-| `MINECRAFT_CONTAINER` | `minecraft`                          | Compose service name of the Minecraft container. |
+| `MINECRAFT_CONTROLLER_URL` | `http://localhost:8001`             | Minecraft-controller base URL (host-dev default; compose overrides it to `http://minecraft-controller:8000`). |
 | `BOOTSTRAP_EMAIL`        | `owner@domain.com`                   | The one email allowed to register without an invitation (so the first user can sign in). No special powers. |
 
 ### `apps/frontend/.env`

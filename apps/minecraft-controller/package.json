@@ -1,0 +1,30 @@
+{
+  "name": "@minecraft-server/minecraft-controller",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/server.ts",
+    "build": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "lint": "eslint . --fix",
+    "format": "prettier . --write",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@minecraft-server/shared": "workspace:*",
+    "dockerode": "^4.0.9",
+    "express": "^5.2.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.42",
+    "@types/express": "^5.0.6",
+    "@types/supertest": "^7.2.0",
+    "supertest": "^7.2.2",
+    "tsc-alias": "^1.9.0",
+    "tsx": "^4.22.4",
+    "vitest": "^4.1.9"
+  }
+}

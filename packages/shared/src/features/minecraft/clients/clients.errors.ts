@@ -4,6 +4,7 @@ import type { ErrorMeta } from "@/common/index.js";
 
 export const minecraftClientErrorMeta = {
   MOJANG_CLIENT_ERROR: { kind: "SERVICE_UNAVAILABLE" },
+  PROCESS_CLIENT_ERROR: { kind: "SERVICE_UNAVAILABLE" },
   RCON_CLIENT_ERROR: { kind: "SERVICE_UNAVAILABLE" },
 } as const satisfies ErrorMeta;
 

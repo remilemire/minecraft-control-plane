@@ -23,7 +23,11 @@ there are no roles.
   signed-in user adds or removes profiles, which whitelists/unwhitelists them over
   **RCON** — applied asynchronously via the backend's transactional outbox. Everyone
   can view the whitelist (profiles + online status) and all registered users, and
-  controls the server via **docker compose** (start/stop/restart the container).
+  controls the server (start/stop/restart the container) through the
+  **minecraft-controller** sidecar — a small HTTP service that owns the docker
+  socket (dockerode) so the backend never touches docker itself. It's reachable
+  only from the backend (dedicated compose network + bearer token
+  `MINECRAFT_CONTROLLER_TOKEN`, plus a loopback host port for host-run dev).
 - A firewall / IP-access layer in front of the server is a **planned future**
   addition — it does not exist yet. Access is the Minecraft whitelist for now.
 
@@ -32,12 +36,14 @@ there are no roles.
 A single **pnpm** workspace monorepo. TypeScript everywhere (ESM, strict).
 
 ```
-apps/backend     Express 5 + Drizzle + Postgres API   → apps/backend/CLAUDE.md
-apps/frontend    React 19 + Vite SPA                   → apps/frontend/CLAUDE.md
-packages/shared  Zod schemas + error catalog (shared by both apps)
+apps/backend               Express 5 + Drizzle + Postgres API   → apps/backend/CLAUDE.md
+apps/frontend              React 19 + Vite SPA                   → apps/frontend/CLAUDE.md
+apps/minecraft-controller  Dockerode sidecar (server power control over HTTP)
+packages/shared            Zod schemas + error catalog (shared by the apps)
 ```
 
-Top level: `compose.yaml` (dev stack: db, backend, frontend, minecraft), root
+Top level: `compose.yaml` (dev stack: db, backend, frontend, minecraft,
+minecraft-controller), root
 `Makefile` (task runner), shared TS/ESLint/Prettier base configs
 (`tsconfig.base.json`, `eslint.config.base.ts`, `prettier.config.ts`).
 
@@ -68,9 +74,14 @@ Other single test layers are still pnpm scripts, not Make targets — run them w
 Three gitignored `.env` files (each has a committed `.env.example`):
 
 - **root `.env`** — compose-level: ports, Postgres (`POSTGRES_*`), RCON
-  (`MINECRAFT_RCON_*`), `APP_ENV` (`dev`|`prod`).
+  (`MINECRAFT_RCON_*`), `APP_ENV` (`dev`|`prod`), the compose project name
+  (`MINECRAFT_COMPOSE_PROJECT` — interpolated into compose's top-level `name:`
+  and used by the controller's label-based container lookup), and the controller
+  (`MINECRAFT_CONTROLLER_PORT`, `MINECRAFT_CONTROLLER_TOKEN` — the token lives
+  **only** here; backend host dev reads it via `--env-file-if-exists=../../.env`).
 - **`apps/backend/.env`** — app settings: `SESSION_SECRET`, `CORS_ALLOWED_ORIGINS`,
-  `*_TTL_DAYS`, `GOOGLE_CLIENT_ID`, `MINECRAFT_COMPOSE_FILE`/`MINECRAFT_CONTAINER`,
+  `*_TTL_DAYS`, `GOOGLE_CLIENT_ID`, `MINECRAFT_CONTROLLER_URL` (host-dev default
+  `http://localhost:8001`; compose overrides it to `http://minecraft-controller:8000`),
   `BOOTSTRAP_EMAIL`.
 - **`apps/frontend/.env`** — `BACKEND_ORIGIN` (Vite dev-server `/api` proxy target;
   `compose.yaml` overrides it to `http://backend:8000` inside the network) and

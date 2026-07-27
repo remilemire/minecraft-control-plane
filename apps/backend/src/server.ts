@@ -20,8 +20,8 @@ const { app, outboxDispatcher } = createBackend({
     password: env.MINECRAFT_RCON_PASSWORD,
   }),
   processClient: new ProcessClient({
-    composeFile: env.MINECRAFT_COMPOSE_FILE,
-    serviceName: env.MINECRAFT_CONTAINER,
+    baseUrl: env.MINECRAFT_CONTROLLER_URL,
+    token: env.MINECRAFT_CONTROLLER_TOKEN,
   }),
 });
 

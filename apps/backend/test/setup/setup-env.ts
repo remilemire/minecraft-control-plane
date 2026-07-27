@@ -37,5 +37,5 @@ process.env.BOOTSTRAP_EMAIL ??= "bootstrap@example.com";
 process.env.MINECRAFT_RCON_HOST ??= "localhost";
 process.env.MINECRAFT_RCON_PORT ??= "25575";
 process.env.MINECRAFT_RCON_PASSWORD ??= "test-rcon-password";
-process.env.MINECRAFT_COMPOSE_FILE ??= "/dev/null";
-process.env.MINECRAFT_CONTAINER ??= "minecraft";
+process.env.MINECRAFT_CONTROLLER_URL ??= "http://minecraft-controller:8000";
+process.env.MINECRAFT_CONTROLLER_TOKEN ??= "test-controller-token";
