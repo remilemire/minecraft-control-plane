@@ -18,13 +18,12 @@ services:
 
     volumes:
       - postgres-data:/var/lib/postgresql
-
   
   minecraft:
     image: itzg/minecraft-server
 
-    expose:
-      - "25565"
+    ports:
+      - "25565:25565"
 
     volumes:
       - ./data/minecraft:/data
@@ -33,9 +32,15 @@ services:
     # notably MINECRAFT_CONTROLLER_TOKEN, which guards the controller against
     # a compromised sibling container (this one included).
     environment:
-      EULA: "TRUE"
       ENABLE_RCON: "true"
       RCON_PASSWORD: "${MINECRAFT_RCON_PASSWORD}"
+      EULA: "TRUE"
+      ENABLE_WHITELIST: "true"
+      ENFORCE_WHITELIST: "true"
+      VERSION: "${MINECRAFT_VERSION}"
+      TYPE: "${MINECRAFT_TYPE}"
+      DIFFICULTY: "${MINECRAFT_DIFFICULTY}"
+      MODE: "${MINECRAFT_MODE}"
 
   minecraft-controller:
     build:
@@ -110,10 +115,6 @@ services:
     depends_on:
       - db
       - minecraft-controller
-
-
-
-
 
   frontend:
     build:

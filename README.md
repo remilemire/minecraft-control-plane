@@ -176,6 +176,10 @@ root `.env` and `apps/backend/.env` (via `compose.yaml`'s `env_file`).
 | `MINECRAFT_RCON_HOST`     | `minecraft`            | RCON host (the compose service name). |
 | `MINECRAFT_RCON_PORT`     | `25575`                | RCON port. |
 | `MINECRAFT_RCON_PASSWORD` | `password`             | RCON password (also passed to the minecraft container). |
+| `MINECRAFT_VERSION`       | `LATEST`               | Minecraft server version (`itzg/minecraft-server` `VERSION`). |
+| `MINECRAFT_TYPE`          | `VANILLA`              | Server type/loader (`itzg/minecraft-server` `TYPE`). |
+| `MINECRAFT_DIFFICULTY`    | `HARD`                 | World difficulty (`itzg/minecraft-server` `DIFFICULTY`). |
+| `MINECRAFT_MODE`          | `SURVIVAL`             | Game mode (`itzg/minecraft-server` `MODE`). |
 | `MINECRAFT_COMPOSE_PROJECT` | `minecraft-server`   | Compose project name (pinned via `name:`); the controller finds the minecraft container by its compose labels. |
 | `MINECRAFT_CONTROLLER_PORT` | `8001`               | Loopback-only host port for the controller; a host-run controller also listens on it. |
 | `MINECRAFT_CONTROLLER_TOKEN` | *(generate one)*    | Bearer token the backend must present to the controller. Lives only in this file. |
