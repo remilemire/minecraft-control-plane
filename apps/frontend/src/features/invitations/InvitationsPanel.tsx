@@ -66,7 +66,7 @@ export function InvitationsPanel() {
   }
 
   return (
-    <McPanel title="Invitations">
+    <McPanel title="Admin Invitations">
       {/* noValidate: the shared zod schema owns validation, not the browser. */}
       <form onSubmit={(event) => void handleInvite(event)} noValidate className="mb-4 flex gap-2">
         <label htmlFor="invitation-email" className="sr-only">

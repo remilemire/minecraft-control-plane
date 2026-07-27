@@ -11,10 +11,10 @@ export function UsersPanel() {
   const { data: users, error, loading } = useRequest(fetchUsers);
 
   return (
-    <McPanel title="Users">
+    <McPanel title="Admins">
       {loading && <LoadingText />}
 
-      {users !== null && users.length === 0 && <p className="text-muted">No users yet.</p>}
+      {users !== null && users.length === 0 && <p className="text-muted">No admins yet.</p>}
 
       {users !== null && users.length > 0 && (
         <ul className="divide-slot divide-y">
