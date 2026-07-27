@@ -31,6 +31,9 @@ const rconMock = vi.hoisted(() => {
     // The real executeCommandAsync rejects with a plain string on timeout.
     commandRejection: undefined as string | undefined,
     response: "command output",
+    // When set, executeCommandAsync waits on this before settling, so a test
+    // can hold one command open and watch what the next one does.
+    gate: undefined as Promise<void> | undefined,
     instances: [] as MockRcon[],
   };
   return { state };
@@ -72,6 +75,7 @@ vi.mock("@minecraft-js/rcon", async () => {
     });
 
     public executeCommandAsync = vi.fn(async () => {
+      await rconMock.state.gate;
       if (rconMock.state.commandRejection !== undefined) {
         throw rconMock.state.commandRejection;
       }
@@ -111,6 +115,7 @@ describe("RconClient", () => {
     rconMock.state.connectOutcome = "authenticated";
     rconMock.state.commandRejection = undefined;
     rconMock.state.response = "command output";
+    rconMock.state.gate = undefined;
     rconMock.state.instances = [];
   });
 
@@ -195,5 +200,52 @@ describe("RconClient", () => {
       cause: "RCONClient#executeCommandAsync didn't resolve",
     });
     expect(lastInstance().disconnect).toHaveBeenCalledOnce();
+  });
+
+  // Vanilla bleeds one connection's command output into another's response when
+  // RCON connections overlap, which corrupted `list` replies with the error text
+  // from the library's pipelined `me` probe. Overlapping calls must queue.
+  it("serializes overlapping commands onto one connection at a time", async () => {
+    let release!: () => void;
+    rconMock.state.gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const client = new RconClient(OPTIONS);
+    const first = client.execute("list");
+    const second = client.execute("whitelist add Notch");
+
+    // A single microtask tick isn't enough hops to reach the second command.
+    await new Promise((resolve) => setImmediate(resolve));
+
+    // The second command must not have opened a socket while the first is in
+    // flight — that overlap is the whole bug.
+    expect(rconMock.state.instances).toHaveLength(1);
+
+    rconMock.state.gate = undefined;
+    release();
+    await Promise.all([first, second]);
+
+    expect(rconMock.state.instances).toHaveLength(2);
+    expect(rconMock.state.instances[0]?.executeCommandAsync).toHaveBeenCalledWith(
+      "list",
+      OPTIONS.timeoutMs,
+    );
+    expect(rconMock.state.instances[1]?.executeCommandAsync).toHaveBeenCalledWith(
+      "whitelist add Notch",
+      OPTIONS.timeoutMs,
+    );
+  });
+
+  it("keeps serving commands after one fails", async () => {
+    rconMock.state.connectOutcome = "throws";
+
+    const client = new RconClient(OPTIONS);
+
+    await expect(client.execute("list")).rejects.toMatchObject({ code: "RCON_CLIENT_ERROR" });
+
+    // A rejection must not poison the queue for everything behind it.
+    rconMock.state.connectOutcome = "authenticated";
+    expect(await client.execute("list")).toBe("command output");
   });
 });

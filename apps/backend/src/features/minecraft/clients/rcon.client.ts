@@ -31,7 +31,24 @@ export class RconClient implements RconApi {
     this.timeoutMs = timeoutMs;
   }
 
-  public async execute(command: string): Promise<string> {
+  // Vanilla bleeds one connection's command output into another's response when
+  // RCON connections overlap — the library pipelines a bogus `me` command after
+  // every real one to detect fragmentation, and that error text is what leaks.
+  // One command at a time, process-wide, is what keeps responses clean.
+  private tail: Promise<unknown> = Promise.resolve();
+
+  public execute(command: string): Promise<string> {
+    const result = this.tail.then(() => this.run(command));
+
+    // The chain advances on the settled outcome, not the rejection: one failed
+    // command must not poison every command after it (nor surface as an
+    // unhandled rejection on the tail, which nobody awaits).
+    this.tail = result.catch(() => undefined);
+
+    return result;
+  }
+
+  private async run(command: string): Promise<string> {
     const client = new RCONClient(this.host, this.password, this.port);
 
     // The library reports failures by emitting on the client, and both of

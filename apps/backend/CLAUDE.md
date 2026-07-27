@@ -92,6 +92,13 @@ To add a dependency on an outside system, define an interface (a "seam"), implem
 as a client (real in `server.ts`, fake in `test/fakes/`), and thread it through
 `AppDeps`.
 
+**`RconClient` serializes its commands** behind a promise chain, so only one RCON
+connection is ever open. Vanilla bleeds one connection's command output into
+another's response when they overlap — and `@minecraft-js/rcon` pipelines a bogus
+`me` command after every real one to detect fragmentation, so the leaked text is
+that probe's "Unknown or incomplete command" error, which corrupted `list` replies.
+Like the outbox's ordering guarantee, this assumes the single backend process.
+
 ## Request flow
 
 1. Controller calls `parseOrThrow(schema, input)` (`validation/parse.ts`) with a Zod
