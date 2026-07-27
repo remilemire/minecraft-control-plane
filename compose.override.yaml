@@ -1,0 +1,78 @@
+# compose.override.yaml
+#
+# Dev-only additions, auto-loaded by plain `docker compose` (what the
+# Makefile runs when APP_ENV != prod): dev build targets, source bind mounts
+# (with anonymous volumes masking each node_modules so the images' installs
+# win over the host's), and host port publishes for host-run tooling.
+
+services:
+  db:
+    # Published for host-run tooling (drizzle-kit, vitest). Keep 5432 —
+    # Postgres always listens on 5432 internally.
+    ports:
+      - "${POSTGRES_PORT}:5432"
+
+  minecraft-controller:
+    build:
+      target: dev
+
+    # Loopback-only publish so a host-run backend (pnpm dev) can reach the
+    # controller; the compose network path for other containers is gated by
+    # the `minecraft-controller` network.
+    ports:
+      - "127.0.0.1:${MINECRAFT_CONTROLLER_PORT}:8000"
+
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/apps/backend/node_modules
+      - /app/apps/frontend/node_modules
+      - /app/apps/minecraft-controller/node_modules
+      - /app/packages/shared/node_modules
+
+    working_dir: /app/apps/minecraft-controller
+
+  backend:
+    build:
+      target: dev
+
+    ports:
+      - "${BACKEND_PORT}:8000"
+
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/apps/backend/node_modules
+      - /app/apps/frontend/node_modules
+      - /app/apps/minecraft-controller/node_modules
+      - /app/packages/shared/node_modules
+
+    working_dir: /app/apps/backend
+
+  # Dev-only service: in prod the SPA is built into the backend image and
+  # served same-origin.
+  frontend:
+    build:
+      context: .
+      dockerfile: ./apps/frontend/Dockerfile
+      target: dev
+
+    env_file:
+      - ./.env
+      - ./apps/frontend/.env
+
+    environment:
+      # Vite proxies /api inside the compose network; overrides the host
+      # default from apps/frontend/.env.
+      BACKEND_ORIGIN: http://backend:8000
+
+    ports:
+      - "${FRONTEND_PORT}:5173"
+
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/apps/backend/node_modules
+      - /app/apps/frontend/node_modules
+      - /app/apps/minecraft-controller/node_modules
+      - /app/packages/shared/node_modules

@@ -1,4 +1,9 @@
 # compose.yaml
+#
+# Shared config for both environments. Dev-only additions live in
+# compose.override.yaml (auto-loaded by plain `docker compose`); prod
+# additions in compose.prod.yaml (the Makefile passes
+# `-f compose.yaml -f compose.prod.yaml` when APP_ENV=prod).
 
 # Pinned (rather than derived from the directory name) because the controller
 # finds the minecraft container by its com.docker.compose.project label.
@@ -13,12 +18,18 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DATABASE}
 
-    ports:
-      - "${POSTGRES_PORT}:5432"
+    # Gates the backend's boot (depends_on: service_healthy) so prod's
+    # migrate-on-boot never races the database's first start.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DATABASE}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
     volumes:
       - postgres-data:/var/lib/postgresql
-  
+
   minecraft:
     image: itzg/minecraft-server
 
@@ -47,7 +58,6 @@ services:
     build:
       context: .
       dockerfile: ./apps/minecraft-controller/Dockerfile
-      target: ${APP_ENV}
 
     environment:
       MINECRAFT_COMPOSE_PROJECT: ${MINECRAFT_COMPOSE_PROJECT}
@@ -61,31 +71,17 @@ services:
       # Process env wins over --env-file, keeping the container on 8000.
       MINECRAFT_CONTROLLER_PORT: 8000
 
-    # Loopback-only publish so a host-run backend (pnpm dev) can reach the
-    # controller; the compose network path for other containers is gated by
-    # the `minecraft-controller` network below.
-    ports:
-      - "127.0.0.1:${MINECRAFT_CONTROLLER_PORT}:8000"
-
     networks:
       - minecraft-controller
 
+    # The docker socket is the service's whole purpose — not a dev-only mount.
     volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/apps/backend/node_modules
-      - /app/apps/frontend/node_modules
-      - /app/apps/minecraft-controller/node_modules
-      - /app/packages/shared/node_modules
       - /var/run/docker.sock:/var/run/docker.sock
-
-    working_dir: /app/apps/minecraft-controller
 
   backend:
     build:
       context: .
       dockerfile: ./apps/backend/Dockerfile
-      target: ${APP_ENV}
 
     env_file:
       - ./.env
@@ -96,52 +92,15 @@ services:
       # overrides the host default from apps/backend/.env.
       MINECRAFT_CONTROLLER_URL: http://minecraft-controller:8000
 
-    ports:
-      - "${BACKEND_PORT}:8000"
-
     networks:
       - default
       - minecraft-controller
 
-    volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/apps/backend/node_modules
-      - /app/apps/frontend/node_modules
-      - /app/apps/minecraft-controller/node_modules
-      - /app/packages/shared/node_modules
-
-    working_dir: /app/apps/backend
-
     depends_on:
-      - db
-      - minecraft-controller
-
-  frontend:
-    build:
-      context: .
-      dockerfile: ./apps/frontend/Dockerfile
-      target: ${APP_ENV}
-
-    env_file:
-      - ./.env
-      - ./apps/frontend/.env
-
-    environment:
-      # Vite proxies /api inside the compose network; overrides the host
-      # default from apps/frontend/.env.
-      BACKEND_ORIGIN: http://backend:8000
-
-    ports:
-      - "${FRONTEND_PORT}:5173"
-
-    volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/apps/backend/node_modules
-      - /app/apps/frontend/node_modules
-      - /app/apps/minecraft-controller/node_modules
-      - /app/packages/shared/node_modules
+      db:
+        condition: service_healthy
+      minecraft-controller:
+        condition: service_started
 
 volumes:
   postgres-data:

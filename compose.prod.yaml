@@ -1,0 +1,54 @@
+# compose.prod.yaml
+#
+# Prod additions: prod build targets, restart policies, and the Caddy edge.
+# Loaded explicitly by the Makefile when APP_ENV=prod (which also skips the
+# dev compose.override.yaml — always drive prod through `make`). Published
+# port surface: caddy 80/443 and minecraft 25565, nothing else.
+
+services:
+  db:
+    restart: unless-stopped
+
+  minecraft:
+    restart: unless-stopped
+
+  minecraft-controller:
+    restart: unless-stopped
+    build:
+      target: prod
+
+  backend:
+    restart: unless-stopped
+    build:
+      target: prod
+      args:
+        # Baked into the SPA bundle at build time (public, not a secret).
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+
+  # TLS termination for the panel. Kept off the minecraft-controller network —
+  # only the backend may reach the service holding the docker socket.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+
+    environment:
+      CADDY_SITE_ADDRESS: ${CADDY_SITE_ADDRESS}
+      BACKEND_PORT: ${BACKEND_PORT}
+
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and ACME account state survive restarts.
+      - caddy-data:/data
+      - caddy-config:/config
+
+    depends_on:
+      - backend
+
+volumes:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,13 @@
+# caddy/Caddyfile
+#
+# TLS termination for the panel. CADDY_SITE_ADDRESS is the public hostname:
+# a real DNS name gets automatic publicly-trusted certificates via ACME
+# (TCP 80 and 443 must be forwarded to this host for the challenges);
+# localhost/internal names fall back to Caddy's internal CA on their own,
+# which is what makes local prod dry-runs work without DNS.
+
+{$CADDY_SITE_ADDRESS} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy backend:{$BACKEND_PORT}
+}
