@@ -1,6 +1,5 @@
 // apps/backend/src/server.ts
 
-import "dotenv/config";
 import { createBackend } from "./backend.js";
 import { env } from "./config/env.js";
 import { db, pool } from "@/infrastructure/db/index.js";

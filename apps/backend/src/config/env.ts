@@ -1,12 +1,13 @@
 // apps/backend/src/config/env.ts
 
-import dotenv from "dotenv";
 import { z } from "zod";
 import { buildPostgresUrl, postgresEnvSchema } from "./postgres.js";
 
-dotenv.config({ path: "../.env" });
-dotenv.config({ path: ".env", override: true });
-
+// This module only *parses* process.env — nothing here reads a .env file. The
+// environment is already filled by the time it loads: host dev passes
+// --env-file-if-exists for the root and backend files (the `dev` script),
+// Compose injects the same values via env_file, and tests set their own in
+// test/setup/setup-env.ts.
 const envSchema = z.object({
   APP_ENV: z.enum(["prod", "dev"]).default("prod"),
   BACKEND_PORT: z.coerce.number().int().positive(),
