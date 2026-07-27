@@ -1,7 +1,7 @@
 // apps/frontend/src/features/minecraft/server/ServerPanel.test.tsx
 
 import { ApiError } from "@/lib/apiClient";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchServerStatus, restartServer, startServer, stopServer } from "./api";
@@ -72,6 +72,51 @@ describe("ServerPanel", () => {
     await user.click(screen.getByRole("button", { name: "Restart" }));
 
     await waitFor(() => expect(restartMock).toHaveBeenCalledTimes(1));
+  });
+
+  it("polls the status and picks up a change made outside the panel", async () => {
+    vi.useFakeTimers();
+    try {
+      statusMock.mockResolvedValueOnce("RUNNING");
+      statusMock.mockResolvedValue("STOPPED");
+
+      render(<ServerPanel />);
+      // Flush the initial load without waitFor, which fake timers would stall.
+      await act(async () => {});
+      expect(screen.getByText("RUNNING")).toBeInTheDocument();
+      expect(statusMock).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(statusMock).toHaveBeenCalledTimes(2);
+      expect(screen.getByText("STOPPED")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the badge and the controls live while a poll is in flight", async () => {
+    vi.useFakeTimers();
+    try {
+      statusMock.mockResolvedValue("RUNNING");
+
+      render(<ServerPanel />);
+      await act(async () => {});
+
+      // The refetch is in flight — the badge stays put and nothing disables.
+      act(() => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(screen.getByText("RUNNING")).toBeInTheDocument();
+      expect(screen.queryByText(/Loading/)).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
+
+      await act(async () => {});
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("shows action errors", async () => {

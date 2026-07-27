@@ -7,15 +7,28 @@ import { McButton } from "@/components/McButton";
 import { McPanel } from "@/components/McPanel";
 import { toApiError, type ApiError } from "@/lib/apiClient";
 import { useRequest } from "@/lib/useRequest";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { fetchServerStatus, restartServer, startServer, stopServer } from "./api";
 
 type ServerAction = "start" | "stop" | "restart";
+
+// The container's state changes without us — a crash, a `docker stop` on the
+// host, or a Start that only finishes booting after the call returns — so the
+// status is polled rather than trusted until the next action.
+const STATUS_POLL_MS = 10_000;
 
 export function ServerPanel() {
   const { data: status, error, loading, reload } = useRequest(fetchServerStatus);
   const [pending, setPending] = useState<ServerAction | null>(null);
   const [actionError, setActionError] = useState<ApiError | null>(null);
+
+  useEffect(() => {
+    const timer = setInterval(reload, STATUS_POLL_MS);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [reload]);
 
   async function run(action: ServerAction, request: () => Promise<undefined>) {
     setPending(action);
@@ -30,14 +43,17 @@ export function ServerPanel() {
     }
   }
 
-  const busy = pending !== null || loading;
+  // A poll is not something the user is waiting on: only the first load may
+  // blank the badge or disable the controls.
+  const initialLoad = loading && status === null;
+  const busy = pending !== null || initialLoad;
   const running = status === "RUNNING";
 
   return (
     <McPanel title="Server">
       <div className="mb-4 flex items-center gap-3">
         <span className="text-muted">Status:</span>
-        {loading ? (
+        {initialLoad ? (
           <LoadingText />
         ) : status !== null ? (
           <McBadge variant={running ? "success" : "danger"}>{status}</McBadge>
