@@ -16,6 +16,7 @@
 
 export * from "./database.js";
 export * from "./errors.js";
+export * from "./migrate.js";
 export * from "./provider.js";
 export * from "./transaction/index.js";
 export * from "./types.js";

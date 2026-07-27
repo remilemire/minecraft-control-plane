@@ -2,13 +2,20 @@
 
 import { createBackend } from "./backend.js";
 import { env } from "./config/env.js";
-import { db, pool } from "@/infrastructure/db/index.js";
+import { db, pool, runMigrations } from "@/infrastructure/db/index.js";
 import { GoogleOauthClient } from "./features/auth/clients/google-oauth.client.js";
 import { MojangClient } from "./features/minecraft/clients/mojang.client.js";
 import { ProcessClient } from "./features/minecraft/clients/process.client.js";
 import { RconClient } from "./features/minecraft/clients/rcon.client.js";
 
 const port = Number(env.BACKEND_PORT);
+
+// Prod applies pending migrations before serving (the image ships the .sql
+// files but no drizzle-kit); a failure crashes the boot and compose restarts
+// us once the database is healthy. Dev migrates explicitly via `make migrate`.
+if (!env.DEBUG) {
+  await runMigrations(db);
+}
 
 const { app, outboxDispatcher } = createBackend({
   db,
