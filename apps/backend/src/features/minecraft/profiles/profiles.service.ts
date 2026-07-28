@@ -33,13 +33,29 @@ export class MinecraftProfileService {
     private readonly outboxService: AppOutboxService,
   ) {}
 
+  // Online status is enrichment over rows that live in Postgres, so an
+  // unreachable server costs the badge, not the list: RCON is down for the
+  // minutes the Minecraft server takes to boot, and letting that through would
+  // 503 a whitelist we can read perfectly well. Everyone reads offline until
+  // RCON answers again — which is also the truth while the server is starting.
   public async list(): Promise<MinecraftProfileWithStatus[]> {
     const [profiles, onlineUsernames] = await Promise.all([
       this.minecraftProfiles.findAll(),
-      this.minecraftServerService.listOnlineUsernames(),
+      this.listOnlineUsernamesOrNone(),
     ]);
 
     return profiles.map((profile) => withStatus(profile, onlineUsernames));
+  }
+
+  // Swallowing the failure costs us the error handler's 5xx log, so this is
+  // the only trace left that the status came back degraded.
+  private async listOnlineUsernamesOrNone(): Promise<string[]> {
+    try {
+      return await this.minecraftServerService.listOnlineUsernames();
+    } catch (error) {
+      console.warn("Online status unavailable; reporting every profile offline:", error);
+      return [];
+    }
   }
 
   // Resolves the username against Mojang and enqueues the whitelist command

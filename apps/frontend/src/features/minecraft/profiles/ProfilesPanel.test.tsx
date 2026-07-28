@@ -118,6 +118,34 @@ describe("ProfilesPanel", () => {
     }
   });
 
+  it("keeps the list on screen when a poll fails", async () => {
+    vi.useFakeTimers();
+    try {
+      listMock.mockResolvedValueOnce([
+        makeProfile({ username: "Steve", whitelistStatus: "pending" }),
+      ]);
+      listMock.mockRejectedValue(
+        new ApiError("SERVICE_UNAVAILABLE", "SERVICE_UNAVAILABLE", "Could not reach the server."),
+      );
+
+      render(<ProfilesPanel />);
+      await act(async () => {});
+      expect(screen.getByText("Steve")).toBeInTheDocument();
+
+      await act(async () => {
+        vi.advanceTimersByTime(3_000);
+      });
+
+      // The failed poll reports itself beside the last good rows rather than
+      // blanking them — and polling survives, so the list recovers on its own.
+      expect(screen.getByText("Steve")).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toHaveTextContent("Could not reach the server.");
+      expect(listMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("shows the empty state when nothing is whitelisted", async () => {
     listMock.mockResolvedValue([]);
 
@@ -141,7 +169,9 @@ describe("ProfilesPanel", () => {
 
     expect(await screen.findByText("Steve")).toBeInTheDocument();
     expect(createMock).toHaveBeenCalledWith("steve");
-    expect(screen.getByRole("status")).toHaveTextContent("Whitelisted!");
+    // The whitelist command is still in flight at this point, so the notice
+    // says added, not whitelisted.
+    expect(screen.getByRole("status")).toHaveTextContent("Added!");
   });
 
   it("rejects an invalid username without calling the API", async () => {

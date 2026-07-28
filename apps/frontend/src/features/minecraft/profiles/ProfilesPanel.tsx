@@ -100,9 +100,12 @@ function AddProfileForm({ onAdded }: AddProfileFormProps) {
         </McButton>
       </div>
       <ErrorText error={error} className="mt-2 text-sm" />
+      {/* The POST only enqueues the whitelist command — the profile lands
+          `pending` and the outbox settles it, so promising they can join now
+          would be a lie for as long as the server is unreachable. */}
       {added && (
         <p role="status" className="text-success mt-2 text-sm">
-          Whitelisted! They can now join the server.
+          Added! Whitelisting them now — the status below will update.
         </p>
       )}
     </form>

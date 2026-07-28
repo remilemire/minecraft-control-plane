@@ -3,9 +3,10 @@
 import type { MinecraftServerService } from "@/features/minecraft/server/server.service.js";
 import type { TransactionManager } from "@/infrastructure/db/index.js";
 import type { AppOutboxService } from "@/infrastructure/outbox/outbox.registry.js";
+import { AppError } from "@/errors/app-error.js";
 import { FakeMojangClient } from "@test/fakes/fake-mojang.client.js";
 import { randomUUID } from "crypto";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MinecraftProfile } from "./profiles.schema.js";
 import type { MinecraftProfileRepository } from "./profiles.repository.js";
 import { MinecraftProfileService } from "./profiles.service.js";
@@ -33,6 +34,16 @@ function repositoryStub(
 function serverServiceStub(onlineUsernames: readonly string[] = []): MinecraftServerService {
   return {
     listOnlineUsernames: async () => onlineUsernames,
+  } as unknown as MinecraftServerService;
+}
+
+// A Minecraft server that isn't answering RCON — the state it's in for the
+// minutes it takes to boot.
+function unreachableServerServiceStub(): MinecraftServerService {
+  return {
+    listOnlineUsernames: async () => {
+      throw new AppError("RCON_CLIENT_ERROR");
+    },
   } as unknown as MinecraftServerService;
 }
 
@@ -66,6 +77,10 @@ function neverRunsTransactionManager(): TransactionManager {
 }
 
 describe("MinecraftProfileService", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe("list", () => {
     it("merges profiles with their online and whitelist status", async () => {
       const online = profile({
@@ -98,6 +113,31 @@ describe("MinecraftProfileService", () => {
           whitelistStatus: "failed",
         },
       ]);
+    });
+
+    it("reports every profile offline when the server is unreachable", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const steve = profile({ username: "Steve", whitelistStatus: "whitelisted" });
+      const service = new MinecraftProfileService(
+        repositoryStub({ findAll: async () => [steve] }),
+        new FakeMojangClient(),
+        unreachableServerServiceStub(),
+        neverRunsTransactionManager(),
+        outboxServiceRecorder().service,
+      );
+
+      // The whitelist itself is in Postgres, so RCON being down costs the
+      // online badge and nothing else — the list still answers.
+      expect(await service.list()).toEqual([
+        {
+          id: steve.id,
+          username: "Steve",
+          uuid: steve.uuid,
+          online: false,
+          whitelistStatus: "whitelisted",
+        },
+      ]);
+      expect(warn).toHaveBeenCalled();
     });
   });
 

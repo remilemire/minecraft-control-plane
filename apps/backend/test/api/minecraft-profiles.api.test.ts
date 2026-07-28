@@ -4,7 +4,7 @@ import { db } from "@/infrastructure/db/index.js";
 import { outboxMessages } from "@/infrastructure/db/schemas.js";
 import { OUTBOX_DISPATCHER_DEFAULTS } from "@/infrastructure/outbox/index.js";
 import request from "supertest";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestApp, type TestApp } from "@test/helpers/create-test-app.js";
 import { createMinecraftProfile } from "@test/helpers/factories/minecraft-profile.factory.js";
 import { authenticateUser } from "@test/helpers/test-auth.js";
@@ -14,6 +14,10 @@ let testApp: TestApp;
 
 beforeEach(() => {
   testApp = createTestApp();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("GET /api/minecraft/profiles", () => {
@@ -45,6 +49,33 @@ describe("GET /api/minecraft/profiles", () => {
       online: false,
       whitelistStatus: "failed",
     });
+  });
+
+  // The whole list used to 503 on this — RCON is unreachable for as long as
+  // the Minecraft server takes to boot, which is exactly when someone is most
+  // likely to be looking at the panel.
+  it("still lists profiles when the server is unreachable, reporting them offline", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { app, rconClient } = testApp;
+    rconClient.failOn("list");
+    const auth = await authenticateUser();
+    const steve = await createMinecraftProfile({
+      username: "Steve",
+      whitelistStatus: "whitelisted",
+    });
+
+    const response = await request(app).get("/api/minecraft/profiles").set("Cookie", [auth.cookie]);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([
+      {
+        id: steve.id,
+        username: "Steve",
+        uuid: steve.uuid,
+        online: false,
+        whitelistStatus: "whitelisted",
+      },
+    ]);
   });
 
   it("rejects requests without a session", async () => {

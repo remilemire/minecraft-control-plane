@@ -72,7 +72,9 @@ src/
 
 `useRequest(load)` (`lib/useRequest.ts`) fetches on mount and on `reload()`. `load`
 must be identity-stable (module-level fn); previous data stays visible while a
-reload is in flight. Mutations live in component handlers and call `reload()` on
+reload is in flight **and survives one that fails** — `data` is only ever replaced
+by a success, so a panel renders the error _beside_ its last good data, never
+instead of it. Mutations live in component handlers and call `reload()` on
 success — there's no cache/store.
 
 Backend state that settles asynchronously is polled by interval-calling `reload()`

@@ -22,7 +22,9 @@ interface SettledState<T> {
  *
  * `loading` is derived by comparing the requested tick with the last settled
  * one, so the effect never has to set state synchronously; previous data
- * stays visible while a reload is in flight.
+ * stays visible while a reload is in flight, and survives a reload that fails
+ * — a poll that hits a blip shows the error beside the last good data instead
+ * of blanking the view.
  */
 export function useRequest<T>(load: () => Promise<T>): RequestState<T> {
   const [tick, setTick] = useState(0);
@@ -36,7 +38,8 @@ export function useRequest<T>(load: () => Promise<T>): RequestState<T> {
         if (!cancelled) setSettled({ tick, data, error: null });
       },
       (error: unknown) => {
-        if (!cancelled) setSettled({ tick, data: null, error: toApiError(error) });
+        if (!cancelled)
+          setSettled((previous) => ({ tick, data: previous.data, error: toApiError(error) }));
       },
     );
 
