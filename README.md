@@ -196,8 +196,6 @@ root `.env` and `apps/backend/.env` (via `compose.yaml`'s `env_file`).
 | Variable                 | Example                              | Purpose |
 | ------------------------ | ------------------------------------ | ------- |
 | `SESSION_SECRET`         | `secret`                             | Required by `config/env.ts` but currently unused (sessions store hashed random tokens, no signing). |
-| `CORS_ALLOWED_ORIGINS`   | `http://localhost:5173`              | Comma-separated allowed origins (parsed into `ALLOWED_ORIGINS`). |
-| `COOKIE_DOMAIN`          | *(empty)*                            | Optional cookie domain; empty for host-only cookies. |
 | `SESSION_TTL_DAYS`       | `7`                                  | Session lifetime (days). |
 | `CSRF_TTL_DAYS`          | `7`                                  | CSRF cookie lifetime (days). |
 | `INVITATION_TTL_DAYS`    | `7`                                  | Invitation lifetime (days). |

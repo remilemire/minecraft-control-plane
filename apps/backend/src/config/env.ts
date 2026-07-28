@@ -12,9 +12,6 @@ const envSchema = z.object({
   APP_ENV: z.enum(["prod", "dev"]).default("prod"),
   BACKEND_PORT: z.coerce.number().int().positive(),
 
-  CORS_ALLOWED_ORIGINS: z.string().default(""),
-  COOKIE_DOMAIN: z.string().exactOptional(),
-
   // Path of the built SPA to serve same-origin (set by the prod image);
   // unset → no static serving (dev uses the Vite dev server).
   SPA_DIR: z.string().exactOptional(),
@@ -48,10 +45,6 @@ export const env = {
   ...postgres,
 
   DEBUG: parsedEnv.APP_ENV === "dev",
-
-  ALLOWED_ORIGINS: parsedEnv.CORS_ALLOWED_ORIGINS.split(",")
-    .map((origin: string) => origin.trim())
-    .filter(Boolean),
 
   SESSION_TTL_MS: parsedEnv.SESSION_TTL_DAYS * MS_PER_DAY,
   CSRF_TTL_MS: parsedEnv.CSRF_TTL_DAYS * MS_PER_DAY,

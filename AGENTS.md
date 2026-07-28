@@ -95,8 +95,8 @@ Three gitignored `.env` files (each has a committed `.env.example`):
   token lives **only** here; backend host dev reads it via
   `--env-file-if-exists=../../.env`).
 - **`apps/backend/.env`** — app settings: `SESSION_SECRET` (required but currently
-  unused), `CORS_ALLOWED_ORIGINS`, `*_TTL_DAYS`, `MINECRAFT_CONTROLLER_URL`
-  (host-dev default `http://localhost:8001`; compose overrides it to
+  unused), `*_TTL_DAYS`, `MINECRAFT_CONTROLLER_URL` (host-dev default
+  `http://localhost:8001`; compose overrides it to
   `http://minecraft-controller:8000`), `BOOTSTRAP_EMAIL`.
 - **`apps/frontend/.env`** — `VITE_GOOGLE_CLIENT_ID` (Google sign-in button in
   host dev; same client as the root `GOOGLE_CLIENT_ID`, which supplies the prod

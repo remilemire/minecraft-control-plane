@@ -6,7 +6,6 @@
 import "./openapi/zod-extend.js";
 
 import cookieParser from "cookie-parser";
-import cors from "cors";
 import express from "express";
 import type { Router } from "express";
 
@@ -23,7 +22,8 @@ import { createSpaRoutes } from "./spa/spa.routes.js";
 export function createApp(apiRouter: Router) {
   const app = express();
 
-  app.use(cors({ origin: env.ALLOWED_ORIGINS, credentials: true }));
+  // No CORS middleware: every path is same-origin — the Vite proxy in dev,
+  // the backend-served SPA (SPA_DIR) in prod.
   app.use(express.json());
   app.use(cookieParser());
   if (env.DEBUG) {
