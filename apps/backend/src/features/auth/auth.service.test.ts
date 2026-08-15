@@ -1,13 +1,13 @@
 // apps/backend/src/features/auth/auth.service.test.ts
 
 import { env } from "@/config/env.js";
-import type { Invitation, User } from "@/infrastructure/db/schemas.js";
+import { AppError } from "@/errors/app-error.js";
+import type { User } from "@/infrastructure/db/schemas.js";
 import type { OAuthIdentity } from "./oauth-identities/oauth-identities.schema.js";
 import type { Session } from "./sessions/sessions.schema.js";
 import type { TransactionManager } from "@/infrastructure/db/index.js";
 import { FakeGoogleOauthClient } from "@test/fakes/fake-google-oauth.client.js";
 import { describe, expect, it } from "vitest";
-import type { InvitationService } from "@/features/invitations/invitations.service.js";
 import type { UserService } from "@/features/users/users.service.js";
 import type { OAuthIdentityService } from "./oauth-identities/oauth-identities.service.js";
 import type { SessionService } from "./sessions/sessions.service.js";
@@ -16,13 +16,13 @@ import { AuthService } from "./auth.service.js";
 
 const USER_ID = "00000000-0000-0000-0000-000000000001";
 const IDENTITY_ID = "00000000-0000-0000-0000-0000000000bb";
-const INVITATION_ID = "00000000-0000-0000-0000-0000000000cc";
 
 function user(overrides: Partial<User> = {}): User {
   return {
     id: USER_ID,
     email: "steve@example.com",
     fullName: null,
+    isOwner: false,
     createdAt: new Date(),
     ...overrides,
   };
@@ -35,19 +35,6 @@ function oauthIdentity(overrides: Partial<OAuthIdentity> = {}): OAuthIdentity {
     provider: "google",
     subject: "google-abc",
     createdAt: new Date(),
-    ...overrides,
-  };
-}
-
-function invitation(overrides: Partial<Invitation> = {}): Invitation {
-  return {
-    id: INVITATION_ID,
-    email: "invited@example.com",
-    invitedByUserId: "00000000-0000-0000-0000-0000000000dd",
-    acceptedByUserId: null,
-    createdAt: new Date(),
-    expiresAt: new Date(Date.now() + 1_000),
-    acceptedAt: null,
     ...overrides,
   };
 }
@@ -72,11 +59,6 @@ function sessionServiceStub(
   methods: Partial<Record<keyof SessionService, unknown>>,
 ): SessionService {
   return methods as unknown as SessionService;
-}
-function invitationServiceStub(
-  methods: Partial<Record<keyof InvitationService, unknown>>,
-): InvitationService {
-  return methods as unknown as InvitationService;
 }
 function oauthIdentityServiceStub(
   methods: Partial<Record<keyof OAuthIdentityService, unknown>>,
@@ -124,8 +106,8 @@ describe("AuthService", () => {
 
       const service = new AuthService(
         userServiceStub({
-          create: async () => {
-            throw new Error("existing users must not be re-created");
+          findByEmail: async () => {
+            throw new Error("a linked identity must not fall back to the email lookup");
           },
         }),
         sessionServiceStub({
@@ -134,7 +116,6 @@ describe("AuthService", () => {
             return issuedSession;
           },
         }),
-        invitationServiceStub({}),
         { google: googleOauthClient },
         oauthIdentityServiceStub({
           findBySubjectWithUser: async (provider: string, subject: string) => {
@@ -158,47 +139,123 @@ describe("AuthService", () => {
       expect(sessionUserId).toBe(existing.id);
     });
 
-    it("registers an invited user on first login: user, identity, then invitation acceptance, in order", async () => {
+    it("claims a provisioned account on first login by linking the identity, without a transaction", async () => {
       const googleOauthClient = new FakeGoogleOauthClient();
       const credential = googleOauthClient.issueToken({
-        email: "invited@example.com",
-        sub: "google-invited",
-        name: "In Vited",
+        email: "provisioned@example.com",
+        sub: "google-provisioned",
       });
-      const created = user({ email: "invited@example.com", fullName: "In Vited" });
-      const pending = invitation({ email: "invited@example.com" });
+      const provisioned = user({ email: "provisioned@example.com" });
 
-      const callOrder: string[] = [];
-      let createInput: unknown;
+      let lookedUpEmail: unknown;
       let identityInput: unknown;
-      let acceptedId: unknown;
-      let acceptedInput: unknown;
 
       const service = new AuthService(
         userServiceStub({
+          findByEmail: async (email: unknown) => {
+            lookedUpEmail = email;
+            return provisioned;
+          },
+          create: async () => {
+            throw new Error("a provisioned user must not be re-created");
+          },
+          createOwner: async () => {
+            throw new Error("claiming a provisioned account must not create an owner");
+          },
+        }),
+        sessionServiceStub({ create: async () => issuedSession }),
+        { google: googleOauthClient },
+        oauthIdentityServiceStub({
+          findBySubjectWithUser: async () => null,
           create: async (input: unknown) => {
-            callOrder.push("create-user");
-            createInput = input;
+            identityInput = input;
+            return oauthIdentity({ userId: provisioned.id, subject: "google-provisioned" });
+          },
+        }),
+        // Linking is a single insert; it must not open a transaction.
+        neverRunsTransactionManager(),
+      );
+
+      const result = await service.authenticateWithOAuth({ credential, provider: "google" });
+
+      expect(result).toEqual({ user: provisioned, sessionToken: "session-token" });
+      expect(lookedUpEmail).toBe("provisioned@example.com");
+      expect(identityInput).toEqual({
+        userId: provisioned.id,
+        provider: "google",
+        subject: "google-provisioned",
+      });
+    });
+
+    it("normalizes the provider email before matching it against provisioned users", async () => {
+      const googleOauthClient = new FakeGoogleOauthClient();
+      const credential = googleOauthClient.issueToken({
+        email: "  Steve@Example.COM ",
+        sub: "google-cased",
+      });
+      const provisioned = user();
+
+      let lookedUpEmail: unknown;
+
+      const service = new AuthService(
+        userServiceStub({
+          findByEmail: async (email: unknown) => {
+            lookedUpEmail = email;
+            return provisioned;
+          },
+        }),
+        sessionServiceStub({ create: async () => issuedSession }),
+        { google: googleOauthClient },
+        oauthIdentityServiceStub({
+          findBySubjectWithUser: async () => null,
+          create: async () => oauthIdentity({ subject: "google-cased" }),
+        }),
+        neverRunsTransactionManager(),
+      );
+
+      await service.authenticateWithOAuth({ credential, provider: "google" });
+
+      expect(lookedUpEmail).toBe("steve@example.com");
+    });
+
+    it("bootstraps the first account as the owner: user then identity, inside the transaction", async () => {
+      const googleOauthClient = new FakeGoogleOauthClient();
+      const credential = googleOauthClient.issueToken({
+        email: env.BOOTSTRAP_OWNER_EMAIL,
+        sub: "google-bootstrap",
+        name: "First Owner",
+      });
+      const created = user({
+        email: env.BOOTSTRAP_OWNER_EMAIL,
+        fullName: "First Owner",
+        isOwner: true,
+      });
+
+      const callOrder: string[] = [];
+      let createOwnerInput: unknown;
+      let identityInput: unknown;
+
+      const service = new AuthService(
+        userServiceStub({
+          findByEmail: async () => null,
+          findOwner: async () => null,
+          create: async () => {
+            throw new Error("the bootstrap registration must create an owner, not a plain user");
+          },
+          createOwner: async (input: unknown) => {
+            callOrder.push("create-owner");
+            createOwnerInput = input;
             return created;
           },
         }),
         sessionServiceStub({ create: async () => issuedSession }),
-        invitationServiceStub({
-          findPending: async () => pending,
-          markAccepted: async (id: unknown, input: unknown) => {
-            callOrder.push("accept-invitation");
-            acceptedId = id;
-            acceptedInput = input;
-            return invitation({ acceptedByUserId: created.id, acceptedAt: new Date() });
-          },
-        }),
         { google: googleOauthClient },
         oauthIdentityServiceStub({
           findBySubjectWithUser: async () => null,
           create: async (input: unknown) => {
             callOrder.push("create-identity");
             identityInput = input;
-            return oauthIdentity();
+            return oauthIdentity({ subject: "google-bootstrap" });
           },
         }),
         transactionManagerStub(),
@@ -207,89 +264,37 @@ describe("AuthService", () => {
       const result = await service.authenticateWithOAuth({ credential, provider: "google" });
 
       expect(result).toEqual({ user: created, sessionToken: "session-token" });
-      expect(createInput).toEqual({
-        email: "invited@example.com",
-        fullName: "In Vited",
+      expect(createOwnerInput).toEqual({
+        email: env.BOOTSTRAP_OWNER_EMAIL,
+        fullName: "First Owner",
       });
-      // The identity insert must reference the just-created user's id, and
+      // The identity insert must reference the just-created owner's id, and
       // happen strictly after the user row exists.
-      expect(identityInput).toEqual({
-        userId: created.id,
-        provider: "google",
-        subject: "google-invited",
-      });
-      // The invitation is consumed by the registration, attributed to the
-      // user it created.
-      expect(acceptedId).toBe(pending.id);
-      expect(acceptedInput).toEqual({ acceptedByUserId: created.id });
-      expect(callOrder).toEqual(["create-user", "create-identity", "accept-invitation"]);
-    });
-
-    it("registers the BOOTSTRAP_EMAIL without an invitation, as a regular user", async () => {
-      const googleOauthClient = new FakeGoogleOauthClient();
-      const credential = googleOauthClient.issueToken({
-        email: env.BOOTSTRAP_EMAIL,
-        sub: "google-bootstrap",
-      });
-      const created = user({ email: env.BOOTSTRAP_EMAIL });
-
-      let createInput: unknown;
-      let identityInput: unknown;
-      const service = new AuthService(
-        userServiceStub({
-          create: async (input: unknown) => {
-            createInput = input;
-            return created;
-          },
-        }),
-        sessionServiceStub({ create: async () => issuedSession }),
-        // findPending throwing proves the bootstrap path skips the invitation
-        // check entirely, rather than happening to pass it.
-        invitationServiceStub({
-          findPending: async () => {
-            throw new Error("the bootstrap email must not be checked against invitations");
-          },
-          markAccepted: async () => {
-            throw new Error("the bootstrap registration must not consume an invitation");
-          },
-        }),
-        { google: googleOauthClient },
-        oauthIdentityServiceStub({
-          findBySubjectWithUser: async () => null,
-          create: async (input: unknown) => {
-            identityInput = input;
-            return oauthIdentity();
-          },
-        }),
-        transactionManagerStub(),
-      );
-
-      const result = await service.authenticateWithOAuth({ credential, provider: "google" });
-
-      expect(result).toEqual({ user: created, sessionToken: "session-token" });
-      // A plain create: the bootstrap email gets no special treatment beyond
-      // skipping the invitation requirement.
-      expect(createInput).toEqual({ email: env.BOOTSTRAP_EMAIL });
       expect(identityInput).toEqual({
         userId: created.id,
         provider: "google",
         subject: "google-bootstrap",
       });
+      expect(callOrder).toEqual(["create-owner", "create-identity"]);
     });
 
-    it("rejects an uninvited email with NOT_INVITED, without creating an identity or opening a transaction", async () => {
+    it("rejects the bootstrap owner email once an owner exists, with the one login failure code", async () => {
       const googleOauthClient = new FakeGoogleOauthClient();
-      const credential = googleOauthClient.issueToken({ email: "stranger@example.com" });
+      const credential = googleOauthClient.issueToken({
+        email: env.BOOTSTRAP_OWNER_EMAIL,
+        sub: "google-bootstrap-again",
+      });
 
-      // create/findBySubjectWithUser resolve so that a broken invitation
-      // guard surfaces as an unexpected success (not a rejection) rather
-      // than a masked error.
       const service = new AuthService(
         userServiceStub({
-          create: async () => user({ email: "stranger@example.com" }),
+          findByEmail: async () => null,
+          findOwner: async () =>
+            user({ id: "00000000-0000-0000-0000-0000000000ee", isOwner: true }),
+          createOwner: async () => {
+            throw new Error("a second owner must never be created");
+          },
         }),
         sessionServiceStub({ create: async () => issuedSession }),
-        invitationServiceStub({ findPending: async () => null }),
         { google: googleOauthClient },
         oauthIdentityServiceStub({
           findBySubjectWithUser: async () => null,
@@ -303,11 +308,75 @@ describe("AuthService", () => {
       await expect(
         service.authenticateWithOAuth({ credential, provider: "google" }),
       ).rejects.toMatchObject({
-        code: "NOT_INVITED",
+        code: "AUTHENTICATION_FAILED",
       });
     });
 
-    it("rejects a token without a verified email with INVALID_GOOGLE_CREDENTIAL", async () => {
+    it("rejects an unregistered email with the same code as every other login failure", async () => {
+      const googleOauthClient = new FakeGoogleOauthClient();
+      const credential = googleOauthClient.issueToken({ email: "stranger@example.com" });
+
+      const service = new AuthService(
+        userServiceStub({
+          findByEmail: async () => null,
+          findOwner: async () => {
+            throw new Error("only the bootstrap owner email may check for an existing owner");
+          },
+        }),
+        sessionServiceStub({ create: async () => issuedSession }),
+        { google: googleOauthClient },
+        oauthIdentityServiceStub({
+          findBySubjectWithUser: async () => null,
+          create: async () => {
+            throw new Error("no identity must be created when registration is rejected");
+          },
+        }),
+        neverRunsTransactionManager(),
+      );
+
+      await expect(
+        service.authenticateWithOAuth({ credential, provider: "google" }),
+      ).rejects.toMatchObject({
+        code: "AUTHENTICATION_FAILED",
+      });
+    });
+
+    it("collapses a lost bootstrap race into AUTHENTICATION_FAILED", async () => {
+      const googleOauthClient = new FakeGoogleOauthClient();
+      const credential = googleOauthClient.issueToken({
+        email: env.BOOTSTRAP_OWNER_EMAIL,
+        sub: "google-raced",
+      });
+
+      const service = new AuthService(
+        userServiceStub({
+          findByEmail: async () => null,
+          findOwner: async () => null,
+          // A concurrent bootstrap won between the reads and the insert; the
+          // database invariant reports it as a conflict.
+          createOwner: async () => {
+            throw new AppError("EMAIL_TAKEN");
+          },
+        }),
+        sessionServiceStub({ create: async () => issuedSession }),
+        { google: googleOauthClient },
+        oauthIdentityServiceStub({
+          findBySubjectWithUser: async () => null,
+          create: async () => {
+            throw new Error("no identity must be created when the owner insert failed");
+          },
+        }),
+        transactionManagerStub(),
+      );
+
+      await expect(
+        service.authenticateWithOAuth({ credential, provider: "google" }),
+      ).rejects.toMatchObject({
+        code: "AUTHENTICATION_FAILED",
+      });
+    });
+
+    it("rejects a token without a verified email with AUTHENTICATION_FAILED", async () => {
       const googleOauthClient = new FakeGoogleOauthClient();
       const credential = googleOauthClient.issueToken({
         email: "steve@example.com",
@@ -317,7 +386,6 @@ describe("AuthService", () => {
       const service = new AuthService(
         userServiceStub({}),
         sessionServiceStub({}),
-        invitationServiceStub({}),
         { google: googleOauthClient },
         oauthIdentityServiceStub({}),
         neverRunsTransactionManager(),
@@ -326,7 +394,7 @@ describe("AuthService", () => {
       await expect(
         service.authenticateWithOAuth({ credential, provider: "google" }),
       ).rejects.toMatchObject({
-        code: "INVALID_GOOGLE_CREDENTIAL",
+        code: "AUTHENTICATION_FAILED",
       });
     });
   });
@@ -344,7 +412,6 @@ describe("AuthService", () => {
             return context;
           },
         }),
-        invitationServiceStub({}),
         { google: new FakeGoogleOauthClient() },
         oauthIdentityServiceStub({}),
         neverRunsTransactionManager(),
@@ -360,7 +427,6 @@ describe("AuthService", () => {
       const service = new AuthService(
         userServiceStub({}),
         sessionServiceStub({ findValidWithUser: async () => null }),
-        invitationServiceStub({}),
         { google: new FakeGoogleOauthClient() },
         oauthIdentityServiceStub({}),
         neverRunsTransactionManager(),
@@ -383,7 +449,6 @@ describe("AuthService", () => {
             return session();
           },
         }),
-        invitationServiceStub({}),
         { google: new FakeGoogleOauthClient() },
         oauthIdentityServiceStub({}),
         neverRunsTransactionManager(),

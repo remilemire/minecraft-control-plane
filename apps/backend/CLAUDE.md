@@ -23,7 +23,7 @@ of files by role (not all features have every file):
 | `*.outbox.ts`        | The feature's outbox message definitions (type + payload schema) and their handlers.   |
 
 Features: `auth` (with `auth/oauth-identities`, `auth/sessions`, `auth/clients/`),
-`users`, `invitations`, `minecraft` (with `minecraft/profiles`, `minecraft/server`,
+`users`, `minecraft` (with `minecraft/profiles`, `minecraft/server`,
 and `minecraft/clients/`). Cross-cutting code sits outside
 `features/`: `config/`, `infrastructure/` (`infrastructure/db/`,
 `infrastructure/outbox/`), `errors/`, `http/`, `validation/`, `openapi/`,
@@ -152,26 +152,37 @@ To add an error code, update three places that must stay in sync:
 
 ## Auth, sessions, CSRF, authorization
 
-- **OAuth, invite-only, provider-agnostic.** `AuthService.authenticateWithOAuth` picks
-  the caller's provider (today just `google`) from its `OAuthClients` registry, verifies
-  the credential via that client, then looks up `oauth_identities` by
+- **OAuth, owner-provisioned, provider-agnostic.** `AuthService.authenticateWithOAuth`
+  picks the caller's provider (today just `google`) from its `OAuthClients` registry,
+  verifies the credential via that client, normalizes the returned email through the
+  shared `emailSchema` (trim + lowercase — `users.email` and `BOOTSTRAP_OWNER_EMAIL`
+  are stored normalized), then looks up `oauth_identities` by
   `(provider, providerSubject)` (`OAuthIdentityService.findBySubjectWithUser`). Found
-  → that user. Not found → `registerInvited`: the bootstrap check
-  (`email === env.BOOTSTRAP_EMAIL`, which skips **only** the invitation requirement)
-  and, for everyone else, the `InvitationService.findPending(email)` lookup (else
-  `NOT_INVITED`) run **before** the transaction; inside it
-  (`TransactionManager.run`), the user is created, its first `oauth_identities` row
-  is inserted, and the invitation is marked accepted by that user — one unit of
-  work. Session creation happens after, outside the transaction.
+  → that user. Not found → `registerFirstLogin`: a user row with a matching email
+  (owner-provisioned) is **claimed** by inserting the identity (a plain insert, no
+  transaction); otherwise, only `BOOTSTRAP_OWNER_EMAIL` while **no owner exists** may
+  register — as the owner — with the user + identity created in one
+  `TransactionManager.run`. Everything else is rejected. Session creation happens
+  after, outside the transaction.
+- **One login failure code (anti-enumeration).** Every `POST /auth/google` failure —
+  invalid/expired/wrong-audience token, unverified email, unregistered email, even a
+  lost concurrent-bootstrap race — surfaces as the single 401 `AUTHENTICATION_FAILED`
+  with one catalog message. Keep it that way: a cause-specific code or message would
+  let callers probe which emails have accounts. The route only ever answers 200,
+  401, 422 (malformed body), or 5xx.
 - **Sessions:** opaque random token in an httponly `session_token` cookie; only its
   **sha256 hash** (`lib/tokens.ts`) is stored in the `sessions` table. Cookie helpers
   in `http/session/`, base cookie options in `config/cookies.ts`.
 - **CSRF:** double-submit. `requireCsrf` (`http/csrf/`) checks the non-httponly
   `csrf_token` cookie against the `x-csrf-token` header; applied to mutating routes.
 - **Authorization:** `createRequireAuth(authService)` loads `req.user`/`req.session`
-  from the session cookie. There are **no roles** — every authenticated user has
-  full access; mutating routes additionally require the CSRF pair. 403s can only
-  mean `INVALID_CSRF_TOKEN`.
+  from the session cookie (fresh each request). The single role is the **owner**
+  (`users.is_owner`, at most one — enforced by a partial unique index). Owner-only
+  routes (`POST /users`, `POST /users/:userId/transfer-ownership`) chain
+  `requireOwner` after `requireAuth` + `requireCsrf`; everyone else has full access
+  to everything else. A 403 means `INVALID_CSRF_TOKEN` or `NOT_OWNER`. Ownership
+  transfer demotes-then-promotes inside one transaction; the partial unique index is
+  the invariant's backstop (`OWNER_ALREADY_EXISTS`).
 
 ## Database & migrations (Drizzle)
 
@@ -301,7 +312,7 @@ handlers, with retries.
   schema like `emailSchema` can't be annotated in place and reused by reference).
   To fix a lost format/type on one route's request body, build a one-off variant
   with `baseSchema.extend({ field: innerSchema.openapi({...}) })` at the call site
-  (see `invitations.openapi.ts`) rather than annotating the shared schema.
+  (see `users.openapi.ts`) rather than annotating the shared schema.
 
 ## Testing (Vitest, three projects)
 
@@ -325,8 +336,8 @@ before any `src` import (hence the `setup-env.ts` / `zod-extend.ts` ordering).
 
 ## Backend gaps (structural)
 
-- **`invitations.invitedByUserId`** is `NOT NULL` but its FK is `ON DELETE SET NULL`
-  — deleting the inviting user would violate the not-null constraint instead of
-  cleanly nulling it out. Harmless today (no user-deletion path exists), but it must
-  be resolved (nullable column vs. restrict/no-op the delete) **before** building
-  the planned user-deletion feature.
+- **User deletion does not exist yet.** When building it, enforce that **the owner
+  cannot be deleted** — ownership must be transferred first
+  (`UserService.transferOwnership`); rely on the `is_owner` partial unique index
+  plus a predicated delete (`WHERE id = $1 AND NOT is_owner`) rather than a
+  check-then-delete.

@@ -69,7 +69,7 @@ describe("apiRequest", () => {
 
   it("throws an ApiError built from the error body", async () => {
     fetchMock.mockResolvedValue(
-      jsonResponse(403, { kind: "FORBIDDEN", code: "NOT_INVITED", message: "Not invited." }),
+      jsonResponse(403, { kind: "FORBIDDEN", code: "NOT_OWNER", message: "Owners only." }),
     );
 
     const error = await apiRequest("GET", "/thing", { schema: z.object({}) }).catch(
@@ -79,8 +79,8 @@ describe("apiRequest", () => {
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({
       kind: "FORBIDDEN",
-      code: "NOT_INVITED",
-      message: "Not invited.",
+      code: "NOT_OWNER",
+      message: "Owners only.",
     });
   });
 

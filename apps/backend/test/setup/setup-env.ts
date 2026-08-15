@@ -32,7 +32,7 @@ process.env.POSTGRES_DATABASE = `${baseDatabase}_test_w${poolId}`;
 
 process.env.SESSION_SECRET ??= "test-session-secret";
 process.env.GOOGLE_CLIENT_ID ??= "test-client-id.apps.googleusercontent.com";
-process.env.BOOTSTRAP_EMAIL ??= "bootstrap@example.com";
+process.env.BOOTSTRAP_OWNER_EMAIL ??= "bootstrap@example.com";
 
 process.env.MINECRAFT_RCON_HOST ??= "localhost";
 process.env.MINECRAFT_RCON_PORT ??= "25575";

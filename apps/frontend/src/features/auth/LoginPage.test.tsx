@@ -35,13 +35,13 @@ describe("LoginPage", () => {
     const user = userEvent.setup();
     const login = vi
       .fn()
-      .mockRejectedValue(new ApiError("FORBIDDEN", "NOT_INVITED", "You need an invitation."));
+      .mockRejectedValue(new ApiError("UNAUTHORIZED", "AUTHENTICATION_FAILED", "Sign-in failed."));
     renderWithAuth(<LoginPage />, {
       auth: makeAuthValue({ status: "unauthenticated", user: null, login }),
     });
 
     await user.click(screen.getByRole("button", { name: "Sign in with Google" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("You need an invitation.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Sign-in failed.");
   });
 });

@@ -14,7 +14,7 @@ type FakeTokenPayload = Pick<TokenPayload, "sub" | "email" | "email_verified" | 
 // In-memory stand-in for GoogleOauthClient. issueToken() registers a Google
 // payload and returns the credential that resolves to it; verifyCredential()
 // mirrors the real client's contract, rejecting unknown credentials and
-// unverified identities with INVALID_GOOGLE_CREDENTIAL.
+// unverified identities with AUTHENTICATION_FAILED.
 export class FakeGoogleOauthClient implements OAuthApi {
   private readonly payloads = new Map<string, FakeTokenPayload>();
 
@@ -35,12 +35,10 @@ export class FakeGoogleOauthClient implements OAuthApi {
 
     // Unknown credential, like the real library rejecting a bad token.
     if (payload === undefined) {
-      throw new AppError("INVALID_GOOGLE_CREDENTIAL");
+      throw new AppError("AUTHENTICATION_FAILED");
     }
     if (payload.email === undefined || !payload.email_verified) {
-      throw new AppError("INVALID_GOOGLE_CREDENTIAL", {
-        message: "Google did not provide a verified identity.",
-      });
+      throw new AppError("AUTHENTICATION_FAILED");
     }
 
     return {

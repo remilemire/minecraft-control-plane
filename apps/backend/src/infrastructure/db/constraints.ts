@@ -13,7 +13,6 @@
 
 export * from "@/features/auth/oauth-identities/oauth-identities.constraints.js";
 export * from "@/features/auth/sessions/sessions.constraints.js";
-export * from "@/features/invitations/invitations.constraints.js";
 export * from "@/features/minecraft/profiles/profiles.constraints.js";
 export * from "@/features/users/users.constraints.js";
 export * from "@/infrastructure/outbox/outbox.constraints.js";

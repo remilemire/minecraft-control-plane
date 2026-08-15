@@ -22,12 +22,12 @@ export class GoogleOauthClient implements OAuthApi {
     const payload = ticket.getPayload();
 
     if (payload === undefined) {
-      throw new AppError("INVALID_GOOGLE_CREDENTIAL");
+      throw new AppError("AUTHENTICATION_FAILED");
     }
+    // No cause-specific message: every login failure shares one code and one
+    // catalog message so responses can't be used to probe accounts.
     if (payload.email === undefined || !payload.email_verified) {
-      throw new AppError("INVALID_GOOGLE_CREDENTIAL", {
-        message: "Google did not provide a verified identity.",
-      });
+      throw new AppError("AUTHENTICATION_FAILED");
     }
 
     return {
@@ -47,7 +47,7 @@ export class GoogleOauthClient implements OAuthApi {
     } catch (cause) {
       // The library throws on malformed, expired, or wrong-audience tokens;
       // surface that as an auth failure instead of an unhandled 500.
-      throw new AppError("INVALID_GOOGLE_CREDENTIAL", { cause });
+      throw new AppError("AUTHENTICATION_FAILED", { cause });
     }
   }
 }

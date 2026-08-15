@@ -22,6 +22,7 @@ export const userResponseSchema = z.object({
   id: z.uuid(),
   email: emailSchema,
   fullName: nameSchema.nullable(),
+  isOwner: z.boolean(),
   createdAt: z.date(),
 });
 

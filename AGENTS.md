@@ -9,15 +9,21 @@ detail lives closer to the code:
 
 ## What this is
 
-A self-hosted panel for a personal, **invite-only** Minecraft server, run on a
-home Linux box via Docker Compose. Every signed-in user has **full access** —
-there are no roles.
+A self-hosted panel for a personal, **private** Minecraft server, run on a
+home Linux box via Docker Compose. There is exactly one role: a single **owner**
+(`users.is_owner`, at most one at all times — DB-enforced). The owner provisions
+users and can transfer ownership; every other signed-in user has full access to
+everything else.
 
-- Users **invite** players by email. A player signs in with **Google**; login only
-  succeeds if their email has a valid, unaccepted invitation (or they already have
-  an account). The env-configured **bootstrap email** (`BOOTSTRAP_EMAIL`) may always
-  register without an invitation — that's how the first account is created — but
-  gets no special powers.
+- The **owner creates users** by email (`POST /users`, owner-only). A player signs
+  in with **Google**; login succeeds only if an identity is already linked or a
+  user row with their (normalized) email exists — the first sign-in claims the
+  provisioned account by linking the Google identity. The env-configured
+  **bootstrap owner email** (`BOOTSTRAP_OWNER_EMAIL`) may create the very first
+  account — as the owner — while no owner exists yet. Every login failure is the
+  single opaque `AUTHENTICATION_FAILED` 401 (anti-enumeration). Owners cannot be
+  deleted; ownership must be transferred first (`POST
+  /users/:userId/transfer-ownership`, owner-only).
 - The **whitelist** is a list of standalone **Minecraft profiles** (username → UUID,
   resolved via Mojang), decoupled from users and addressed by their own id. Any
   signed-in user adds or removes profiles, which whitelists/unwhitelists them over
@@ -97,7 +103,7 @@ Three gitignored `.env` files (each has a committed `.env.example`):
 - **`apps/backend/.env`** — app settings: `SESSION_SECRET` (required but currently
   unused), `*_TTL_DAYS`, `MINECRAFT_CONTROLLER_URL` (host-dev default
   `http://localhost:8001`; compose overrides it to
-  `http://minecraft-controller:8000`), `BOOTSTRAP_EMAIL`.
+  `http://minecraft-controller:8000`), `BOOTSTRAP_OWNER_EMAIL`.
 - **`apps/frontend/.env`** — `VITE_GOOGLE_CLIENT_ID` (Google sign-in button in
   host dev; same client as the root `GOOGLE_CLIENT_ID`, which supplies the prod
   build). `BACKEND_ORIGIN` (the Vite dev-server `/api` proxy target) is not in the
@@ -152,7 +158,7 @@ Gotchas:
 
 ## Not built yet — don't assume it exists
 
-- **User deletion**: users can only be listed; there is no delete endpoint or UI
-  action yet (planned — note the `invitations.invitedByUserId` FK gap in the
-  backend guide before building it).
+- **User deletion**: users can only be listed and created; there is no delete
+  endpoint or UI action yet. When building it, enforce the rule that **the owner
+  cannot be deleted** — ownership must be transferred first.
 - **The firewall / IP-access layer** in front of the Minecraft server.

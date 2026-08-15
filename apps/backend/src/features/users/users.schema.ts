@@ -1,7 +1,7 @@
 // apps/backend/src/features/users/users.schema.ts
 
 import { sql } from "drizzle-orm";
-import { check, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { USERS_CONSTRAINTS } from "./users.constraints.js";
 
 export const users = pgTable(
@@ -13,12 +13,19 @@ export const users = pgTable(
 
     fullName: text("full_name"),
 
+    isOwner: boolean("is_owner").notNull().default(false),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     check("users_email_length_check", sql`char_length(${table.email}) BETWEEN 1 AND 254`),
     // 129 = the two former 64-char name columns joined with a space.
     check("users_full_name_length_check", sql`char_length(${table.fullName}) BETWEEN 1 AND 129`),
+    // At most one owner, enforced by the database — READ COMMITTED makes
+    // check-then-write racy, so this index is the invariant.
+    uniqueIndex(USERS_CONSTRAINTS.SINGLE_OWNER_UNIQUE)
+      .on(table.isOwner)
+      .where(sql`${table.isOwner}`),
   ],
 );
 

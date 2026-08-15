@@ -1,14 +1,10 @@
 // apps/backend/test/api/auth.api.test.ts
 
-import { db } from "@/infrastructure/db/index.js";
-import { invitations } from "@/infrastructure/db/schemas.js";
 import { SESSION_COOKIE } from "@/http/session/session.constants.js";
 import { CSRF_COOKIE } from "@/http/csrf/csrf.constants.js";
-import { eq } from "drizzle-orm";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestApp, type TestApp } from "@test/helpers/create-test-app.js";
-import { createInvitation } from "@test/helpers/factories/invitation.factory.js";
 import { createOAuthIdentity } from "@test/helpers/factories/oauth-identity.factory.js";
 import { createUser } from "@test/helpers/factories/user.factory.js";
 import { authenticateUser } from "@test/helpers/test-auth.js";
@@ -49,37 +45,23 @@ describe("POST /api/auth/google", () => {
     expect(csrfCookie).not.toContain("HttpOnly");
   });
 
-  it("registers an invited user on first login, and persists the identity for a later login", async () => {
+  it("claims a provisioned account on first login, and persists the identity for a later login", async () => {
     const { app, googleOauthClient } = testApp;
-    const invitation = await createInvitation({ email: "newplayer@example.com" });
+    // Owners provision the user row ahead of time; no identity exists yet.
+    const provisioned = await createUser({ email: "newplayer@example.com" });
     const credential = googleOauthClient.issueToken({
       email: "newplayer@example.com",
       sub: "google-newplayer",
-      name: "New Player",
     });
 
     const response = await request(app).post("/api/auth/google").send({ credential });
 
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({
-      email: "newplayer@example.com",
-      fullName: "New Player",
-    });
-    expect(response.body.id).toBeDefined();
+    expect(response.body).toMatchObject({ id: provisioned.id, email: "newplayer@example.com" });
     expect(findSetCookie(response, SESSION_COOKIE)).toBeDefined();
 
-    // Registration consumes the invitation: it is marked accepted by the
-    // user it created.
-    const [storedInvitation] = await db
-      .select()
-      .from(invitations)
-      .where(eq(invitations.id, invitation.id));
-    expect(storedInvitation?.acceptedAt).not.toBeNull();
-    expect(storedInvitation?.acceptedByUserId).toBe(response.body.id);
-
     // The first-login identity must have been persisted: a later login with
-    // the same provider subject resolves to the same user, rather than
-    // re-registering (and without needing a still-valid invitation).
+    // the same provider subject resolves to the same user.
     const laterCredential = googleOauthClient.issueToken({
       email: "newplayer@example.com",
       sub: "google-newplayer",
@@ -89,14 +71,28 @@ describe("POST /api/auth/google", () => {
       .send({ credential: laterCredential });
 
     expect(laterResponse.status).toBe(200);
-    expect(laterResponse.body.id).toBe(response.body.id);
+    expect(laterResponse.body.id).toBe(provisioned.id);
   });
 
-  it("registers the bootstrap email without an invitation", async () => {
+  it("matches a provisioned account regardless of the provider email's casing", async () => {
     const { app, googleOauthClient } = testApp;
-    // setup-env.ts sets BOOTSTRAP_EMAIL for every worker; issuing a token for
-    // it exercises the one path allowed to skip the invitation requirement.
-    const bootstrapEmail = process.env.BOOTSTRAP_EMAIL ?? "";
+    const provisioned = await createUser({ email: "cased@example.com" });
+    const credential = googleOauthClient.issueToken({
+      email: "Cased@Example.com",
+      sub: "google-cased",
+    });
+
+    const response = await request(app).post("/api/auth/google").send({ credential });
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(provisioned.id);
+  });
+
+  it("bootstraps the first account for the bootstrap owner email, as the owner", async () => {
+    const { app, googleOauthClient } = testApp;
+    // setup-env.ts sets BOOTSTRAP_OWNER_EMAIL for every worker; issuing a
+    // token for it exercises the one path that may create an account.
+    const bootstrapEmail = process.env.BOOTSTRAP_OWNER_EMAIL ?? "";
     const credential = googleOauthClient.issueToken({
       email: bootstrapEmail,
       sub: "google-bootstrap",
@@ -105,49 +101,62 @@ describe("POST /api/auth/google", () => {
     const response = await request(app).post("/api/auth/google").send({ credential });
 
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ email: bootstrapEmail });
+    expect(response.body).toMatchObject({ email: bootstrapEmail, isOwner: true });
     expect(findSetCookie(response, SESSION_COOKIE)).toBeDefined();
   });
 
-  it("rejects an invalid Google credential", async () => {
-    const { app } = testApp;
-
-    // Never issued by the fake verifier, so it rejects like the real library.
-    const response = await request(app)
-      .post("/api/auth/google")
-      .send({ credential: "not-a-real-token" });
-
-    expect(response.status).toBe(401);
-    expect(response.body).toMatchObject({
-      kind: "UNAUTHORIZED",
-      code: "INVALID_GOOGLE_CREDENTIAL",
-    });
-    expect(findSetCookie(response, SESSION_COOKIE)).toBeUndefined();
-  });
-
-  it("rejects a login without an invitation", async () => {
+  it("rejects the bootstrap owner email once an owner exists", async () => {
     const { app, googleOauthClient } = testApp;
-    const credential = googleOauthClient.issueToken({ email: "uninvited@example.com" });
-
-    const response = await request(app).post("/api/auth/google").send({ credential });
-
-    expect(response.status).toBe(403);
-    expect(response.body).toMatchObject({ kind: "FORBIDDEN", code: "NOT_INVITED" });
-    expect(findSetCookie(response, SESSION_COOKIE)).toBeUndefined();
-  });
-
-  it("rejects a token whose email is unverified", async () => {
-    const { app, googleOauthClient } = testApp;
-    await createInvitation({ email: "unverified@example.com" });
+    await createUser({ email: "current-owner@example.com", isOwner: true });
     const credential = googleOauthClient.issueToken({
-      email: "unverified@example.com",
-      email_verified: false,
+      email: process.env.BOOTSTRAP_OWNER_EMAIL ?? "",
+      sub: "google-bootstrap-late",
     });
 
     const response = await request(app).post("/api/auth/google").send({ credential });
 
     expect(response.status).toBe(401);
-    expect(response.body).toMatchObject({ code: "INVALID_GOOGLE_CREDENTIAL" });
+    expect(response.body).toMatchObject({ kind: "UNAUTHORIZED", code: "AUTHENTICATION_FAILED" });
+    expect(findSetCookie(response, SESSION_COOKIE)).toBeUndefined();
+  });
+
+  // The anti-enumeration invariant: every failure mode answers with the exact
+  // same status and body, so a response can't reveal whether an email has an
+  // account (or an invalid token from a registered user's browser differs
+  // from a stranger's).
+  it("answers every login failure with one identical 401 body", async () => {
+    const { app, googleOauthClient } = testApp;
+    await createUser({ email: "registered@example.com" });
+
+    const failures = [
+      // Never issued by the fake verifier, like a forged or expired token.
+      request(app).post("/api/auth/google").send({ credential: "not-a-real-token" }),
+      // Verified token for an email nobody provisioned.
+      request(app)
+        .post("/api/auth/google")
+        .send({ credential: googleOauthClient.issueToken({ email: "stranger@example.com" }) }),
+      // Unverified email on an otherwise valid token for a registered user.
+      request(app)
+        .post("/api/auth/google")
+        .send({
+          credential: googleOauthClient.issueToken({
+            email: "registered@example.com",
+            email_verified: false,
+          }),
+        }),
+    ];
+
+    const responses = await Promise.all(failures);
+
+    for (const response of responses) {
+      expect(response.status).toBe(401);
+      expect(response.body).toEqual(responses[0]?.body);
+      expect(findSetCookie(response, SESSION_COOKIE)).toBeUndefined();
+    }
+    expect(responses[0]?.body).toMatchObject({
+      kind: "UNAUTHORIZED",
+      code: "AUTHENTICATION_FAILED",
+    });
   });
 
   it("rejects a request with a missing credential", async () => {

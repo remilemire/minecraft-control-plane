@@ -52,9 +52,9 @@ describe("withDbErrors", () => {
   });
 
   it("rethrows a domain error from the operation instead of reburying it", async () => {
-    const failure = withDbErrors(failWith(new AppError("INVITATION_NOT_FOUND")));
+    const failure = withDbErrors(failWith(new AppError("USER_NOT_FOUND")));
 
-    await expect(failure).rejects.toMatchObject({ code: "INVITATION_NOT_FOUND" });
+    await expect(failure).rejects.toMatchObject({ code: "USER_NOT_FOUND" });
   });
 
   it("maps an unreachable or shutting-down database to SERVICE_UNAVAILABLE", async () => {

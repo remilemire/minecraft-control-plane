@@ -7,8 +7,7 @@ import {
   type ErrorMeta,
   type ErrorKind,
 } from "./common/index.js";
-import { authClientErrorMeta, authErrorMeta, sessionErrorMeta } from "./features/auth/index.js";
-import { invitationErrorMeta } from "./features/invitations/index.js";
+import { authErrorMeta, sessionErrorMeta } from "./features/auth/index.js";
 import {
   minecraftClientErrorMeta,
   minecraftProfileErrorMeta,
@@ -19,9 +18,7 @@ import { userErrorMeta } from "./features/users/index.js";
 export const errorMeta = {
   ...commonErrorMeta,
   ...authErrorMeta,
-  ...authClientErrorMeta,
   ...sessionErrorMeta,
-  ...invitationErrorMeta,
   ...minecraftProfileErrorMeta,
   ...minecraftServerErrorMeta,
   ...minecraftClientErrorMeta,

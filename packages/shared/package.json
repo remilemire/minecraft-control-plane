@@ -18,10 +18,6 @@
       "types": "./dist/features/auth/index.d.ts",
       "import": "./dist/features/auth/index.js"
     },
-    "./invitations": {
-      "types": "./dist/features/invitations/index.d.ts",
-      "import": "./dist/features/invitations/index.js"
-    },
     "./minecraft": {
       "types": "./dist/features/minecraft/index.d.ts",
       "import": "./dist/features/minecraft/index.js"

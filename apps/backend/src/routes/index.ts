@@ -2,7 +2,7 @@
 
 import { DatabaseProvider, type Db, TransactionManager } from "@/infrastructure/db/index.js";
 import { AuthController } from "@/features/auth/auth.controller.js";
-import { createRequireAuth } from "@/features/auth/auth.middleware.js";
+import { createRequireAuth, requireOwner } from "@/features/auth/auth.middleware.js";
 import { createAuthRoutes } from "@/features/auth/auth.routes.js";
 import { AuthService } from "@/features/auth/auth.service.js";
 import type { OAuthApi } from "@/features/auth/auth.types.js";
@@ -10,10 +10,6 @@ import { OAuthIdentityRepository } from "@/features/auth/oauth-identities/oauth-
 import { OAuthIdentityService } from "@/features/auth/oauth-identities/oauth-identities.service.js";
 import { SessionRepository } from "@/features/auth/sessions/sessions.repository.js";
 import { SessionService } from "@/features/auth/sessions/sessions.service.js";
-import { InvitationController } from "@/features/invitations/invitations.controller.js";
-import { InvitationRepository } from "@/features/invitations/invitations.repository.js";
-import { createInvitationRoutes } from "@/features/invitations/invitations.routes.js";
-import { InvitationService } from "@/features/invitations/invitations.service.js";
 import { createMinecraftRoutes } from "@/features/minecraft/minecraft.routes.js";
 import type { MojangApi, ProcessApi, RconApi } from "@/features/minecraft/minecraft.types.js";
 import { MinecraftProfileController } from "@/features/minecraft/profiles/profiles.controller.js";
@@ -64,21 +60,18 @@ export function createRouter(deps: AppDeps): AppWiring {
 
   const users = new UserRepository(databaseProvider);
   const sessions = new SessionRepository(databaseProvider);
-  const invitations = new InvitationRepository(databaseProvider);
   const oauthIdentities = new OAuthIdentityRepository(databaseProvider);
   const minecraftProfiles = new MinecraftProfileRepository(databaseProvider);
   const outboxMessages = new OutboxMessageRepository(databaseProvider);
 
-  const userService = new UserService(users);
+  const userService = new UserService(users, transactionManager);
   const sessionService = new SessionService(sessions);
-  const invitationService = new InvitationService(invitations);
   const oauthIdentityService = new OAuthIdentityService(oauthIdentities);
   const outboxService = new OutboxService(outboxMessages, outboxMessageDefinitions);
 
   const authService = new AuthService(
     userService,
     sessionService,
-    invitationService,
     { google: deps.googleOauthClient },
     oauthIdentityService,
     transactionManager,
@@ -102,15 +95,13 @@ export function createRouter(deps: AppDeps): AppWiring {
   );
 
   const userController = new UserController(userService);
-  const invitationController = new InvitationController(invitationService);
   const authController = new AuthController(authService);
   const minecraftProfileController = new MinecraftProfileController(minecraftProfileService);
   const minecraftServerController = new MinecraftServerController(minecraftServerService);
 
   const requireAuth = createRequireAuth(authService);
 
-  router.use("/users", createUserRoutes(userController, requireAuth));
-  router.use("/invitations", createInvitationRoutes(invitationController, requireAuth));
+  router.use("/users", createUserRoutes(userController, requireAuth, requireOwner));
   router.use("/auth", createAuthRoutes(authController, requireAuth));
   router.use(
     "/minecraft",

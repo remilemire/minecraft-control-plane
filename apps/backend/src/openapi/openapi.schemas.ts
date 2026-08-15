@@ -10,7 +10,6 @@ import {
   validationIssueCodeSchema,
   type ErrorCodeForKind,
 } from "@minecraft-control-plane/shared/errors";
-import { invitationResponseSchema } from "@minecraft-control-plane/shared/invitations";
 import {
   minecraftProfileResponseSchema,
   minecraftServerStatusResponseSchema,
@@ -112,6 +111,13 @@ export const csrfErrorSchema = openApiRegistry.register(
   createErrorResponseSchema("FORBIDDEN", ["INVALID_CSRF_TOKEN"]),
 );
 
+// Owner-gated mutations share one 403 slot, so their component unions the
+// CSRF failure with the not-the-owner failure.
+export const ownerOnlyErrorSchema = openApiRegistry.register(
+  "OwnerOnlyError",
+  createErrorResponseSchema("FORBIDDEN", ["NOT_OWNER", "INVALID_CSRF_TOKEN"]),
+);
+
 export const conflictErrorSchema = openApiRegistry.register(
   "ConflictError",
   createErrorResponseSchema("CONFLICT", errorCodesOfKind("CONFLICT")),
@@ -144,6 +150,11 @@ export const unauthenticatedResponse = jsonResponse(
 
 export const csrfErrorResponse = jsonResponse("CSRF token missing or invalid.", csrfErrorSchema);
 
+export const ownerOnlyErrorResponse = jsonResponse(
+  "Owner-only route: the caller is not the owner, or the CSRF pair is missing or invalid.",
+  ownerOnlyErrorSchema,
+);
+
 export const validationErrorResponse = jsonResponse(
   "The request failed validation.",
   validationErrorSchema,
@@ -168,11 +179,6 @@ export const baseErrorResponses = {
 // --- Public resource components --------------------------------------------
 
 export const openApiUserSchema = openApiRegistry.register("User", userResponseSchema);
-
-export const openApiInvitationSchema = openApiRegistry.register(
-  "Invitation",
-  invitationResponseSchema,
-);
 
 export const openApiMinecraftProfileSchema = openApiRegistry.register(
   "MinecraftProfile",

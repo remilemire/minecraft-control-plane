@@ -14,14 +14,9 @@ import {
 } from "@/openapi/openapi.schemas.js";
 import { oauthLoginSchema } from "@minecraft-control-plane/shared/auth";
 
-const invalidGoogleCredentialErrorSchema = openApiRegistry.register(
-  "InvalidGoogleCredentialError",
-  createErrorResponseSchema("UNAUTHORIZED", ["INVALID_GOOGLE_CREDENTIAL"]),
-);
-
-const notInvitedErrorSchema = openApiRegistry.register(
-  "NotInvitedError",
-  createErrorResponseSchema("FORBIDDEN", ["NOT_INVITED"]),
+const authenticationFailedErrorSchema = openApiRegistry.register(
+  "AuthenticationFailedError",
+  createErrorResponseSchema("UNAUTHORIZED", ["AUTHENTICATION_FAILED"]),
 );
 
 openApiRegistry.registerPath({
@@ -30,7 +25,8 @@ openApiRegistry.registerPath({
   tags: ["Auth"],
   summary: "Log in with a Google ID token",
   description:
-    "Public. Verifies the Google credential; first-time users must have a pending invitation. " +
+    "Public. Verifies the Google credential; a first-time sign-in must match a user the owner " +
+    "provisioned (the bootstrap owner email may create the very first account). " +
     "On success sets the httpOnly session_token cookie and the readable csrf_token cookie.",
   operationId: "googleLogin",
   request: {
@@ -43,10 +39,10 @@ openApiRegistry.registerPath({
     ...baseErrorResponses,
     200: jsonResponse("The authenticated user.", openApiUserSchema),
     401: jsonResponse(
-      "The Google credential is invalid, expired, or has no verified identity.",
-      invalidGoogleCredentialErrorSchema,
+      "Sign-in failed. One code covers every cause (invalid or unverified credential, " +
+        "unregistered email) so responses cannot be used to enumerate accounts.",
+      authenticationFailedErrorSchema,
     ),
-    403: jsonResponse("The Google account has no pending invitation.", notInvitedErrorSchema),
     422: validationErrorResponse,
   },
 });

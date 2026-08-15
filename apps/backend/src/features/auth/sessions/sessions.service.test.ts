@@ -26,6 +26,7 @@ function user(overrides: Partial<User> = {}): User {
     id: USER_ID,
     email: "player@example.com",
     fullName: null,
+    isOwner: false,
     createdAt: new Date(),
     ...overrides,
   };

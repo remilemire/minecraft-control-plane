@@ -6,10 +6,9 @@ import { createOpenApiDocument } from "./openapi.document.js";
 const EXPECTED_PATHS = [
   "/users",
   "/users/me",
+  "/users/{userId}/transfer-ownership",
   "/auth/google",
   "/auth/logout",
-  "/invitations",
-  "/invitations/{invitationId}",
   "/minecraft/profiles",
   "/minecraft/profiles/{minecraftProfileId}",
   "/minecraft/server/status",
@@ -39,7 +38,6 @@ describe("OpenAPI document", () => {
     const schemas = document.components?.schemas ?? {};
     for (const name of [
       "User",
-      "Invitation",
       "MinecraftProfile",
       "MinecraftServerStatus",
       "ValidationIssue",
@@ -100,8 +98,8 @@ describe("OpenAPI document", () => {
   });
 
   it("declares session + CSRF security on protected mutations and none on login", () => {
-    const invite = document.paths?.["/invitations"]?.post;
-    expect(invite?.security).toEqual([{ sessionCookie: [], csrfCookie: [], csrfHeader: [] }]);
+    const createUser = document.paths?.["/users"]?.post;
+    expect(createUser?.security).toEqual([{ sessionCookie: [], csrfCookie: [], csrfHeader: [] }]);
 
     const login = document.paths?.["/auth/google"]?.post;
     expect(login?.security).toBeUndefined();
@@ -110,9 +108,12 @@ describe("OpenAPI document", () => {
     expect(me?.security).toEqual([{ sessionCookie: [] }]);
   });
 
-  it("documents the list and profile create endpoints", () => {
+  it("documents the list and create endpoints", () => {
     expect(document.paths?.["/users"]?.get?.operationId).toBe("listUsers");
-    expect(document.paths?.["/invitations"]?.get?.operationId).toBe("listInvitations");
+    expect(document.paths?.["/users"]?.post?.operationId).toBe("createUser");
+    expect(document.paths?.["/users/{userId}/transfer-ownership"]?.post?.operationId).toBe(
+      "transferOwnership",
+    );
     expect(document.paths?.["/minecraft/profiles"]?.get?.operationId).toBe("listMinecraftProfiles");
     expect(document.paths?.["/minecraft/profiles"]?.post?.operationId).toBe(
       "createMinecraftProfile",
@@ -129,11 +130,11 @@ describe("OpenAPI document", () => {
     expect(restart["200"]).toBeUndefined();
   });
 
-  it("switches the invitation delete to a path parameter", () => {
-    const del = document.paths?.["/invitations/{invitationId}"]?.delete;
-    const params = (del?.parameters ?? []) as { name: string; in: string }[];
-    expect(params).toContainEqual(expect.objectContaining({ name: "invitationId", in: "path" }));
-    expect(del?.requestBody).toBeUndefined();
+  it("declares the userId path parameter on the transfer-ownership route", () => {
+    const transfer = document.paths?.["/users/{userId}/transfer-ownership"]?.post;
+    const params = (transfer?.parameters ?? []) as { name: string; in: string }[];
+    expect(params).toContainEqual(expect.objectContaining({ name: "userId", in: "path" }));
+    expect(transfer?.requestBody).toBeUndefined();
   });
 
   it("declares the minecraftProfileId path parameter on the profile delete route", () => {
@@ -150,19 +151,25 @@ describe("OpenAPI document", () => {
       { properties?: { code?: { enum?: string[] } } }
     >;
 
-    expect(schemas["InvitationNotFoundError"]?.properties?.code?.enum).toEqual([
-      "INVITATION_NOT_FOUND",
+    expect(schemas["UserNotFoundError"]?.properties?.code?.enum).toEqual(["USER_NOT_FOUND"]);
+    expect(schemas["AuthenticationFailedError"]?.properties?.code?.enum).toEqual([
+      "AUTHENTICATION_FAILED",
     ]);
     expect(schemas["UnauthenticatedError"]?.properties?.code?.enum).toEqual([
       "UNAUTHENTICATED",
       "INVALID_SESSION",
     ]);
     expect(schemas["CsrfError"]?.properties?.code?.enum).toEqual(["INVALID_CSRF_TOKEN"]);
+    expect(schemas["OwnerOnlyError"]?.properties?.code?.enum).toEqual([
+      "NOT_OWNER",
+      "INVALID_CSRF_TOKEN",
+    ]);
     // Kind-wide components pick up every catalog code of their kind.
     expect(schemas["ConflictError"]?.properties?.code?.enum).toEqual(
       expect.arrayContaining([
         "EMAIL_TAKEN",
-        "INVITATION_ALREADY_EXISTS",
+        "OWNER_ALREADY_EXISTS",
+        "CANNOT_TRANSFER_TO_SELF",
         "MINECRAFT_USERNAME_TAKEN",
         "MINECRAFT_ACCOUNT_TAKEN",
       ]),

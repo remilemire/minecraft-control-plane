@@ -11,11 +11,10 @@
 // own — a repository joining another feature's table, or a module wanting a
 // row type. The exception is schema modules themselves: a table with a foreign
 // key imports the owning feature's `*.schema.js` directly (see
-// `invitations.schema.ts`), because going through this barrel would be a cycle.
+// `oauth-identities.schema.ts`), because going through this barrel would be a cycle.
 
 export * from "@/features/auth/oauth-identities/oauth-identities.schema.js";
 export * from "@/features/auth/sessions/sessions.schema.js";
-export * from "@/features/invitations/invitations.schema.js";
 export * from "@/features/minecraft/profiles/profiles.schema.js";
 export * from "@/features/users/users.schema.js";
 export * from "@/infrastructure/outbox/outbox.schema.js";

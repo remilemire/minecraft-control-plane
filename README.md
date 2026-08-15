@@ -1,17 +1,19 @@
 # Minecraft Control Plane
 
-A self-hosted panel for a private, **invite-only** Minecraft server, run on a
-home Linux box via Docker Compose.
+A self-hosted panel for a private Minecraft server, run on a home Linux box via
+Docker Compose.
 
-Every signed-in user has **full access** — there are no roles. Users invite players
-by email; a player signs in with **Google**, and the login only succeeds if their
-email has a valid, unaccepted invitation (the env-configured **bootstrap email** may
-always register without one, so the first user can ever sign in). The **whitelist**
-is a list of standalone **Minecraft profiles** (username → UUID, resolved via
-Mojang): any user can add or remove profiles, which whitelists/unwhitelists them on
-the server over RCON — applied asynchronously through a transactional outbox.
-Everyone can view the whitelist with online status, the registered users, and
-start/stop/restart the Minecraft container.
+There is exactly one role: a single **owner** (at most one at all times, enforced
+by the database). The owner provisions users by email and can transfer ownership;
+every other signed-in user has full access to everything else. A player signs in
+with **Google**, and the login only succeeds if their email matches a provisioned
+user (the env-configured **bootstrap owner email** may create the very first
+account — as the owner — while none exists). The **whitelist** is a list of
+standalone **Minecraft profiles** (username → UUID, resolved via Mojang): any user
+can add or remove profiles, which whitelists/unwhitelists them on the server over
+RCON — applied asynchronously through a transactional outbox. Everyone can view
+the whitelist with online status, the registered users, and start/stop/restart
+the Minecraft container.
 
 > **Status: active development.** The backend and the SPA dashboard are built —
 > features, layering, error handling, auth/session/CSRF, OpenAPI docs, a
@@ -73,7 +75,7 @@ Single **pnpm** workspace monorepo, TypeScript throughout (ESM, strict).
 │   │   │   ├── openapi/       # OpenAPI document + swagger routes
 │   │   │   ├── validation/    # parseOrThrow + zod-issue normalization
 │   │   │   ├── routes/        # createRouter(deps): mounts feature routers
-│   │   │   └── features/      # auth, users, sessions, invitations, minecraft
+│   │   │   └── features/      # auth, users, sessions, minecraft
 │   │   └── test/             # api tests, fakes, factories, db setup
 │   └── frontend/            # React SPA (skeleton) — see apps/frontend/CLAUDE.md
 │       ├── Dockerfile
@@ -198,9 +200,8 @@ root `.env` and `apps/backend/.env` (via `compose.yaml`'s `env_file`).
 | `SESSION_SECRET`         | `secret`                             | Required by `config/env.ts` but currently unused (sessions store hashed random tokens, no signing). |
 | `SESSION_TTL_DAYS`       | `7`                                  | Session lifetime (days). |
 | `CSRF_TTL_DAYS`          | `7`                                  | CSRF cookie lifetime (days). |
-| `INVITATION_TTL_DAYS`    | `7`                                  | Invitation lifetime (days). |
 | `MINECRAFT_CONTROLLER_URL` | `http://localhost:8001`             | Minecraft-controller base URL (host-dev default; compose overrides it to `http://minecraft-controller:8000`). |
-| `BOOTSTRAP_EMAIL`        | `owner@domain.com`                   | The one email allowed to register without an invitation (so the first user can sign in). No special powers. |
+| `BOOTSTRAP_OWNER_EMAIL`  | `owner@domain.com`                   | May create the very first account — as the owner — while no owner exists yet. |
 
 ### `apps/frontend/.env`
 
@@ -236,26 +237,33 @@ Feature-first, class-based, with explicit dependency injection. Details live in
 
 ## Authentication
 
-- **Google OAuth, invite-only.** The frontend obtains a Google credential; the
+- **Google OAuth, owner-provisioned.** The frontend obtains a Google credential; the
   backend verifies it with `google-auth-library`. If no user exists for that Google
-  identity, one is created **only if** the email has a valid, unaccepted invitation
-  (`NOT_INVITED` otherwise). The `BOOTSTRAP_EMAIL` may always register without an
-  invitation — that's how the first account is created — but becomes a regular user
-  like everyone else.
+  identity, the first sign-in **claims** the user row whose (normalized) email
+  matches — the owner provisions those rows ahead of time. Only the
+  `BOOTSTRAP_OWNER_EMAIL` may register while **no owner exists**, creating the very
+  first account as the owner.
+- **One login failure code.** Every sign-in failure — bad token, unverified email,
+  unregistered email — returns the same 401 `AUTHENTICATION_FAILED` with one
+  message, so responses can't be used to enumerate which emails have accounts.
 - **Sessions:** a random token is set in an httponly `session_token` cookie; only its
   SHA-256 hash is stored in the `sessions` table. Expires after `SESSION_TTL_DAYS`.
 - **CSRF:** double-submit — a non-httponly `csrf_token` cookie must match the
   `x-csrf-token` header on unsafe requests (`requireCsrf`).
-- **Authorization:** `requireAuth` loads the session's user; every authenticated user
-  has full access — there are no roles. Mutations additionally require the CSRF pair.
+- **Authorization:** `requireAuth` loads the session's user. The single **owner**
+  (at most one, DB-enforced) is the only role: creating users and transferring
+  ownership are owner-only (`NOT_OWNER` otherwise); everything else is open to every
+  authenticated user. Mutations additionally require the CSRF pair. The owner cannot
+  be deleted; ownership must be transferred first (user deletion itself is not built
+  yet).
 
 ## API
 
 All routes are mounted under `/api`. Current surface:
 
 - `POST /api/auth/google`, `POST /api/auth/logout`
-- `GET /api/users`, `GET /api/users/me`
-- `GET/POST /api/invitations`, `DELETE /api/invitations/:invitationId`
+- `GET/POST /api/users`, `GET /api/users/me`,
+  `POST /api/users/:userId/transfer-ownership` (the POSTs are owner-only)
 - `GET/POST /api/minecraft/profiles`,
   `DELETE /api/minecraft/profiles/:minecraftProfileId`
 - `GET /api/minecraft/server/status`,
@@ -344,18 +352,20 @@ whitelist over RCON (`ENFORCE_WHITELIST=true`).
 
 Implemented:
 - pnpm monorepo + Docker Compose dev stack (db, backend, frontend, minecraft)
-- Backend features: auth (Google OAuth, invite-only + bootstrap email), users,
-  sessions, invitations, Minecraft profiles (the whitelist over RCON, applied via a
+- Backend features: auth (Google OAuth, owner-provisioned accounts + bootstrap
+  owner email), users (single owner role, owner-only provisioning + ownership
+  transfer), sessions, Minecraft profiles (the whitelist over RCON, applied via a
   transactional outbox), Minecraft server control (power via docker compose)
 - Layered feature architecture with DI, shared Zod schemas, and a shared error catalog
 - Centralized error handling + generated OpenAPI docs (Swagger UI, dev only)
 - Drizzle schema + migrations; three-layer Vitest suite
-- The SPA dashboard: whitelist management, server controls, invitations, users
+- The SPA dashboard: whitelist management, server controls, users (owner badge,
+  owner-only provisioning and ownership transfer)
 - Production deployment: same-origin SPA from the backend, prod images
   (`pnpm deploy`), Caddy TLS edge, migrate-on-boot ([Deployment](#deployment))
 
 Not yet implemented:
-- User deletion (the users table in the UI is read-only for now)
+- User deletion (when built, the owner must transfer ownership before deletion)
 - The firewall / IP-access layer in front of the Minecraft server
 
 ## License

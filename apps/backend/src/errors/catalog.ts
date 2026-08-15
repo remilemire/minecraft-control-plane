@@ -1,7 +1,6 @@
 // apps/backend/src/errors/catalog.ts
 
 import { authErrorCatalog } from "@/features/auth/auth.error-catalog.js";
-import { invitationErrorCatalog } from "@/features/invitations/invitations.error-catalog.js";
 import { minecraftErrorCatalog } from "@/features/minecraft/minecraft.error-catalog.js";
 import { userErrorCatalog } from "@/features/users/users.error-catalog.js";
 import type { CommonErrorCode } from "@minecraft-control-plane/shared/common";
@@ -17,7 +16,6 @@ const commonErrorCatalog = {
 export const errorCatalog = {
   ...commonErrorCatalog,
   ...authErrorCatalog,
-  ...invitationErrorCatalog,
   ...minecraftErrorCatalog,
   ...userErrorCatalog,
 } as const satisfies ErrorCatalog;

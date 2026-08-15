@@ -46,8 +46,11 @@ src/
 
 - `AuthProvider` probes `GET /users/me` on mount → `loading` | `authenticated` |
   `unauthenticated`; `login(credential)` posts to `/auth/google`. Guards redirect:
-  RequireAuth → `/login`, RequireGuest → `/`. There are no roles — every
-  authenticated user sees the same single-page dashboard.
+  RequireAuth → `/login`, RequireGuest → `/`. Everyone sees the same single-page
+  dashboard; the single **owner** (`user.isOwner` from `useAuth()`) additionally
+  sees the UsersPanel's provision form and per-row "Make owner" transfer action.
+  After transferring ownership away, the AuthContext user is stale until the next
+  `fetchMe` — the backend re-checks on every request, so this is cosmetic.
 - Google sign-in loads the GIS script lazily (`features/auth/googleIdentity.ts`) and
   needs `VITE_GOOGLE_CLIENT_ID` — from `apps/frontend/.env` in host dev, and baked
   in at build time from the root `GOOGLE_CLIENT_ID` (build arg) for prod images.

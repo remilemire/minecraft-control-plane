@@ -1,5 +1,6 @@
 // apps/backend/src/config/env.ts
 
+import { emailSchema } from "@minecraft-control-plane/shared/common";
 import { z } from "zod";
 import { buildPostgresUrl, postgresEnvSchema } from "./postgres.js";
 
@@ -18,7 +19,6 @@ const envSchema = z.object({
 
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(7),
   CSRF_TTL_DAYS: z.coerce.number().int().positive().default(7),
-  INVITATION_TTL_DAYS: z.coerce.number().int().positive().default(7),
 
   GOOGLE_CLIENT_ID: z.string().min(1),
 
@@ -30,9 +30,10 @@ const envSchema = z.object({
   MINECRAFT_CONTROLLER_TOKEN: z.string().min(1),
 
   SESSION_SECRET: z.string().min(1),
-  // The one email allowed to register without an invitation (so the first
-  // user can ever sign in). Grants no other special treatment.
-  BOOTSTRAP_EMAIL: z.string().min(1),
+  // May create the very first account — as the owner — while no owner exists
+  // yet. Parsed with the shared emailSchema (trim + lowercase) so it compares
+  // cleanly against normalized user emails.
+  BOOTSTRAP_OWNER_EMAIL: emailSchema,
 });
 
 const parsedEnv = envSchema.parse(process.env);
@@ -48,7 +49,6 @@ export const env = {
 
   SESSION_TTL_MS: parsedEnv.SESSION_TTL_DAYS * MS_PER_DAY,
   CSRF_TTL_MS: parsedEnv.CSRF_TTL_DAYS * MS_PER_DAY,
-  INVITATION_TTL_MS: parsedEnv.INVITATION_TTL_DAYS * MS_PER_DAY,
 
   DATABASE_URL: buildPostgresUrl(postgres),
 };
