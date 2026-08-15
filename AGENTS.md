@@ -18,7 +18,9 @@ everything else.
 - The **owner creates users** by email (`POST /users`, owner-only). A player signs
   in with **Google**; login succeeds only if an identity is already linked or a
   user row with their (normalized) email exists — the first sign-in claims the
-  provisioned account by linking the Google identity. The env-configured
+  provisioned account by linking the Google identity, stamping
+  `users.last_login_at` (null = never signed in; stamped on every login) and
+  adopting the Google profile name as `fullName`. The env-configured
   **bootstrap owner email** (`BOOTSTRAP_OWNER_EMAIL`) may create the very first
   account — as the owner — while no owner exists yet. Every login failure is the
   single opaque `AUTHENTICATION_FAILED` 401 (anti-enumeration). Owners cannot be

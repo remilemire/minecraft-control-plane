@@ -15,6 +15,10 @@ export const users = pgTable(
 
     isOwner: boolean("is_owner").notNull().default(false),
 
+    // Null = has never signed in. The first sign-in stamps it and adopts the
+    // provider's display name (owner-provisioned rows carry no name until then).
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

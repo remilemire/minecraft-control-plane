@@ -45,11 +45,27 @@ export class AuthService {
     );
     const user = found !== null ? found.user : await this.registerFirstLogin(identity);
 
+    // A null lastLoginAt marks the first sign-in ever: adopt the provider's
+    // display name then (owner-provisioned rows have none). Keying on the
+    // column, not the code path, makes an interrupted claim self-healing —
+    // the next login still counts as the first.
+    const isFirstLogin = user.lastLoginAt === null;
+    const loggedIn = await this.userService
+      .recordLogin(user.id, isFirstLogin ? identity.fullName : undefined)
+      .catch((error: unknown) => {
+        // The user row vanishing mid-login is a conflict like any other:
+        // login stays single-coded.
+        if (error instanceof AppError && error.code === "USER_NOT_FOUND") {
+          throw new AppError("AUTHENTICATION_FAILED", { cause: error });
+        }
+        throw error;
+      });
+
     const { sessionToken } = await this.sessionService.create({
-      userId: user.id,
+      userId: loggedIn.id,
     });
 
-    return { user, sessionToken };
+    return { user: loggedIn, sessionToken };
   }
 
   public async authenticateFromSession(sessionToken: string): Promise<AuthContext> {

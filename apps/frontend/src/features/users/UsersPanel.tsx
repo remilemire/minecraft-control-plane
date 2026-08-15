@@ -98,6 +98,7 @@ export function UsersPanel() {
                 </p>
               </div>
               <div className="ml-auto flex items-center gap-2">
+                {user.lastLoginAt === null && <McBadge>Never signed in</McBadge>}
                 {user.isOwner && <McBadge variant="highlight">Owner</McBadge>}
                 {isOwner && user.id !== me?.id && (
                   <McConfirmButton

@@ -45,26 +45,37 @@ describe("POST /api/auth/google", () => {
     expect(csrfCookie).not.toContain("HttpOnly");
   });
 
-  it("claims a provisioned account on first login, and persists the identity for a later login", async () => {
+  it("claims a provisioned account on first login: links the identity, adopts the name, stamps the login", async () => {
     const { app, googleOauthClient } = testApp;
-    // Owners provision the user row ahead of time; no identity exists yet.
+    // Owners provision the user row ahead of time; no identity, no name, and
+    // no login yet.
     const provisioned = await createUser({ email: "newplayer@example.com" });
+    expect(provisioned.lastLoginAt).toBeNull();
     const credential = googleOauthClient.issueToken({
       email: "newplayer@example.com",
       sub: "google-newplayer",
+      name: "New Player",
     });
 
     const response = await request(app).post("/api/auth/google").send({ credential });
 
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ id: provisioned.id, email: "newplayer@example.com" });
+    expect(response.body).toMatchObject({
+      id: provisioned.id,
+      email: "newplayer@example.com",
+      // The first sign-in adopts the Google profile name and stamps the login.
+      fullName: "New Player",
+    });
+    expect(response.body.lastLoginAt).not.toBeNull();
     expect(findSetCookie(response, SESSION_COOKIE)).toBeDefined();
 
     // The first-login identity must have been persisted: a later login with
-    // the same provider subject resolves to the same user.
+    // the same provider subject resolves to the same user — and a changed
+    // Google name no longer overwrites the adopted one.
     const laterCredential = googleOauthClient.issueToken({
       email: "newplayer@example.com",
       sub: "google-newplayer",
+      name: "Renamed Player",
     });
     const laterResponse = await request(app)
       .post("/api/auth/google")
@@ -72,6 +83,7 @@ describe("POST /api/auth/google", () => {
 
     expect(laterResponse.status).toBe(200);
     expect(laterResponse.body.id).toBe(provisioned.id);
+    expect(laterResponse.body.fullName).toBe("New Player");
   });
 
   it("matches a provisioned account regardless of the provider email's casing", async () => {
@@ -102,6 +114,7 @@ describe("POST /api/auth/google", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ email: bootstrapEmail, isOwner: true });
+    expect(response.body.lastLoginAt).not.toBeNull();
     expect(findSetCookie(response, SESSION_COOKIE)).toBeDefined();
   });
 

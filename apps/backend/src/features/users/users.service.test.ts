@@ -15,6 +15,7 @@ function user(overrides: Partial<User> = {}): User {
     email: "steve@example.com",
     fullName: null,
     isOwner: false,
+    lastLoginAt: null,
     createdAt: new Date(),
     ...overrides,
   };
@@ -78,6 +79,39 @@ describe("UserService", () => {
       await service.createOwner({ email: "steve@example.com" });
 
       expect(createInput).toEqual({ email: "steve@example.com", isOwner: true });
+    });
+  });
+
+  describe("recordLogin", () => {
+    it("passes the stamp through and returns the updated user", async () => {
+      const stamped = user({ fullName: "Steve Miner", lastLoginAt: new Date() });
+      let recordArgs: unknown[] | undefined;
+
+      const service = new UserService(
+        repositoryStub({
+          recordLogin: async (...args: unknown[]) => {
+            recordArgs = args;
+            return stamped;
+          },
+        }),
+        neverRunsTransactionManager(),
+      );
+
+      const result = await service.recordLogin(OWNER_ID, "Steve Miner");
+
+      expect(result).toEqual(stamped);
+      expect(recordArgs).toEqual([OWNER_ID, "Steve Miner"]);
+    });
+
+    it("throws USER_NOT_FOUND when the user no longer exists", async () => {
+      const service = new UserService(
+        repositoryStub({ recordLogin: async () => null }),
+        neverRunsTransactionManager(),
+      );
+
+      await expect(service.recordLogin(OWNER_ID)).rejects.toMatchObject({
+        code: "USER_NOT_FOUND",
+      });
     });
   });
 

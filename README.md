@@ -242,7 +242,8 @@ Feature-first, class-based, with explicit dependency injection. Details live in
   identity, the first sign-in **claims** the user row whose (normalized) email
   matches — the owner provisions those rows ahead of time. Only the
   `BOOTSTRAP_OWNER_EMAIL` may register while **no owner exists**, creating the very
-  first account as the owner.
+  first account as the owner. Every login stamps `last_login_at` (null = has never
+  signed in); the first one also adopts the Google profile name.
 - **One login failure code.** Every sign-in failure — bad token, unverified email,
   unregistered email — returns the same 401 `AUTHENTICATION_FAILED` with one
   message, so responses can't be used to enumerate which emails have accounts.

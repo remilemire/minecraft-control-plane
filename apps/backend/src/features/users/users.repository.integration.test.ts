@@ -47,10 +47,29 @@ describe("UserRepository", () => {
     expect(await repository.findByEmail("nobody@example.com")).toBeNull();
   });
 
-  it("creates users as non-owners by default", async () => {
+  it("creates users as non-owners that have never signed in", async () => {
     const created = await repository.create({ email: `${randomUUID()}@example.com` });
 
     expect(created.isOwner).toBe(false);
+    expect(created.lastLoginAt).toBeNull();
+  });
+
+  it("stamps a login, adopting the given name", async () => {
+    const created = await createUser();
+    expect(created.lastLoginAt).toBeNull();
+
+    const first = await repository.recordLogin(created.id, "Steve Miner");
+    expect(first).toMatchObject({ id: created.id, fullName: "Steve Miner" });
+    expect(first?.lastLoginAt).not.toBeNull();
+
+    // Without a name the stamp leaves the existing name untouched.
+    const second = await repository.recordLogin(created.id);
+    expect(second).toMatchObject({ id: created.id, fullName: "Steve Miner" });
+    expect(second?.lastLoginAt?.getTime()).toBeGreaterThanOrEqual(
+      first?.lastLoginAt?.getTime() ?? Number.POSITIVE_INFINITY,
+    );
+
+    expect(await repository.recordLogin(randomUUID())).toBeNull();
   });
 
   it("finds the owner, and returns null when none exists", async () => {

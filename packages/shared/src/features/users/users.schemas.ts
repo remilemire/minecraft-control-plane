@@ -23,6 +23,8 @@ export const userResponseSchema = z.object({
   email: emailSchema,
   fullName: nameSchema.nullable(),
   isOwner: z.boolean(),
+  // Null = the user has never signed in (their account awaits its first claim).
+  lastLoginAt: z.date().nullable(),
   createdAt: z.date(),
 });
 

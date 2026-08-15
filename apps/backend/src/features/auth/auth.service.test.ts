@@ -23,6 +23,7 @@ function user(overrides: Partial<User> = {}): User {
     email: "steve@example.com",
     fullName: null,
     isOwner: false,
+    lastLoginAt: null,
     createdAt: new Date(),
     ...overrides,
   };
@@ -97,17 +98,24 @@ describe("AuthService", () => {
       const credential = googleOauthClient.issueToken({
         email: "steve@example.com",
         sub: "google-abc",
+        name: "Steve Renamed",
       });
-      const existing = user();
+      const existing = user({ fullName: "Steve Miner", lastLoginAt: new Date("2026-08-01") });
+      const stamped = user({ ...existing, lastLoginAt: new Date() });
 
       let lookedUpProvider: string | undefined;
       let lookedUpSubject: string | undefined;
+      let recordLoginArgs: unknown[] | undefined;
       let sessionUserId: string | undefined;
 
       const service = new AuthService(
         userServiceStub({
           findByEmail: async () => {
             throw new Error("a linked identity must not fall back to the email lookup");
+          },
+          recordLogin: async (...args: unknown[]) => {
+            recordLoginArgs = args;
+            return stamped;
           },
         }),
         sessionServiceStub({
@@ -132,23 +140,66 @@ describe("AuthService", () => {
 
       const result = await service.authenticateWithOAuth({ credential, provider: "google" });
 
-      expect(result).toEqual({ user: existing, sessionToken: "session-token" });
+      expect(result).toEqual({ user: stamped, sessionToken: "session-token" });
       // The user is matched by (provider, subject), not their email.
       expect(lookedUpProvider).toBe("google");
       expect(lookedUpSubject).toBe("google-abc");
-      expect(sessionUserId).toBe(existing.id);
+      // A returning user's login is stamped, but their name is never touched
+      // again — only the very first sign-in adopts the provider's name.
+      expect(recordLoginArgs).toEqual([existing.id, undefined]);
+      expect(sessionUserId).toBe(stamped.id);
     });
 
-    it("claims a provisioned account on first login by linking the identity, without a transaction", async () => {
+    it("adopts the provider name for a linked user whose first sign-in never completed", async () => {
+      const googleOauthClient = new FakeGoogleOauthClient();
+      const credential = googleOauthClient.issueToken({
+        email: "steve@example.com",
+        sub: "google-abc",
+        name: "Steve Miner",
+      });
+      // Identity linked but lastLoginAt still null: a claim that was
+      // interrupted between the identity insert and the login stamp.
+      const halfClaimed = user({ lastLoginAt: null });
+
+      let recordLoginArgs: unknown[] | undefined;
+
+      const service = new AuthService(
+        userServiceStub({
+          recordLogin: async (...args: unknown[]) => {
+            recordLoginArgs = args;
+            return user({ fullName: "Steve Miner", lastLoginAt: new Date() });
+          },
+        }),
+        sessionServiceStub({ create: async () => issuedSession }),
+        { google: googleOauthClient },
+        oauthIdentityServiceStub({
+          findBySubjectWithUser: async () => ({ identity: oauthIdentity(), user: halfClaimed }),
+        }),
+        neverRunsTransactionManager(),
+      );
+
+      await service.authenticateWithOAuth({ credential, provider: "google" });
+
+      expect(recordLoginArgs).toEqual([halfClaimed.id, "Steve Miner"]);
+    });
+
+    it("claims a provisioned account on first login: links the identity and adopts the name, without a transaction", async () => {
       const googleOauthClient = new FakeGoogleOauthClient();
       const credential = googleOauthClient.issueToken({
         email: "provisioned@example.com",
         sub: "google-provisioned",
+        name: "New Player",
       });
       const provisioned = user({ email: "provisioned@example.com" });
+      const claimed = user({
+        email: "provisioned@example.com",
+        fullName: "New Player",
+        lastLoginAt: new Date(),
+      });
 
       let lookedUpEmail: unknown;
       let identityInput: unknown;
+      let recordLoginArgs: unknown[] | undefined;
 
       const service = new AuthService(
         userServiceStub({
@@ -161,6 +212,10 @@ describe("AuthService", () => {
           },
           createOwner: async () => {
             throw new Error("claiming a provisioned account must not create an owner");
+          },
+          recordLogin: async (...args: unknown[]) => {
+            recordLoginArgs = args;
+            return claimed;
           },
         }),
         sessionServiceStub({ create: async () => issuedSession }),
@@ -178,13 +233,16 @@ describe("AuthService", () => {
 
       const result = await service.authenticateWithOAuth({ credential, provider: "google" });
 
-      expect(result).toEqual({ user: provisioned, sessionToken: "session-token" });
+      expect(result).toEqual({ user: claimed, sessionToken: "session-token" });
       expect(lookedUpEmail).toBe("provisioned@example.com");
       expect(identityInput).toEqual({
         userId: provisioned.id,
         provider: "google",
         subject: "google-provisioned",
       });
+      // The provisioned row had never signed in (lastLoginAt null), so the
+      // first login stamps it and adopts the Google profile name.
+      expect(recordLoginArgs).toEqual([provisioned.id, "New Player"]);
     });
 
     it("normalizes the provider email before matching it against provisioned users", async () => {
@@ -203,6 +261,7 @@ describe("AuthService", () => {
             lookedUpEmail = email;
             return provisioned;
           },
+          recordLogin: async () => provisioned,
         }),
         sessionServiceStub({ create: async () => issuedSession }),
         { google: googleOauthClient },
@@ -235,6 +294,7 @@ describe("AuthService", () => {
       let createOwnerInput: unknown;
       let identityInput: unknown;
 
+      const stamped = user({ ...created, lastLoginAt: new Date() });
       const service = new AuthService(
         userServiceStub({
           findByEmail: async () => null,
@@ -247,6 +307,7 @@ describe("AuthService", () => {
             createOwnerInput = input;
             return created;
           },
+          recordLogin: async () => stamped,
         }),
         sessionServiceStub({ create: async () => issuedSession }),
         { google: googleOauthClient },
@@ -263,7 +324,7 @@ describe("AuthService", () => {
 
       const result = await service.authenticateWithOAuth({ credential, provider: "google" });
 
-      expect(result).toEqual({ user: created, sessionToken: "session-token" });
+      expect(result).toEqual({ user: stamped, sessionToken: "session-token" });
       expect(createOwnerInput).toEqual({
         email: env.BOOTSTRAP_OWNER_EMAIL,
         fullName: "First Owner",

@@ -11,7 +11,14 @@ import { csrfPair, sessionCookie } from "@test/helpers/test-cookies.js";
 
 const { app } = createTestApp();
 
-const PUBLIC_USER_KEYS = ["id", "email", "fullName", "isOwner", "createdAt"] as const;
+const PUBLIC_USER_KEYS = [
+  "id",
+  "email",
+  "fullName",
+  "isOwner",
+  "lastLoginAt",
+  "createdAt",
+] as const;
 
 describe("GET /api/users", () => {
   it("returns every user's public shape for any authenticated user", async () => {
@@ -119,6 +126,8 @@ describe("POST /api/users", () => {
       email: "provisioned@example.com",
       fullName: "New Player",
       isOwner: false,
+      // Provisioned accounts await their first sign-in.
+      lastLoginAt: null,
     });
     expect(Object.keys(response.body).sort()).toEqual([...PUBLIC_USER_KEYS].sort());
   });

@@ -13,6 +13,7 @@ export function makeUser(overrides: Partial<User> = {}): User {
     email: "steve@example.com",
     fullName: "Steve Miner",
     isOwner: false,
+    lastLoginAt: new Date("2026-01-02T00:00:00Z"),
     createdAt: new Date("2026-01-01T00:00:00Z"),
     ...overrides,
   };

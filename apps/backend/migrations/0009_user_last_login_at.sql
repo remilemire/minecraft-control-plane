@@ -1,0 +1,2 @@
+ALTER TABLE "users" ADD COLUMN "last_login_at" timestamp with time zone;--> statement-breakpoint
+UPDATE "users" SET "last_login_at" = "created_at" WHERE "id" IN (SELECT "user_id" FROM "oauth_identities");

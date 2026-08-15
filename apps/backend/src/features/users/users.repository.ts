@@ -2,7 +2,7 @@
 
 import { withDbErrors, type DatabaseProvider } from "@/infrastructure/db/index.js";
 import { AppError } from "@/errors/app-error.js";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { USERS_CONSTRAINTS } from "./users.constraints.js";
 import { users, type NewUser, type User } from "./users.schema.js";
 
@@ -50,6 +50,21 @@ export class UserRepository {
     }
 
     return user;
+  }
+
+  public async recordLogin(id: string, fullName?: string): Promise<User | null> {
+    const [user] = await withDbErrors(() =>
+      this.databaseProvider
+        .get()
+        .update(users)
+        .set({
+          lastLoginAt: sql`now()`,
+          ...(fullName !== undefined ? { fullName } : {}),
+        })
+        .where(eq(users.id, id))
+        .returning(),
+    );
+    return user ?? null;
   }
 
   // The is_owner predicate makes the demotion conditional: a null result means

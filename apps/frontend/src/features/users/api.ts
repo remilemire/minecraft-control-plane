@@ -7,6 +7,7 @@ import { z } from "zod";
 // The shared response schemas type timestamps as Date (the backend serializes
 // them); on the wire they are ISO strings, so coerce them back.
 export const userSchema = userResponseSchema.extend({
+  lastLoginAt: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
 });
 

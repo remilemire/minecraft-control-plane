@@ -32,6 +32,14 @@ export class UserService {
     return await this.users.create({ ...input, isOwner: true });
   }
 
+  public async recordLogin(userId: string, fullName?: string): Promise<User> {
+    const user = await this.users.recordLogin(userId, fullName);
+    if (user === null) {
+      throw new AppError("USER_NOT_FOUND");
+    }
+    return user;
+  }
+
   public async transferOwnership(currentUserId: string, targetUserId: string): Promise<User> {
     if (currentUserId === targetUserId) {
       throw new AppError("CANNOT_TRANSFER_TO_SELF");

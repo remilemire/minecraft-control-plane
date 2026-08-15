@@ -162,8 +162,13 @@ To add an error code, update three places that must stay in sync:
   (owner-provisioned) is **claimed** by inserting the identity (a plain insert, no
   transaction); otherwise, only `BOOTSTRAP_OWNER_EMAIL` while **no owner exists** may
   register — as the owner — with the user + identity created in one
-  `TransactionManager.run`. Everything else is rejected. Session creation happens
-  after, outside the transaction.
+  `TransactionManager.run`. Everything else is rejected. Every successful login
+  then stamps `users.last_login_at` (`UserService.recordLogin`); while it is
+  still **null** — the first sign-in ever — the provider's display name is
+  adopted as `fullName`. Keying first-login off the column rather than the code
+  path makes an interrupted claim self-healing (identity linked but stamp lost →
+  the next login still counts as the first). Session creation happens after,
+  outside the transaction.
 - **One login failure code (anti-enumeration).** Every `POST /auth/google` failure —
   invalid/expired/wrong-audience token, unverified email, unregistered email, even a
   lost concurrent-bootstrap race — surfaces as the single 401 `AUTHENTICATION_FAILED`

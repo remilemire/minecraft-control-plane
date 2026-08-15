@@ -63,6 +63,22 @@ describe("UsersPanel", () => {
     expect(await screen.findByText("Owner")).toBeInTheDocument();
   });
 
+  it("badges accounts that have never signed in", async () => {
+    listMock.mockResolvedValue([
+      makeUser(),
+      makeUser({
+        id: OTHER_ID,
+        email: "provisioned@example.com",
+        fullName: null,
+        lastLoginAt: null,
+      }),
+    ]);
+
+    renderWithAuth(<UsersPanel />);
+
+    expect(await screen.findAllByText("Never signed in")).toHaveLength(1);
+  });
+
   it("lets the owner provision a user and reloads the list", async () => {
     const user = userEvent.setup();
     listMock.mockResolvedValueOnce([makeUser({ isOwner: true })]);
