@@ -9,6 +9,7 @@ import { toApiError, type ApiError } from "@/lib/apiClient";
 import { minecraftConsoleCommandSchema } from "@minecraft-control-plane/shared/minecraft";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { openConsoleLogStream, sendConsoleCommand, type MinecraftConsoleLogEvent } from "./api";
+import { isNoise } from "./noise";
 
 // Every connect replays a tail of recent lines, so scrollback older than a few
 // screens only grows memory — cap the buffer instead of keeping it all.
@@ -90,6 +91,12 @@ export function ConsolePanel() {
 
     return openConsoleLogStream({
       onLog: (event) => {
+        // Dropped on the way in rather than at render: this noise arrives on a
+        // fixed cadence, so filtering it later would still let it push real
+        // output out of the capped buffer.
+        if (isNoise(event.line)) {
+          return;
+        }
         append({ kind: "log", stream: event.stream, line: event.line });
       },
       onOpen: () => {

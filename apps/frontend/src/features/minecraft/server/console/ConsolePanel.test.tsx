@@ -62,6 +62,26 @@ describe("ConsolePanel", () => {
     expect(screen.queryByText("No console output yet.")).not.toBeInTheDocument();
   });
 
+  it("keeps the RCON polling churn out of the log view", () => {
+    render(<ConsolePanel />);
+
+    act(() => {
+      handlers.onOpen();
+      handlers.onLog({
+        stream: "stdout",
+        line: "[02:33:29 INFO]: Thread RCON Client /1.2.3.4 shutting down",
+      });
+      handlers.onLog({
+        stream: "stdout",
+        line: "[02:33:44 INFO]: Thread RCON Client /1.2.3.4 started",
+      });
+      handlers.onLog({ stream: "stdout", line: "[02:33:45 INFO]: Steve joined the game" });
+    });
+
+    expect(screen.getByText(/Steve joined the game/)).toBeInTheDocument();
+    expect(screen.queryByText(/Thread RCON Client/)).not.toBeInTheDocument();
+  });
+
   it("marks a drop and its recovery with seam notices", () => {
     render(<ConsolePanel />);
 

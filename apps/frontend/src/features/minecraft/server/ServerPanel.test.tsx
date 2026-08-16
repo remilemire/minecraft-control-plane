@@ -87,7 +87,7 @@ describe("ServerPanel", () => {
       expect(statusMock).toHaveBeenCalledTimes(1);
 
       await act(async () => {
-        vi.advanceTimersByTime(10_000);
+        vi.advanceTimersByTime(15_000);
       });
       expect(statusMock).toHaveBeenCalledTimes(2);
       expect(screen.getByText("STOPPED")).toBeInTheDocument();
@@ -106,7 +106,7 @@ describe("ServerPanel", () => {
 
       // The refetch is in flight — the badge stays put and nothing disables.
       act(() => {
-        vi.advanceTimersByTime(10_000);
+        vi.advanceTimersByTime(15_000);
       });
       expect(screen.getByText("RUNNING")).toBeInTheDocument();
       expect(screen.queryByText(/Loading/)).not.toBeInTheDocument();

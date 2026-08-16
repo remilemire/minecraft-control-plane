@@ -6,8 +6,9 @@ import { McBadge } from "@/components/McBadge";
 import { McButton } from "@/components/McButton";
 import { McPanel } from "@/components/McPanel";
 import { toApiError, type ApiError } from "@/lib/apiClient";
+import { usePoll } from "@/lib/usePoll";
 import { useRequest } from "@/lib/useRequest";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { fetchServerStatus, restartServer, startServer, stopServer } from "./api";
 
 type ServerAction = "start" | "stop" | "restart";
@@ -15,20 +16,14 @@ type ServerAction = "start" | "stop" | "restart";
 // The container's state changes without us — a crash, a `docker stop` on the
 // host, or a Start that only finishes booting after the call returns — so the
 // status is polled rather than trusted until the next action.
-const STATUS_POLL_MS = 10_000;
+const STATUS_POLL_MS = 15_000;
 
 export function ServerPanel() {
   const { data: status, error, loading, reload } = useRequest(fetchServerStatus);
   const [pending, setPending] = useState<ServerAction | null>(null);
   const [actionError, setActionError] = useState<ApiError | null>(null);
 
-  useEffect(() => {
-    const timer = setInterval(reload, STATUS_POLL_MS);
-
-    return () => {
-      clearInterval(timer);
-    };
-  }, [reload]);
+  usePoll(reload, STATUS_POLL_MS);
 
   async function run(action: ServerAction, request: () => Promise<undefined>) {
     setPending(action);

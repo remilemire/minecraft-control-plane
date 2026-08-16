@@ -16,13 +16,16 @@ Aliases: `@/*` → `src/*`, `@test/*` → `test/*`. Unlike the backend, imports 
 src/
   app/         router.tsx, providers/ (AuthProvider + auth-context), guards/
                (RequireAuth / RequireGuest — Outlet-based)
-  components/  Minecraft-styled primitives: McPanel, McButton, McInput, McBadge,
+  components/  Minecraft-styled primitives: McPanel (optional `actions` slot —
+               panel-wide controls right-aligned on the title row), McButton,
+               McInput, McBadge,
                McConfirmButton (two-click destructive confirm), ErrorText,
                LoadingText, AppLayout (authed shell: header/logout)
   features/    feature-first, mirrors the backend: <feature>/api.ts (fetchers)
                + components; minecraft splits into profiles/ and server/ (with
                its console/ sub-feature)
-  lib/         apiClient.ts (fetch wrapper), cookies.ts, useRequest.ts, format.ts
+  lib/         apiClient.ts (fetch wrapper), cookies.ts, useRequest.ts,
+               usePoll.ts (visibility-aware interval), format.ts
   pages/       route compositions: HomePage (the whole dashboard), NotFoundPage
   assets/      bundled Monocraft font (OFL) + generated background.svg tile
   index.css    the whole theme: @theme tokens + mc-raised/mc-inset utilities
@@ -82,10 +85,25 @@ by a success, so a panel renders the error _beside_ its last good data, never
 instead of it. Mutations live in component handlers and call `reload()` on
 success — there's no cache/store.
 
-Backend state that settles asynchronously is polled by interval-calling `reload()`
-**only while something is unsettled** (`ProfilesPanel` does this while any profile's
-`whitelistStatus` is `pending`), and such a panel renders `<LoadingText />` only on
-the first load (`loading && data === null`) so polls don't blink the list away.
+Polling goes through **`usePoll(onPoll, intervalMs)`** (`lib/usePoll.ts`) — never a
+hand-rolled `setInterval` effect. It runs only while the page is visible and fires
+once on the way back, so a backgrounded tab costs nothing and a returning one is
+never stale. Panels compose it with `useRequest`: `usePoll(reload, ms)`.
+
+The cadence follows what the response actually contains. **Settling** state (a
+`whitelistStatus` that ends at `whitelisted`) justifies a fast poll that stops, but
+**live** state (`online`, the server's run status) never settles and must keep
+polling for as long as the panel is mounted — a response carrying both takes the
+union, as `ProfilesPanel` does: 3s while any profile is `pending`, 15s forever
+otherwise. Getting this wrong is invisible in the happy path, since a page reload
+refetches and looks correct. Live cadences are deliberately **in step across panels**
+(both minecraft panels poll 15s): they describe one server, so drifting them apart
+lets the dashboard contradict itself.
+
+A polling panel renders `<LoadingText />` only on the first load
+(`loading && data === null`) so polls don't blink the list away, and disables its
+manual Refresh button on that same first load rather than on `loading` — otherwise
+every poll greys the button out.
 
 The console is the one streaming feature: `server/console/api.ts` wraps
 `EventSource` over the backend's SSE log endpoint (`openConsoleLogStream`,
@@ -93,6 +111,14 @@ returning a closer), and **the frontend owns the connection status** — the
 browser auto-reconnects and every connect replays a tail of recent lines with
 no deduplication upstream, so `ConsolePanel` marks drop/reconnect seams with
 notice lines in the log view instead.
+
+The console also **drops known-noise lines on the way in** (`console/noise.ts`,
+applied in `onLog` before the entry is appended). The noise is self-inflicted:
+each online-status poll and each outbox whitelist opens an RCON connection and
+closes it, and Minecraft logs a thread start and shutdown for every one — so the
+rate is set by the poll cadence. Filtering at ingestion rather than at render
+keeps that churn from pushing real output out of the capped buffer. Keep the
+patterns narrow enough that an RCON line reporting an actual failure survives.
 
 ## Testing
 

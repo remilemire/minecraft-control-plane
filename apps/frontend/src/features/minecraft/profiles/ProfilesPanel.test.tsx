@@ -69,7 +69,7 @@ describe("ProfilesPanel", () => {
     expect(screen.getByText("Failed")).toBeInTheDocument();
   });
 
-  it("polls while a profile is pending and stops once it settles", async () => {
+  it("polls fast while a profile is pending and slows down once it settles", async () => {
     vi.useFakeTimers();
     try {
       listMock.mockResolvedValueOnce([makeProfile({ whitelistStatus: "pending" })]);
@@ -87,11 +87,38 @@ describe("ProfilesPanel", () => {
       expect(listMock).toHaveBeenCalledTimes(2);
       expect(screen.getByText("Whitelisted")).toBeInTheDocument();
 
-      // Nothing is pending any more, so the polling stops.
+      // Settled, so the fast cadence is gone — 3s no longer refetches.
       await act(async () => {
-        vi.advanceTimersByTime(30_000);
+        vi.advanceTimersByTime(3_000);
       });
       expect(listMock).toHaveBeenCalledTimes(2);
+
+      // ...but the slow one carries on, because online status never settles.
+      await act(async () => {
+        vi.advanceTimersByTime(15_000);
+      });
+      expect(listMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps refreshing online status when nothing is pending", async () => {
+    vi.useFakeTimers();
+    try {
+      listMock.mockResolvedValueOnce([makeProfile({ username: "Steve", online: false })]);
+      listMock.mockResolvedValue([makeProfile({ username: "Steve", online: true })]);
+
+      render(<ProfilesPanel />);
+      await act(async () => {});
+      expect(screen.getByText("Offline")).toBeInTheDocument();
+
+      // Nothing was ever pending here — the badge still has to catch the join.
+      await act(async () => {
+        vi.advanceTimersByTime(15_000);
+      });
+      expect(screen.getByText("Online")).toBeInTheDocument();
+      expect(screen.queryByText("Offline")).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
@@ -144,6 +171,20 @@ describe("ProfilesPanel", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("refetches when Refresh is clicked", async () => {
+    const user = userEvent.setup();
+    listMock.mockResolvedValueOnce([makeProfile({ username: "Steve", online: false })]);
+    listMock.mockResolvedValue([makeProfile({ username: "Steve", online: true })]);
+
+    render(<ProfilesPanel />);
+    expect(await screen.findByText("Offline")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+    expect(await screen.findByText("Online")).toBeInTheDocument();
+    expect(listMock).toHaveBeenCalledTimes(2);
   });
 
   it("shows the empty state when nothing is whitelisted", async () => {

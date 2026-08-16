@@ -8,19 +8,27 @@ import { McConfirmButton } from "@/components/McConfirmButton";
 import { McInput } from "@/components/McInput";
 import { McPanel } from "@/components/McPanel";
 import { toApiError, type ApiError } from "@/lib/apiClient";
+import { usePoll } from "@/lib/usePoll";
 import { useRequest } from "@/lib/useRequest";
 import {
   minecraftUsernameSchema,
   type WhitelistStatus,
 } from "@minecraft-control-plane/shared/minecraft";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { createProfile, deleteProfile, fetchProfiles, type MinecraftProfile } from "./api";
 
 const USERNAME_HINT = "Usernames are 3-16 characters: letters, numbers, and underscores.";
 
 // A pending profile is waiting on the server's whitelist command, which the
-// backend applies asynchronously — refetch until every profile has settled.
+// backend applies asynchronously — refetch quickly until every profile has
+// settled.
 const PENDING_POLL_MS = 3_000;
+
+// `online` is live RCON state, not a settling one: players join and leave for
+// as long as the panel is open, so the slow poll never stops. Kept in step
+// with the server panel's status cadence — the two badges describe the same
+// server, and drifting them apart makes the dashboard disagree with itself.
+const ONLINE_POLL_MS = 15_000;
 
 const WHITELIST_STATUS_BADGES = {
   pending: { label: "Pending", variant: "highlight" },
@@ -119,19 +127,9 @@ export function ProfilesPanel() {
 
   const hasPending = profiles?.some(isPending) ?? false;
 
-  // Only while something is pending: once every profile has settled there is
-  // nothing left for a refetch to reveal.
-  useEffect(() => {
-    if (!hasPending) {
-      return;
-    }
-
-    const timer = setInterval(reload, PENDING_POLL_MS);
-
-    return () => {
-      clearInterval(timer);
-    };
-  }, [hasPending, reload]);
+  // Fast while a whitelist command is still settling, slow forever after to
+  // keep the online badges honest.
+  usePoll(reload, hasPending ? PENDING_POLL_MS : ONLINE_POLL_MS);
 
   async function handleRemove(minecraftProfileId: string) {
     setRemoving(minecraftProfileId);
@@ -146,16 +144,31 @@ export function ProfilesPanel() {
     }
   }
 
+  // A poll is not something the user is waiting on, so only the first load
+  // stands the Refresh button down.
+  const initialLoad = loading && profiles === null;
+
   // The form stays mounted through reloads so its feedback isn't lost when
   // the freshly whitelisted profile is refetched.
   return (
-    <McPanel title="Whitelist">
+    <McPanel
+      title="Whitelist"
+      actions={
+        <McButton
+          onClick={reload}
+          disabled={initialLoad || removing !== null}
+          className="px-2 py-1 text-sm"
+        >
+          Refresh
+        </McButton>
+      }
+    >
       <AddProfileForm onAdded={reload} />
 
       <div className="mt-4">
         {/* Only the first load: a poll keeps the list on screen instead of
             replacing it with "Loading..." every few seconds. */}
-        {loading && profiles === null && <LoadingText />}
+        {initialLoad && <LoadingText />}
 
         {profiles !== null && profiles.length === 0 && (
           <p className="text-muted">No profiles whitelisted yet. {USERNAME_HINT}</p>
