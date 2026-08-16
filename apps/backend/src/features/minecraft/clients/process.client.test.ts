@@ -12,13 +12,15 @@ const TOKEN = "test-token";
 interface FakeResponseInit {
   readonly status: number;
   readonly json?: () => Promise<unknown>;
+  readonly body?: ReadableStream<Uint8Array> | null;
 }
 
-function fakeResponse({ status, json }: FakeResponseInit): Response {
+function fakeResponse({ status, json, body = null }: FakeResponseInit): Response {
   return {
     status,
     ok: status >= 200 && status < 300,
     json: json ?? (async () => ({})),
+    body,
   } as unknown as Response;
 }
 
@@ -109,5 +111,40 @@ describe("ProcessClient", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(client().getStatus()).rejects.toMatchObject({ code: "PROCESS_CLIENT_ERROR" });
+  });
+
+  it("streams validated NDJSON log events from the controller", async () => {
+    const body = new Response(
+      '{"stream":"stdout","line":"first"}\n' + '{"stream":"stderr","line":"second"}\n',
+    ).body;
+    const fetchMock = stubFetch(fakeResponse({ status: 200, body }));
+    const events = await client().openLogStream(new AbortController().signal);
+    const received = [];
+
+    for await (const event of events) {
+      received.push(event);
+    }
+
+    expect(received).toEqual([
+      { stream: "stdout", line: "first" },
+      { stream: "stderr", line: "second" },
+    ]);
+    const [url, init] = lastCall(fetchMock);
+    expect(url.href).toBe(`${BASE_URL}/logs`);
+    expect(init.method).toBe("GET");
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("rejects malformed controller log events", async () => {
+    const body = new Response('{"stream":"other","line":"bad"}\n').body;
+    stubFetch(fakeResponse({ status: 200, body }));
+    const events = await client().openLogStream(new AbortController().signal);
+
+    await expect(async () => {
+      for await (const event of events) {
+        // Consume the stream so validation runs.
+        void event;
+      }
+    }).rejects.toMatchObject({ code: "PROCESS_CLIENT_ERROR" });
   });
 });

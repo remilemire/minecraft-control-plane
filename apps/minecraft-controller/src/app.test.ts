@@ -1,6 +1,9 @@
 // apps/minecraft-controller/src/app.test.ts
 
-import type { MinecraftServerStatus } from "@minecraft-control-plane/shared/minecraft";
+import type {
+  MinecraftConsoleLogEvent,
+  MinecraftServerStatus,
+} from "@minecraft-control-plane/shared/minecraft";
 import supertest from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
@@ -13,6 +16,7 @@ const AUTHORIZATION = `Bearer ${TOKEN}`;
 class FakeMinecraftDocker implements MinecraftDockerApi {
   public readonly calls: ("start" | "stop" | "restart")[] = [];
   public status: MinecraftServerStatus = "RUNNING";
+  public logEvents: MinecraftConsoleLogEvent[] = [];
 
   public async start(): Promise<void> {
     this.calls.push("start");
@@ -28,6 +32,21 @@ class FakeMinecraftDocker implements MinecraftDockerApi {
 
   public async getStatus(): Promise<MinecraftServerStatus> {
     return this.status;
+  }
+
+  public async openLogStream(
+    signal: AbortSignal,
+  ): Promise<AsyncIterable<MinecraftConsoleLogEvent>> {
+    const events = [...this.logEvents];
+
+    return (async function* () {
+      for (const event of events) {
+        if (signal.aborted) {
+          return;
+        }
+        yield event;
+      }
+    })();
   }
 }
 
@@ -60,6 +79,24 @@ describe("createApp", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ status: "STOPPED" });
+  });
+
+  it("GET /logs returns authenticated NDJSON log events", async () => {
+    const docker = new FakeMinecraftDocker();
+    docker.logEvents = [
+      { stream: "stdout", line: "first" },
+      { stream: "stderr", line: "second" },
+    ];
+
+    const response = await supertest(createTestApp(docker))
+      .get("/logs")
+      .set("authorization", AUTHORIZATION);
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toMatch(/^application\/x-ndjson/);
+    expect(response.text).toBe(
+      '{"stream":"stdout","line":"first"}\n{"stream":"stderr","line":"second"}\n',
+    );
   });
 
   it("rejects a missing token with 401", async () => {

@@ -1,6 +1,9 @@
 // apps/backend/src/features/minecraft/minecraft.types.ts
 
-import type { MinecraftServerStatus } from "@minecraft-control-plane/shared/minecraft";
+import type {
+  MinecraftConsoleLogEvent,
+  MinecraftServerStatus,
+} from "@minecraft-control-plane/shared/minecraft";
 
 export type MojangProfile = {
   readonly uuid: string;
@@ -16,6 +19,7 @@ export interface ProcessApi {
   stop(): Promise<void>;
   restart(): Promise<void>;
   getStatus(): Promise<MinecraftServerStatus>;
+  openLogStream(signal: AbortSignal): Promise<AsyncIterable<MinecraftConsoleLogEvent>>;
 }
 
 export interface RconApi {

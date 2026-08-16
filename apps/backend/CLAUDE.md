@@ -23,8 +23,8 @@ of files by role (not all features have every file):
 | `*.outbox.ts`        | The feature's outbox message definitions (type + payload schema) and their handlers.   |
 
 Features: `auth` (with `auth/oauth-identities`, `auth/sessions`, `auth/clients/`),
-`users`, `minecraft` (with `minecraft/profiles`, `minecraft/server`,
-and `minecraft/clients/`). Cross-cutting code sits outside
+`users`, `minecraft` (with `minecraft/profiles`, `minecraft/server`
+and its `console` sub-feature, and `minecraft/clients/`). Cross-cutting code sits outside
 `features/`: `config/`, `infrastructure/` (`infrastructure/db/`,
 `infrastructure/outbox/`), `errors/`, `http/`, `validation/`, `openapi/`,
 `middleware/`, `lib/`, `routes/`.
@@ -40,6 +40,12 @@ one belongs in that sub-feature's `*.types.ts` / errors module, not the parent's
 The parent's `*.types.ts` keeps what the whole feature shares — including the
 external-client seams (`OAuthApi`, `MojangApi`), which stay at parent level rather
 than moving into `clients/`.
+
+`minecraft/server/console` is owned by `server`; the app composition root
+(`routes/index.ts`) wires its service and controller directly, following the same
+explicit composition convention as the other features. `server.openapi.ts` and
+`server.schemas.ts` aggregate the console's public registrations and schemas. Like
+the other features and sub-features, neither directory has an `index.ts` barrel.
 
 The parent's `*.error-catalog.ts` **aggregates** its sub-features' catalogs (spread
 them alongside its own codes) so `errors/catalog.ts` has one entry per top-level
@@ -76,10 +82,11 @@ Composition is explicit DI:
 - `createBackend(deps)` (`backend.ts`) is the composition entry point: it calls
   `createRouter(deps)` and wraps the result in `createApp(router)`, returning
   `{ app, outboxDispatcher }`. Consumers own the returned lifecycles.
-- `createRouter(deps)` (`routes/index.ts`) instantiates every repository → service →
-  controller, mounts the feature routers, and builds the outbox dispatcher; it
-  returns `{ router, outboxDispatcher }`. **This is where wiring lives** — add new
-  features here.
+- `createRouter(deps)` (`routes/index.ts`) instantiates repositories → services →
+  controllers, including the nested Minecraft console, mounts the feature routers,
+  and builds the outbox dispatcher. `createRouter` returns
+  `{ router, outboxDispatcher, closeConsoleStreams }`. **This is where wiring starts**
+  — add new features and sub-features here.
 - `createApp(router)` (`app.ts`) is pure HTTP assembly: middleware, the OpenAPI
   routes (dev only — not mounted in prod), the wired router under `/api`, the
   `apiNotFound` middleware (unmatched `/api/*` → `ROUTE_NOT_FOUND` envelope), the

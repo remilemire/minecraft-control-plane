@@ -11,10 +11,11 @@ import type { OutboxDispatcher } from "@/infrastructure/outbox/index.js";
 export interface Backend {
   readonly app: ReturnType<typeof createApp>;
   readonly outboxDispatcher: OutboxDispatcher;
+  closeConsoleStreams(): void;
 }
 
 export function createBackend(deps: AppDeps): Backend {
-  const { router, outboxDispatcher } = createRouter(deps);
+  const { router, outboxDispatcher, closeConsoleStreams } = createRouter(deps);
 
-  return { app: createApp(router), outboxDispatcher };
+  return { app: createApp(router), outboxDispatcher, closeConsoleStreams };
 }

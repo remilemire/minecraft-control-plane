@@ -1,8 +1,12 @@
 // apps/minecraft-controller/src/routes.ts
 
-import { minecraftServerStatusResponseSchema } from "@minecraft-control-plane/shared/minecraft";
+import {
+  minecraftConsoleLogEventSchema,
+  minecraftServerStatusResponseSchema,
+} from "@minecraft-control-plane/shared/minecraft";
 import { Router, type RequestHandler } from "express";
 import { timingSafeEqual } from "node:crypto";
+import { once } from "node:events";
 import type { MinecraftDockerApi } from "./docker.js";
 
 export function createRequireBearerToken(token: string): RequestHandler {
@@ -50,6 +54,46 @@ export function createRoutes({ docker }: CreateRoutesOptions): Router {
   router.get("/status", async (_req, res) => {
     const status = await docker.getStatus();
     res.json(minecraftServerStatusResponseSchema.parse({ status }));
+  });
+
+  router.get("/logs", async (_req, res) => {
+    const abortController = new AbortController();
+    const abort = () => {
+      abortController.abort();
+    };
+    res.once("close", abort);
+
+    try {
+      const events = await docker.openLogStream(abortController.signal);
+
+      res.status(200).set({
+        "Cache-Control": "no-cache, no-transform",
+        "Content-Type": "application/x-ndjson",
+      });
+      res.flushHeaders();
+
+      for await (const event of events) {
+        const data = minecraftConsoleLogEventSchema.parse(event);
+
+        if (!res.write(`${JSON.stringify(data)}\n`) && !abortController.signal.aborted) {
+          await once(res, "drain", { signal: abortController.signal });
+        }
+      }
+    } catch (error) {
+      if (abortController.signal.aborted) {
+        return;
+      }
+      if (!res.headersSent) {
+        throw error;
+      }
+      console.error(error);
+      res.destroy(error instanceof Error ? error : undefined);
+    } finally {
+      res.off("close", abort);
+      if (res.headersSent && !res.destroyed && !res.writableEnded) {
+        res.end();
+      }
+    }
   });
 
   return router;

@@ -20,7 +20,8 @@ src/
                McConfirmButton (two-click destructive confirm), ErrorText,
                LoadingText, AppLayout (authed shell: header/logout)
   features/    feature-first, mirrors the backend: <feature>/api.ts (fetchers)
-               + components; minecraft splits into profiles/ and server/
+               + components; minecraft splits into profiles/ and server/ (with
+               its console/ sub-feature)
   lib/         apiClient.ts (fetch wrapper), cookies.ts, useRequest.ts, format.ts
   pages/       route compositions: HomePage (the whole dashboard), NotFoundPage
   assets/      bundled Monocraft font (OFL) + generated background.svg tile
@@ -64,8 +65,9 @@ src/
 ## Minecraft GUI conventions
 
 - All colors/fonts come from the `@theme` tokens in `index.css` (slot greys
-  `#373737`/`#4C4C4C`, highlight `#FFFF55`, chat green/red, shadow `#3F3F3F`) —
-  don't hardcode colors in components.
+  `#373737`/`#4C4C4C`, highlight `#FFFF55`, chat green/red, shadow `#3F3F3F`,
+  plus the console log view's Homebrew-terminal pair — green on black, no text
+  shadow) — don't hardcode colors in components.
 - `mc-raised` = light top/left + dark bottom/right bevel (buttons, panels);
   `mc-inset` = the inverse (inventory slots, inputs). **No rounded corners
   anywhere**; body text carries the 2px drop shadow globally.
@@ -85,6 +87,13 @@ Backend state that settles asynchronously is polled by interval-calling `reload(
 `whitelistStatus` is `pending`), and such a panel renders `<LoadingText />` only on
 the first load (`loading && data === null`) so polls don't blink the list away.
 
+The console is the one streaming feature: `server/console/api.ts` wraps
+`EventSource` over the backend's SSE log endpoint (`openConsoleLogStream`,
+returning a closer), and **the frontend owns the connection status** — the
+browser auto-reconnects and every connect replays a tail of recent lines with
+no deduplication upstream, so `ConsolePanel` marks drop/reconnect seams with
+notice lines in the log view instead.
+
 ## Testing
 
 - Colocated `src/**/*.test.{ts,tsx}` (jsdom, globals on, `test/setup.ts` wires
@@ -92,5 +101,6 @@ the first load (`loading && data === null`) so polls don't blink the list away.
   `makeAuthValue` inject `AuthContext` + `MemoryRouter` directly instead of mocking
   fetch.
 - Feature components mock their sibling `./api` module with `vi.mock`; `apiClient`
-  tests stub global `fetch`. Fake-timer tests (McConfirmButton) use `fireEvent`, not
-  `userEvent` (which hangs under fake timers).
+  tests stub global `fetch`, and the console's `api.test.ts` stubs global
+  `EventSource` (jsdom ships none). Fake-timer tests (McConfirmButton) use
+  `fireEvent`, not `userEvent` (which hangs under fake timers).

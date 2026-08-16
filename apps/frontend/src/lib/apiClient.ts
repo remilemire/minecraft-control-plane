@@ -13,7 +13,7 @@ import { readCookie } from "./cookies";
 const CSRF_COOKIE = "csrf_token";
 const CSRF_HEADER = "x-csrf-token";
 
-const API_BASE = "/api";
+export const API_BASE = "/api";
 
 export class ApiError extends Error {
   public readonly kind: ErrorKind;

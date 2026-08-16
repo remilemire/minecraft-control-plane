@@ -28,6 +28,7 @@ function shutdown(): void {
     return;
   }
   shuttingDown = true;
+  dockerClient.closeLogStreams();
 
   server.close(() => {
     process.exit(0);

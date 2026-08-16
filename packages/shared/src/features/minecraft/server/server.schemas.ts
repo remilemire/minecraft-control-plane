@@ -1,5 +1,7 @@
 // packages/shared/src/features/minecraft/server/server.schemas.ts
 
+export * from "./console/console.schemas.js";
+
 import { z } from "zod";
 
 export const minecraftServerStatusSchema = z.enum(["RUNNING", "STOPPED"]);

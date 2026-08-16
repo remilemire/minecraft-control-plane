@@ -9,6 +9,8 @@ const EXPECTED_PATHS = [
   "/users/{userId}/transfer-ownership",
   "/auth/google",
   "/auth/logout",
+  "/minecraft/server/console/logs",
+  "/minecraft/server/console/commands",
   "/minecraft/profiles",
   "/minecraft/profiles/{minecraftProfileId}",
   "/minecraft/server/status",
@@ -128,6 +130,10 @@ describe("OpenAPI document", () => {
     const restart = document.paths?.["/minecraft/server/restart"]?.post?.responses ?? {};
     expect(restart["204"]).toBeDefined();
     expect(restart["200"]).toBeUndefined();
+
+    const command = document.paths?.["/minecraft/server/console/commands"]?.post?.responses ?? {};
+    expect(command["204"]).toBeDefined();
+    expect(command["200"]).toBeUndefined();
   });
 
   it("declares the userId path parameter on the transfer-ownership route", () => {

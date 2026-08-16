@@ -44,6 +44,10 @@
   --color-highlight: #ffff55;
   --color-success: #55ff55;
   --color-danger: #ff5555;
+
+  /* Console log view: the classic Homebrew terminal profile (green on black) */
+  --color-console: #000000;
+  --color-console-text: #28fe14;
 }
 
 @layer base {

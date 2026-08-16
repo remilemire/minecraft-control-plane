@@ -19,7 +19,10 @@ import {
 } from "@/features/minecraft/profiles/profiles.outbox.js";
 import { MinecraftProfileRepository } from "@/features/minecraft/profiles/profiles.repository.js";
 import { MinecraftProfileService } from "@/features/minecraft/profiles/profiles.service.js";
+import { MinecraftConsoleController } from "@/features/minecraft/server/console/console.controller.js";
+import { MinecraftConsoleService } from "@/features/minecraft/server/console/console.service.js";
 import { MinecraftServerController } from "@/features/minecraft/server/server.controller.js";
+import { createMinecraftServerRoutes } from "@/features/minecraft/server/server.routes.js";
 import { MinecraftServerService } from "@/features/minecraft/server/server.service.js";
 import { UserController } from "@/features/users/users.controller.js";
 import { UserRepository } from "@/features/users/users.repository.js";
@@ -50,6 +53,7 @@ export interface AppDeps {
 export interface AppWiring {
   readonly router: Router;
   readonly outboxDispatcher: OutboxDispatcher;
+  closeConsoleStreams(): void;
 }
 
 export function createRouter(deps: AppDeps): AppWiring {
@@ -76,8 +80,10 @@ export function createRouter(deps: AppDeps): AppWiring {
     oauthIdentityService,
     transactionManager,
   );
+  const requireAuth = createRequireAuth(authService);
 
   const minecraftServerService = new MinecraftServerService(deps.rconClient, deps.processClient);
+  const minecraftConsoleService = new MinecraftConsoleService(deps.rconClient, deps.processClient);
   const minecraftProfileService = new MinecraftProfileService(
     minecraftProfiles,
     deps.mojangClient,
@@ -98,15 +104,28 @@ export function createRouter(deps: AppDeps): AppWiring {
   const authController = new AuthController(authService);
   const minecraftProfileController = new MinecraftProfileController(minecraftProfileService);
   const minecraftServerController = new MinecraftServerController(minecraftServerService);
-
-  const requireAuth = createRequireAuth(authService);
+  const minecraftConsoleController = new MinecraftConsoleController(minecraftConsoleService);
 
   router.use("/users", createUserRoutes(userController, requireAuth, requireOwner));
   router.use("/auth", createAuthRoutes(authController, requireAuth));
   router.use(
     "/minecraft",
-    createMinecraftRoutes(minecraftProfileController, minecraftServerController, requireAuth),
+    createMinecraftRoutes(
+      minecraftProfileController,
+      createMinecraftServerRoutes(
+        minecraftConsoleController,
+        minecraftServerController,
+        requireAuth,
+      ),
+      requireAuth,
+    ),
   );
 
-  return { router, outboxDispatcher };
+  return {
+    router,
+    outboxDispatcher,
+    closeConsoleStreams: () => {
+      minecraftConsoleController.closeStreams();
+    },
+  };
 }

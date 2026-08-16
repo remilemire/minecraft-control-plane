@@ -3,7 +3,9 @@
 import { AppError } from "@/errors/app-error.js";
 import type { ProcessApi } from "@/features/minecraft/minecraft.types.js";
 import {
+  minecraftConsoleLogEventSchema,
   minecraftServerStatusResponseSchema,
+  type MinecraftConsoleLogEvent,
   type MinecraftServerStatus,
 } from "@minecraft-control-plane/shared/minecraft";
 
@@ -41,7 +43,7 @@ export class ProcessClient implements ProcessApi {
   }
 
   public async getStatus(): Promise<MinecraftServerStatus> {
-    const response = await this.request("GET", "/status", STATUS_TIMEOUT_MS);
+    const response = await this.request("GET", "/status", AbortSignal.timeout(STATUS_TIMEOUT_MS));
 
     if (response.status !== 200) {
       throw new AppError("PROCESS_CLIENT_ERROR", {
@@ -62,8 +64,22 @@ export class ProcessClient implements ProcessApi {
     return result.data.status;
   }
 
+  public async openLogStream(
+    signal: AbortSignal,
+  ): Promise<AsyncIterable<MinecraftConsoleLogEvent>> {
+    const response = await this.request("GET", "/logs", signal);
+
+    if (response.status !== 200 || response.body === null) {
+      throw new AppError("PROCESS_CLIENT_ERROR", {
+        message: `Controller returned status ${response.status}.`,
+      });
+    }
+
+    return parseLogEvents(response.body);
+  }
+
   private async command(path: string): Promise<void> {
-    const response = await this.request("POST", path, COMMAND_TIMEOUT_MS);
+    const response = await this.request("POST", path, AbortSignal.timeout(COMMAND_TIMEOUT_MS));
 
     if (response.status !== 204) {
       throw new AppError("PROCESS_CLIENT_ERROR", {
@@ -75,7 +91,7 @@ export class ProcessClient implements ProcessApi {
   private async request(
     method: "GET" | "POST",
     path: string,
-    timeoutMs: number,
+    signal: AbortSignal,
   ): Promise<Response> {
     // Unlike Mojang, the controller being unreachable is an expected
     // operational state (it restarts independently), so network-level
@@ -84,7 +100,7 @@ export class ProcessClient implements ProcessApi {
       return await fetch(new URL(path, this.baseUrl), {
         method,
         headers: { authorization: `Bearer ${this.token}` },
-        signal: AbortSignal.timeout(timeoutMs),
+        signal,
       });
     } catch (error) {
       throw new AppError("PROCESS_CLIENT_ERROR", {
@@ -92,5 +108,66 @@ export class ProcessClient implements ProcessApi {
         cause: error,
       });
     }
+  }
+}
+
+async function* parseLogEvents(
+  body: ReadableStream<Uint8Array>,
+): AsyncIterable<MinecraftConsoleLogEvent> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let pending = "";
+  let completed = false;
+
+  try {
+    while (true) {
+      const result = await reader.read();
+      if (result.done) {
+        completed = true;
+        pending += decoder.decode();
+        break;
+      }
+
+      pending += decoder.decode(result.value, { stream: true });
+      const lines = pending.split("\n");
+      pending = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (line !== "") {
+          yield parseLogEvent(line);
+        }
+      }
+    }
+
+    if (pending !== "") {
+      yield parseLogEvent(pending);
+    }
+  } catch (error) {
+    throw error instanceof AppError
+      ? error
+      : new AppError("PROCESS_CLIENT_ERROR", {
+          message: "Controller returned an invalid log stream.",
+          cause: error,
+        });
+  } finally {
+    if (!completed) {
+      try {
+        await reader.cancel();
+      } catch {
+        // The request signal may already have closed the upstream body.
+      }
+    }
+    reader.releaseLock();
+  }
+}
+
+function parseLogEvent(line: string): MinecraftConsoleLogEvent {
+  try {
+    return minecraftConsoleLogEventSchema.parse(JSON.parse(line));
+  } catch (error) {
+    throw new AppError("PROCESS_CLIENT_ERROR", {
+      message: "Controller returned an invalid log event.",
+      cause: error,
+    });
   }
 }

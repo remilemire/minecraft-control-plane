@@ -3,18 +3,16 @@
 import { Router, type RequestHandler } from "express";
 import type { MinecraftProfileController } from "./profiles/profiles.controller.js";
 import { createMinecraftProfileRoutes } from "./profiles/profiles.routes.js";
-import type { MinecraftServerController } from "./server/server.controller.js";
-import { createMinecraftServerRoutes } from "./server/server.routes.js";
 
 export function createMinecraftRoutes(
   minecraftProfileController: MinecraftProfileController,
-  minecraftServerController: MinecraftServerController,
+  minecraftServerRouter: Router,
   requireAuth: RequestHandler,
 ): Router {
   const router = Router();
 
   router.use("/profiles", createMinecraftProfileRoutes(minecraftProfileController, requireAuth));
-  router.use("/server", createMinecraftServerRoutes(minecraftServerController, requireAuth));
+  router.use("/server", minecraftServerRouter);
 
   return router;
 }

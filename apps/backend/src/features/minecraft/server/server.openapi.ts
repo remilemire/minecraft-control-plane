@@ -1,5 +1,7 @@
 // apps/backend/src/features/minecraft/server/server.openapi.ts
 
+import "./console/console.openapi.js";
+
 import { openApiRegistry } from "@/openapi/openapi.registry.js";
 import {
   baseErrorResponses,

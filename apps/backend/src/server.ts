@@ -17,7 +17,7 @@ if (!env.DEBUG) {
   await runMigrations(db);
 }
 
-const { app, outboxDispatcher } = createBackend({
+const { app, outboxDispatcher, closeConsoleStreams } = createBackend({
   db,
   googleOauthClient: new GoogleOauthClient({ clientId: env.GOOGLE_CLIENT_ID }),
   mojangClient: new MojangClient(),
@@ -48,6 +48,7 @@ function shutdown(): void {
     return;
   }
   shuttingDown = true;
+  closeConsoleStreams();
 
   void (async () => {
     await new Promise<void>((resolve) => {

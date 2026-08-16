@@ -124,7 +124,7 @@ This starts five services:
 | frontend  | http://localhost:5173 (`FRONTEND_PORT`)   | Vite dev server |
 | db        | localhost:5432 (`POSTGRES_PORT`)          | PostgreSQL 18 |
 | minecraft | internal only (RCON, `expose: 25565`)     | `itzg/minecraft-server` |
-| minecraft-controller | http://127.0.0.1:8001 (`MINECRAFT_CONTROLLER_PORT`, loopback only) | Docker-socket sidecar for server power control; bearer-token auth, backend-only compose network |
+| minecraft-controller | http://127.0.0.1:8001 (`MINECRAFT_CONTROLLER_PORT`, loopback only) | Docker-socket sidecar for server power control and log streaming; bearer-token auth, backend-only compose network |
 
 The repo is bind-mounted into the backend, frontend, and minecraft-controller
 containers, so changes reload live.
@@ -269,6 +269,8 @@ All routes are mounted under `/api`. Current surface:
   `DELETE /api/minecraft/profiles/:minecraftProfileId`
 - `GET /api/minecraft/server/status`,
   `POST /api/minecraft/server/start|stop|restart`
+- `GET /api/minecraft/server/console/logs` (Server-Sent Events),
+  `POST /api/minecraft/server/console/commands`
 
 A profile is a standalone whitelist entry addressed by its own
 `minecraftProfileId` — profiles are not tied to users. Whitelist commands run
