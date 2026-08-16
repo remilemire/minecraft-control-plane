@@ -53,4 +53,15 @@ describe("MinecraftServerService", () => {
 
     expect(await service.listOnlineUsernames()).toEqual(["Steve", "Alex"]);
   });
+
+  it.each(["\n", "\r\n"])(
+    "parses player names when the rcon list response ends with %j",
+    async (lineEnding) => {
+      const rcon = new FakeRconClient();
+      rcon.respondTo("list", `There are 2 of a max of 20 players online: Steve, Alex${lineEnding}`);
+      const service = new MinecraftServerService(rcon, new FakeProcessClient());
+
+      expect(await service.listOnlineUsernames()).toEqual(["Steve", "Alex"]);
+    },
+  );
 });
