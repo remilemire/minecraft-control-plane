@@ -18,6 +18,24 @@ const closeMock = vi.fn();
 
 let handlers: ConsoleLogStreamHandlers;
 
+// jsdom has no layout, so the log view's scroll metrics are stubbed; scrollTop
+// stays writable so both the user (tests) and the auto-scroll can move it.
+function mockScrollMetrics(
+  view: HTMLElement,
+  { scrollHeight, clientHeight }: { scrollHeight: number; clientHeight: number },
+): void {
+  let scrollTop = 0;
+  Object.defineProperty(view, "scrollHeight", { configurable: true, get: () => scrollHeight });
+  Object.defineProperty(view, "clientHeight", { configurable: true, get: () => clientHeight });
+  Object.defineProperty(view, "scrollTop", {
+    configurable: true,
+    get: () => scrollTop,
+    set: (value: number) => {
+      scrollTop = value;
+    },
+  });
+}
+
 describe("ConsolePanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -101,6 +119,42 @@ describe("ConsolePanel", () => {
 
     expect(screen.getByText("Live")).toBeInTheDocument();
     expect(screen.getByText(/Reconnected — recent lines may repeat/)).toBeInTheDocument();
+  });
+
+  it("follows new lines while the user is at the bottom", () => {
+    render(<ConsolePanel />);
+    const view = screen.getByRole("log");
+    mockScrollMetrics(view, { scrollHeight: 1000, clientHeight: 200 });
+    view.scrollTop = 800; // at the bottom
+
+    act(() => {
+      handlers.onOpen();
+      handlers.onLog({ stream: "stdout", line: "tick" });
+    });
+
+    expect(view.scrollTop).toBe(1000);
+  });
+
+  it("stops following once the user scrolls up, and resumes at the bottom", () => {
+    render(<ConsolePanel />);
+    const view = screen.getByRole("log");
+    mockScrollMetrics(view, { scrollHeight: 1000, clientHeight: 200 });
+    view.scrollTop = 100; // reading history
+
+    act(() => {
+      handlers.onOpen();
+      handlers.onLog({ stream: "stdout", line: "tick" });
+    });
+
+    expect(view.scrollTop).toBe(100);
+
+    view.scrollTop = 800; // back at the bottom
+
+    act(() => {
+      handlers.onLog({ stream: "stdout", line: "tock" });
+    });
+
+    expect(view.scrollTop).toBe(1000);
   });
 
   it("keeps only the newest lines in the buffer", () => {

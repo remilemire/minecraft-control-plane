@@ -7,12 +7,15 @@ import { McInput } from "@/components/McInput";
 import { McPanel } from "@/components/McPanel";
 import { toApiError, type ApiError } from "@/lib/apiClient";
 import { minecraftConsoleCommandSchema } from "@minecraft-control-plane/shared/minecraft";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { openConsoleLogStream, sendConsoleCommand, type MinecraftConsoleLogEvent } from "./api";
 
 // Every connect replays a tail of recent lines, so scrollback older than a few
 // screens only grows memory — cap the buffer instead of keeping it all.
 const MAX_ENTRIES = 500;
+
+// How close to the bottom (px) still counts as following the stream.
+const STICK_TO_BOTTOM_PX = 16;
 
 type ConnectionStatus = "connecting" | "live" | "reconnecting" | "disconnected";
 
@@ -66,6 +69,16 @@ export function ConsolePanel() {
   const stickToBottomRef = useRef(true);
 
   const append = useCallback((entry: ConsoleEntryInput) => {
+    // Decide whether to keep following from where the user actually is
+    // *before* this entry renders. A scroll listener can't tell a user
+    // scroll from the aftermath of our own auto-scroll: its event may run
+    // after the next entry has grown the content, misreading the new
+    // entry's height (tall for wrapped lines) as the user scrolling away.
+    const view = scrollRef.current;
+    if (view !== null) {
+      stickToBottomRef.current =
+        view.scrollHeight - view.scrollTop - view.clientHeight < STICK_TO_BOTTOM_PX;
+    }
     setEntries((previous) => {
       const next = [...previous, { ...entry, id: nextIdRef.current++ }];
       return next.length > MAX_ENTRIES ? next.slice(next.length - MAX_ENTRIES) : next;
@@ -106,19 +119,13 @@ export function ConsolePanel() {
   }, [append, streamEpoch]);
 
   // Follow the newest line unless the user has scrolled up to read history.
-  useEffect(() => {
+  // Layout effect: the scroll must land before the next append measures.
+  useLayoutEffect(() => {
     const view = scrollRef.current;
     if (view !== null && stickToBottomRef.current) {
       view.scrollTop = view.scrollHeight;
     }
   }, [entries]);
-
-  function handleScroll() {
-    const view = scrollRef.current;
-    if (view !== null) {
-      stickToBottomRef.current = view.scrollHeight - view.scrollTop - view.clientHeight < 16;
-    }
-  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -162,7 +169,6 @@ export function ConsolePanel() {
 
       <div
         ref={scrollRef}
-        onScroll={handleScroll}
         role="log"
         aria-label="Server logs"
         className="mc-inset bg-console text-console-text h-80 overflow-y-auto p-3 text-sm [text-shadow:none]"
