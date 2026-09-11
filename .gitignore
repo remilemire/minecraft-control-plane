@@ -7,6 +7,9 @@ node_modules
 *.tsbuildinfo
 dist
 data/minecraft
+data/backups
+data/backup-state
+data/backup-recovery
 .claude/settings.local.json
 .pnpm-store
 .claude

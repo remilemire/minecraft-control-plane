@@ -13,6 +13,7 @@ import type { MinecraftProfileService } from "@/features/minecraft/profiles/prof
 import type { MinecraftServerService } from "@/features/minecraft/server/server.service.js";
 import {
   defineOutboxMessage,
+  OutboxDeferredError,
   type OutboxHandler,
   type OutboxPayloadOf,
 } from "@/infrastructure/outbox/index.js";
@@ -21,6 +22,20 @@ import {
   minecraftUsernameSchema,
 } from "@minecraft-control-plane/shared/minecraft";
 import { z } from "zod";
+import { AppError } from "@/errors/app-error.js";
+
+async function deliverWhenAvailable(deliver: () => Promise<void>): Promise<void> {
+  try {
+    await deliver();
+  } catch (error) {
+    if (
+      error instanceof AppError &&
+      (error.code === "MINECRAFT_MAINTENANCE" || error.code === "BACKUP_RECOVERY_REQUIRED")
+    )
+      throw new OutboxDeferredError("Minecraft maintenance is holding whitelist delivery.");
+    throw error;
+  }
+}
 
 export const whitelistAddMessage = defineOutboxMessage({
   type: "minecraft.whitelistAdd",
@@ -63,7 +78,7 @@ export class WhitelistAddHandler implements OutboxHandler<typeof whitelistAddMes
 
     // Whitelist what the row says now, not what the payload snapshotted.
     // A throw here leaves the profile `pending` and the dispatcher retries.
-    await this.minecraftServerService.addToWhitelist(profile.username);
+    await deliverWhenAvailable(() => this.minecraftServerService.addToWhitelist(profile.username));
 
     await this.minecraftProfileService.markWhitelisted(profile.id);
   }
@@ -92,6 +107,8 @@ export class WhitelistRemoveHandler implements OutboxHandler<typeof whitelistRem
       return;
     }
 
-    await this.minecraftServerService.removeFromWhitelist(payload.username);
+    await deliverWhenAvailable(() =>
+      this.minecraftServerService.removeFromWhitelist(payload.username),
+    );
   }
 }

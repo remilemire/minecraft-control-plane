@@ -7,6 +7,10 @@
 // aggregates tables.
 import type { z } from "zod";
 
+// A known temporary gate means delivery was not attempted. Unlike a failure,
+// deferral releases the claim without spending the message's retry allowance.
+export class OutboxDeferredError extends Error {}
+
 export interface OutboxMessageDefinition<
   TType extends string = string,
   TPayload extends Record<string, unknown> = Record<string, unknown>,

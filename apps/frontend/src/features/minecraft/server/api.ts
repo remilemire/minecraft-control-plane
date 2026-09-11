@@ -3,16 +3,15 @@
 import { apiRequest } from "@/lib/apiClient";
 import {
   minecraftServerStatusResponseSchema,
-  type MinecraftServerStatus,
+  type MinecraftServerStatusResponse,
 } from "@minecraft-control-plane/shared/minecraft";
 
-export type { MinecraftServerStatus };
+export type { MinecraftServerStatusResponse };
 
-export async function fetchServerStatus(): Promise<MinecraftServerStatus> {
-  const { status } = await apiRequest("GET", "/minecraft/server/status", {
+export async function fetchServerStatus(): Promise<MinecraftServerStatusResponse> {
+  return apiRequest("GET", "/minecraft/server/status", {
     schema: minecraftServerStatusResponseSchema,
   });
-  return status;
 }
 
 export function startServer(): Promise<undefined> {

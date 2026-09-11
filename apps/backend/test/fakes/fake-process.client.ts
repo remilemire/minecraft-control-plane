@@ -33,6 +33,10 @@ export class FakeProcessClient implements ProcessApi {
     return this.status;
   }
 
+  public async getStatusDetails() {
+    return { status: await this.getStatus(), maintenance: null };
+  }
+
   public async openLogStream(
     signal: AbortSignal,
   ): Promise<AsyncIterable<MinecraftConsoleLogEvent>> {

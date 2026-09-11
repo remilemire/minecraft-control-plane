@@ -6,6 +6,7 @@ detail lives closer to the code:
 
 - Backend: [apps/backend/CLAUDE.md](apps/backend/CLAUDE.md)
 - Frontend: [apps/frontend/CLAUDE.md](apps/frontend/CLAUDE.md)
+- Controller: [apps/minecraft-controller/CLAUDE.md](apps/minecraft-controller/CLAUDE.md)
 
 ## What this is
 
@@ -25,7 +26,7 @@ everything else.
   account — as the owner — while no owner exists yet. Every login failure is the
   single opaque `AUTHENTICATION_FAILED` 401 (anti-enumeration). Owners cannot be
   deleted; ownership must be transferred first (`POST
-  /users/:userId/transfer-ownership`, owner-only).
+/users/:userId/transfer-ownership`, owner-only).
 - The **whitelist** is a list of standalone **Minecraft profiles** (username → UUID,
   resolved via Mojang), decoupled from users and addressed by their own id. Any
   signed-in user adds or removes profiles, which whitelists/unwhitelists them over
@@ -46,7 +47,7 @@ A single **pnpm** workspace monorepo. TypeScript everywhere (ESM, strict).
 ```
 apps/backend               Express 5 + Drizzle + Postgres API   → apps/backend/CLAUDE.md
 apps/frontend              React 19 + Vite SPA                   → apps/frontend/CLAUDE.md
-apps/minecraft-controller  Dockerode sidecar (power control + log streaming over HTTP)
+apps/minecraft-controller  Docker/RCON sidecar (power, console, backups, and recovery)
 packages/shared            Zod schemas + error catalog (shared by the apps)
 ```
 
@@ -72,16 +73,16 @@ Run from the repo root. The `Makefile` wraps Docker Compose and fans pnpm script
 across workspaces; scope any workspace target to one package with `pkg=` (e.g.
 `make test pkg=backend`).
 
-| Task                                                 | Command                                                        |
-| ---------------------------------------------------- | -------------------------------------------------------------- |
-| Start / stop / restart stack                         | `make up` / `make down` / `make restart`                       |
-| Rebuild from scratch                                 | `make nuke`                                                    |
-| Apply DB migrations (dev; prod migrates on boot)     | `make migrate`                                                 |
-| Tail logs                                            | `make logs` (or `backend-logs` / `db-logs` / `minecraft-logs`) |
-| Dev servers (all)                                    | `make dev`                                                     |
-| Build / test / lint / format                         | `make build` / `test` / `lint` / `format`                      |
-| Everything (format+lint+test)                        | `make check`                                                   |
-| Install deps                                         | `make install` (`pnpm install --frozen-lockfile`)              |
+| Task                                             | Command                                                        |
+| ------------------------------------------------ | -------------------------------------------------------------- |
+| Start / stop / restart stack                     | `make up` / `make down` / `make restart`                       |
+| Rebuild from scratch                             | `make nuke`                                                    |
+| Apply DB migrations (dev; prod migrates on boot) | `make migrate`                                                 |
+| Tail logs                                        | `make logs` (or `backend-logs` / `db-logs` / `minecraft-logs`) |
+| Dev servers (all)                                | `make dev`                                                     |
+| Build / test / lint / format                     | `make build` / `test` / `lint` / `format`                      |
+| Everything (format+lint+test)                    | `make check`                                                   |
+| Install deps                                     | `make install` (`pnpm install --frozen-lockfile`)              |
 
 `make migrate` runs `pnpm db:migrate` via `docker compose exec backend`, so it needs
 the stack up (`make up`) and picks up `POSTGRES_HOST=db` from the container's env.
@@ -157,6 +158,20 @@ Gotchas:
 - **TS:** strict, ESM, `verbatimModuleSyntax` + `isolatedModules`
   (`import type` for type-only imports; `.js` extensions on relative imports —
   except `apps/frontend`, which uses bundler resolution and no extensions).
+
+## Backups and recovery
+
+Every signed-in user can create/delete backups, enable hourly/daily/weekly/monthly
+schedules, and restore compatible snapshots. Schedules default off. Retention caps
+and timezone are deployment env settings; manual and safety backups never expire.
+The controller owns persistent archives and the operation journal outside Minecraft
+`/data`. Backend RCON now goes through the controller's operation coordinator.
+Full restore requires verified matching versions and pinned startup selectors.
+Keep current panel-managed access files and deployment credentials during restore.
+
+Use `make backup-migrate` with Minecraft stopped for the one-time FTB migration;
+`make backup-recover` retries recovery after inspection. Never operate on live
+Minecraft files or run Compose lifecycle commands during backup/recovery work.
 
 ## Not built yet — don't assume it exists
 

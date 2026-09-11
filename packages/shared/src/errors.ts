@@ -12,6 +12,7 @@ import {
   minecraftClientErrorMeta,
   minecraftProfileErrorMeta,
   minecraftServerErrorMeta,
+  minecraftBackupErrorMeta,
 } from "./features/minecraft/index.js";
 import { userErrorMeta } from "./features/users/index.js";
 
@@ -22,6 +23,7 @@ export const errorMeta = {
   ...minecraftProfileErrorMeta,
   ...minecraftServerErrorMeta,
   ...minecraftClientErrorMeta,
+  ...minecraftBackupErrorMeta,
   ...userErrorMeta,
 } as const satisfies ErrorMeta;
 

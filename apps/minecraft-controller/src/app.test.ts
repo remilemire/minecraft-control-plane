@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
 import { ContainerNotFoundError, type MinecraftDockerApi } from "./docker.js";
 import { createRoutes } from "./routes.js";
+import type { BackupManager } from "./backups/manager.js";
 
 const TOKEN = "test-token";
 const AUTHORIZATION = `Bearer ${TOKEN}`;
@@ -51,7 +52,11 @@ class FakeMinecraftDocker implements MinecraftDockerApi {
 }
 
 function createTestApp(docker: MinecraftDockerApi = new FakeMinecraftDocker()) {
-  return createApp({ router: createRoutes({ docker }), token: TOKEN });
+  const backups = {
+    power: (kind: "start" | "stop" | "restart") => docker[kind](),
+    activeOperation: () => null,
+  } as unknown as BackupManager;
+  return createApp({ router: createRoutes({ docker, backups }), token: TOKEN });
 }
 
 describe("createApp", () => {
@@ -78,7 +83,7 @@ describe("createApp", () => {
       .set("authorization", AUTHORIZATION);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ status: "STOPPED" });
+    expect(response.body).toEqual({ status: "STOPPED", maintenance: null });
   });
 
   it("GET /logs returns authenticated NDJSON log events", async () => {

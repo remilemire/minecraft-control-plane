@@ -3,6 +3,7 @@
 import type {
   MinecraftConsoleLogEvent,
   MinecraftServerStatus,
+  MinecraftServerStatusResponse,
 } from "@minecraft-control-plane/shared/minecraft";
 
 export type MojangProfile = {
@@ -19,6 +20,7 @@ export interface ProcessApi {
   stop(): Promise<void>;
   restart(): Promise<void>;
   getStatus(): Promise<MinecraftServerStatus>;
+  getStatusDetails(): Promise<MinecraftServerStatusResponse>;
   openLogStream(signal: AbortSignal): Promise<AsyncIterable<MinecraftConsoleLogEvent>>;
 }
 

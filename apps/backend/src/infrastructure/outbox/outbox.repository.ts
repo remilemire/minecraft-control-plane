@@ -188,6 +188,27 @@ export class OutboxMessageRepository {
     return failed.length > 0;
   }
 
+  public async markDeferred(input: {
+    id: string;
+    claimId: string;
+    nextAttemptAt: Date;
+  }): Promise<boolean> {
+    const deferred = await withDbErrors(() =>
+      this.databaseProvider
+        .get()
+        .update(outboxMessages)
+        .set({
+          status: "pending",
+          claimExpiresAt: null,
+          nextAttemptAt: input.nextAttemptAt,
+          attempts: sql`greatest(${outboxMessages.attempts} - 1, 0)`,
+        })
+        .where(this.claimGuard(input.id, input.claimId))
+        .returning({ id: outboxMessages.id }),
+    );
+    return deferred.length > 0;
+  }
+
   // An outcome may only be recorded against the claim that is still holding
   // the message — same id, same fencing token, and still `processing`.
   private claimGuard(id: string, claimId: string) {

@@ -25,6 +25,40 @@ describe("OutboxMessageRepository", () => {
   const repository = new OutboxMessageRepository(new DatabaseProvider(db));
   const transactionManager = new TransactionManager(db);
 
+  it("refunds maintenance attempts only for the current claim", async () => {
+    const pending = await createOutboxMessage({ nextAttemptAt: PAST, attempts: 9 });
+    const [claimed] = await repository.claimBatch(CLAIM_DEFAULTS);
+    expect(claimed?.attempts).toBe(10);
+    expect(
+      await repository.markDeferred({
+        id: pending.id,
+        claimId: randomUUID(),
+        nextAttemptAt: FUTURE,
+      }),
+    ).toBe(false);
+    expect(
+      await repository.markDeferred({
+        id: pending.id,
+        claimId: claimed!.claimId!,
+        nextAttemptAt: FUTURE,
+      }),
+    ).toBe(true);
+    const [saved] = await db.select().from(outboxMessages);
+    expect(saved).toMatchObject({
+      attempts: 9,
+      status: "pending",
+      claimId: claimed!.claimId,
+      nextAttemptAt: FUTURE,
+    });
+    expect(
+      await repository.markDeferred({
+        id: pending.id,
+        claimId: claimed!.claimId!,
+        nextAttemptAt: FUTURE,
+      }),
+    ).toBe(false);
+  });
+
   describe("insert", () => {
     it("throws MissingTransactionError outside a transaction", async () => {
       await expect(repository.insert({ type: "test.message", payload: {} })).rejects.toThrow(

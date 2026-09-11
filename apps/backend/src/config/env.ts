@@ -22,10 +22,6 @@ const envSchema = z.object({
 
   GOOGLE_CLIENT_ID: z.string().min(1),
 
-  MINECRAFT_RCON_HOST: z.string(),
-  MINECRAFT_RCON_PORT: z.coerce.number().int().positive(),
-  MINECRAFT_RCON_PASSWORD: z.string().min(1),
-
   MINECRAFT_CONTROLLER_URL: z.url(),
   MINECRAFT_CONTROLLER_TOKEN: z.string().min(1),
 

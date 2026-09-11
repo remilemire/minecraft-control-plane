@@ -7,14 +7,14 @@ import {
   minecraftServerStatusResponseSchema,
   type MinecraftConsoleLogEvent,
   type MinecraftServerStatus,
+  type MinecraftServerStatusResponse,
 } from "@minecraft-control-plane/shared/minecraft";
+import { ControllerHttpClient } from "./controller-http.client.js";
 
-// Status is a quick container inspect; commands block while the controller
-// waits out the container's 30s graceful-stop window, so their bound must
-// out-wait it — while still guaranteeing a hung controller (or docker daemon
-// behind it) can't wedge a panel request forever.
+// Restart can include a two-minute graceful stop and ten-minute readiness check.
+// Leave room for both while still bounding an unavailable controller.
 const STATUS_TIMEOUT_MS = 10_000;
-const COMMAND_TIMEOUT_MS = 45_000;
+const COMMAND_TIMEOUT_MS = 13 * 60_000;
 
 export interface ProcessClientOptions {
   readonly baseUrl: string;
@@ -22,12 +22,10 @@ export interface ProcessClientOptions {
 }
 
 export class ProcessClient implements ProcessApi {
-  private readonly baseUrl: string;
-  private readonly token: string;
+  private readonly http: ControllerHttpClient;
 
   public constructor({ baseUrl, token }: ProcessClientOptions) {
-    this.baseUrl = baseUrl;
-    this.token = token;
+    this.http = new ControllerHttpClient({ baseUrl, token }, "PROCESS_CLIENT_ERROR");
   }
 
   public async start(): Promise<void> {
@@ -43,6 +41,10 @@ export class ProcessClient implements ProcessApi {
   }
 
   public async getStatus(): Promise<MinecraftServerStatus> {
+    return (await this.getStatusDetails()).status;
+  }
+
+  public async getStatusDetails(): Promise<MinecraftServerStatusResponse> {
     const response = await this.request("GET", "/status", AbortSignal.timeout(STATUS_TIMEOUT_MS));
 
     if (response.status !== 200) {
@@ -61,7 +63,7 @@ export class ProcessClient implements ProcessApi {
       });
     }
 
-    return result.data.status;
+    return result.data;
   }
 
   public async openLogStream(
@@ -93,21 +95,7 @@ export class ProcessClient implements ProcessApi {
     path: string,
     signal: AbortSignal,
   ): Promise<Response> {
-    // Unlike Mojang, the controller being unreachable is an expected
-    // operational state (it restarts independently), so network-level
-    // failures and timeouts map to SERVICE_UNAVAILABLE, not INTERNAL.
-    try {
-      return await fetch(new URL(path, this.baseUrl), {
-        method,
-        headers: { authorization: `Bearer ${this.token}` },
-        signal,
-      });
-    } catch (error) {
-      throw new AppError("PROCESS_CLIENT_ERROR", {
-        message: "Failed to reach the Minecraft server controller.",
-        cause: error,
-      });
-    }
+    return this.http.request(method, path, signal);
   }
 }
 

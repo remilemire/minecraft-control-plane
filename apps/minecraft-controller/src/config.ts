@@ -1,6 +1,7 @@
 // apps/minecraft-controller/src/config.ts
 
 import { z } from "zod";
+import { fileURLToPath } from "node:url";
 
 // This module only *parses* process.env — nothing here reads a .env file. The
 // environment is already filled by the time it loads: host dev passes
@@ -21,6 +22,25 @@ const envSchema = z.object({
   MINECRAFT_CONTROLLER_TOKEN: z.string().min(1),
 
   DOCKER_SOCKET: z.string().min(1).default("/var/run/docker.sock"),
+  MINECRAFT_DATA_ROOT: z
+    .string()
+    .min(1)
+    .default(fileURLToPath(new URL("../../../data", import.meta.url))),
+  MINECRAFT_BACKUP_TIMEZONE: z
+    .string()
+    .default("America/Edmonton")
+    .refine((zone) => {
+      try {
+        new Intl.DateTimeFormat("en", { timeZone: zone });
+        return true;
+      } catch {
+        return false;
+      }
+    }, "Use an IANA timezone name."),
+  MINECRAFT_BACKUP_KEEP_HOURLY: z.coerce.number().int().positive().default(6),
+  MINECRAFT_BACKUP_KEEP_DAILY: z.coerce.number().int().positive().default(5),
+  MINECRAFT_BACKUP_KEEP_WEEKLY: z.coerce.number().int().positive().default(3),
+  MINECRAFT_BACKUP_KEEP_MONTHLY: z.coerce.number().int().positive().default(2),
 });
 
 export const env = envSchema.parse(process.env);

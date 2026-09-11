@@ -50,6 +50,7 @@ services:
       ENABLE_WHITELIST: "true"
       ENFORCE_WHITELIST: "true"
       VERSION: "${MINECRAFT_VERSION}"
+      PAPER_BUILD: "${MINECRAFT_PAPER_BUILD:-}"
       TYPE: "${MINECRAFT_TYPE}"
       DIFFICULTY: "${MINECRAFT_DIFFICULTY}"
       MODE: "${MINECRAFT_MODE}"
@@ -74,6 +75,12 @@ services:
       # the dev script's --env-file-if-exists would pick it up in here too.
       # Process env wins over --env-file, keeping the container on 8000.
       MINECRAFT_CONTROLLER_PORT: 8000
+      MINECRAFT_DATA_ROOT: /server-data
+      MINECRAFT_BACKUP_TIMEZONE: ${MINECRAFT_BACKUP_TIMEZONE:-America/Edmonton}
+      MINECRAFT_BACKUP_KEEP_HOURLY: ${MINECRAFT_BACKUP_KEEP_HOURLY:-6}
+      MINECRAFT_BACKUP_KEEP_DAILY: ${MINECRAFT_BACKUP_KEEP_DAILY:-5}
+      MINECRAFT_BACKUP_KEEP_WEEKLY: ${MINECRAFT_BACKUP_KEEP_WEEKLY:-3}
+      MINECRAFT_BACKUP_KEEP_MONTHLY: ${MINECRAFT_BACKUP_KEEP_MONTHLY:-2}
 
     networks:
       - minecraft-controller
@@ -81,6 +88,11 @@ services:
     # The docker socket is the service's whole purpose — not a dev-only mount.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # One parent mount keeps recovery renames on the same filesystem;
+      # archives and journals are outside minecraft's /data snapshot.
+      - ./data:/server-data
+
+    stop_grace_period: 30m
 
   backend:
     build:

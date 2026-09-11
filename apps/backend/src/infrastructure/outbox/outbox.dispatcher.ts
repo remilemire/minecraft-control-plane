@@ -14,6 +14,7 @@
 import type { OutboxMessageRepository } from "./outbox.repository.js";
 import type { OutboxMessage } from "./outbox.schema.js";
 import type { OutboxHandler, OutboxMessageDefinitionMap } from "./outbox.types.js";
+import { OutboxDeferredError } from "./outbox.types.js";
 
 export const OUTBOX_DISPATCHER_DEFAULTS = {
   pollIntervalMs: 1_000,
@@ -164,6 +165,14 @@ export class OutboxDispatcher {
       const payload = handler.message.payloadSchema.parse(message.payload);
       await handler.handle(payload);
     } catch (error) {
+      if (error instanceof OutboxDeferredError) {
+        await this.outboxMessages.markDeferred({
+          id: message.id,
+          claimId,
+          nextAttemptAt: new Date(Date.now() + 5000),
+        });
+        return;
+      }
       await this.recordFailure({ message, claimId, error });
       return;
     }

@@ -26,8 +26,8 @@ export class MinecraftServerController {
   };
 
   public getServerStatus = async (_req: Request, res: Response): Promise<void> => {
-    const status = await this.minecraftServerService.getStatus();
+    const status = await this.minecraftServerService.getStatusDetails();
 
-    res.status(200).json(minecraftServerStatusResponseSchema.parse({ status }));
+    res.status(200).json(minecraftServerStatusResponseSchema.parse(status));
   };
 }

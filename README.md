@@ -26,6 +26,7 @@ the Minecraft container.
 Single **pnpm** workspace monorepo, TypeScript throughout (ESM, strict).
 
 **Backend** (`apps/backend`)
+
 - Node + Express 5
 - Drizzle ORM + `node-postgres`, PostgreSQL 18
 - Zod 4 for validation
@@ -34,16 +35,19 @@ Single **pnpm** workspace monorepo, TypeScript throughout (ESM, strict).
 - `tsx` (dev), `drizzle-kit` (migrations), Vitest (unit / integration / api)
 
 **Frontend** (`apps/frontend`)
+
 - React 19 + Vite
 - Tailwind CSS v4 (via `@tailwindcss/vite`; no config file — configured in CSS)
 - React Router
 - ESLint (flat config) + Prettier, Vitest
 
 **Shared** (`packages/shared`)
+
 - Zod schemas and a shared error catalog consumed by both apps, exposed as subpath
   exports (`@minecraft-control-plane/shared/auth`, `/users`, `/errors`, …)
 
 **Tooling**
+
 - Docker Compose (dev stack)
 - GNU Make (root task runner over Compose + pnpm)
 
@@ -90,6 +94,7 @@ Single **pnpm** workspace monorepo, TypeScript throughout (ESM, strict).
 The supported way to run the project is the Docker Compose stack.
 
 ### Prerequisites
+
 - Docker + Docker Compose
 - GNU Make
 - Node + pnpm (for running migrations and workspace scripts from the host)
@@ -118,12 +123,12 @@ make down      # stop
 
 This starts five services:
 
-| Service   | Default URL / port                        | Notes |
-| --------- | ----------------------------------------- | ----- |
-| backend   | http://localhost:8000 (`BACKEND_PORT`)    | `tsx watch`; API under `/api`, docs at `/docs` |
-| frontend  | http://localhost:5173 (`FRONTEND_PORT`)   | Vite dev server |
-| db        | localhost:5432 (`POSTGRES_PORT`)          | PostgreSQL 18 |
-| minecraft | internal only (RCON, `expose: 25565`)     | `itzg/minecraft-server` |
+| Service              | Default URL / port                                                 | Notes                                                                                                             |
+| -------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| backend              | http://localhost:8000 (`BACKEND_PORT`)                             | `tsx watch`; API under `/api`, docs at `/docs`                                                                    |
+| frontend             | http://localhost:5173 (`FRONTEND_PORT`)                            | Vite dev server                                                                                                   |
+| db                   | localhost:5432 (`POSTGRES_PORT`)                                   | PostgreSQL 18                                                                                                     |
+| minecraft            | internal only (RCON, `expose: 25565`)                              | `itzg/minecraft-server`                                                                                           |
 | minecraft-controller | http://127.0.0.1:8001 (`MINECRAFT_CONTROLLER_PORT`, loopback only) | Docker-socket sidecar for server power control and log streaming; bearer-token auth, backend-only compose network |
 
 The repo is bind-mounted into the backend, frontend, and minecraft-controller
@@ -169,44 +174,48 @@ root `.env` and `apps/backend/.env` (via `compose.yaml`'s `env_file`).
 
 ### Root `.env` (compose + Postgres + RCON)
 
-| Variable                  | Example                | Purpose |
-| ------------------------- | ---------------------- | ------- |
-| `APP_ENV`                 | `dev`                  | `dev` or `prod`. Picks the compose file set (`make` adds `compose.prod.yaml` under `prod`, else the dev override) and, in the backend, `dev` enables debug mode (`secure` cookies off, `trust proxy` off, `/docs` served). |
-| `BACKEND_PORT`            | `8000`                 | Backend listen port + host mapping. |
-| `FRONTEND_PORT`           | `5173`                 | Frontend host port. |
-| `POSTGRES_PORT`           | `5432`                 | Postgres port (see caveat). |
-| `POSTGRES_USER`           | `user`                 | Postgres user. |
-| `POSTGRES_PASSWORD`       | `password`             | Postgres password. |
-| `POSTGRES_HOST`           | `db`                   | Postgres host — `db` (the compose service) inside the network. |
-| `POSTGRES_DATABASE`       | `minecraft_server`     | Database name. |
-| `MINECRAFT_RCON_HOST`     | `minecraft`            | RCON host (the compose service name). |
-| `MINECRAFT_RCON_PORT`     | `25575`                | RCON port. |
-| `MINECRAFT_RCON_PASSWORD` | `password`             | RCON password (also passed to the minecraft container). |
-| `MINECRAFT_VERSION`       | `LATEST`               | Minecraft server version (`itzg/minecraft-server` `VERSION`). |
-| `MINECRAFT_TYPE`          | `VANILLA`              | Server type/loader (`itzg/minecraft-server` `TYPE`). |
-| `MINECRAFT_DIFFICULTY`    | `HARD`                 | World difficulty (`itzg/minecraft-server` `DIFFICULTY`). |
-| `MINECRAFT_MODE`          | `SURVIVAL`             | Game mode (`itzg/minecraft-server` `MODE`). |
-| `MINECRAFT_MEMORY`        | `2G`                   | JVM heap size (`itzg/minecraft-server` `MEMORY`). |
-| `GOOGLE_CLIENT_ID`        | `xxx.apps.googleusercontent.com` | Google OAuth client id (public — it ships in the SPA bundle). Verifies sign-ins in the backend and is baked into the prod image's frontend build as `VITE_GOOGLE_CLIENT_ID`. |
-| `CADDY_SITE_ADDRESS`      | `mc.example.com`       | Prod only: the public hostname of the panel — must match its DNS record and the Google console's authorized JavaScript origin. |
-| `MINECRAFT_COMPOSE_PROJECT` | `minecraft-control-plane` | Compose project name (pinned via `name:`); the controller finds the minecraft container by its compose labels. |
-| `MINECRAFT_CONTROLLER_PORT` | `8001`               | Loopback-only host port for the controller (dev); a host-run controller also listens on it. |
-| `MINECRAFT_CONTROLLER_TOKEN` | *(generate one)*    | Bearer token the backend must present to the controller. Lives only in this file. |
+| Variable                        | Example                          | Purpose                                                                                                                                                                                                                    |
+| ------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_ENV`                       | `dev`                            | `dev` or `prod`. Picks the compose file set (`make` adds `compose.prod.yaml` under `prod`, else the dev override) and, in the backend, `dev` enables debug mode (`secure` cookies off, `trust proxy` off, `/docs` served). |
+| `BACKEND_PORT`                  | `8000`                           | Backend listen port + host mapping.                                                                                                                                                                                        |
+| `FRONTEND_PORT`                 | `5173`                           | Frontend host port.                                                                                                                                                                                                        |
+| `POSTGRES_PORT`                 | `5432`                           | Postgres port (see caveat).                                                                                                                                                                                                |
+| `POSTGRES_USER`                 | `user`                           | Postgres user.                                                                                                                                                                                                             |
+| `POSTGRES_PASSWORD`             | `password`                       | Postgres password.                                                                                                                                                                                                         |
+| `POSTGRES_HOST`                 | `db`                             | Postgres host — `db` (the compose service) inside the network.                                                                                                                                                             |
+| `POSTGRES_DATABASE`             | `minecraft_server`               | Database name.                                                                                                                                                                                                             |
+| `MINECRAFT_RCON_PASSWORD`       | `password`                       | RCON password (also passed to the minecraft container).                                                                                                                                                                    |
+| `MINECRAFT_VERSION`             | `LATEST`                         | Minecraft server version (`itzg/minecraft-server` `VERSION`).                                                                                                                                                              |
+| `MINECRAFT_PAPER_BUILD`         | (empty)                          | Pin the installed Paper build to enable assisted restore with Paper.                                                                                                                                                       |
+| `MINECRAFT_TYPE`                | `VANILLA`                        | Server type/loader (`itzg/minecraft-server` `TYPE`).                                                                                                                                                                       |
+| `MINECRAFT_DIFFICULTY`          | `HARD`                           | World difficulty (`itzg/minecraft-server` `DIFFICULTY`).                                                                                                                                                                   |
+| `MINECRAFT_MODE`                | `SURVIVAL`                       | Game mode (`itzg/minecraft-server` `MODE`).                                                                                                                                                                                |
+| `MINECRAFT_MEMORY`              | `2G`                             | JVM heap size (`itzg/minecraft-server` `MEMORY`).                                                                                                                                                                          |
+| `GOOGLE_CLIENT_ID`              | `xxx.apps.googleusercontent.com` | Google OAuth client id (public — it ships in the SPA bundle). Verifies sign-ins in the backend and is baked into the prod image's frontend build as `VITE_GOOGLE_CLIENT_ID`.                                               |
+| `CADDY_SITE_ADDRESS`            | `mc.example.com`                 | Prod only: the public hostname of the panel — must match its DNS record and the Google console's authorized JavaScript origin.                                                                                             |
+| `MINECRAFT_COMPOSE_PROJECT`     | `minecraft-control-plane`        | Compose project name (pinned via `name:`); the controller finds the minecraft container by its compose labels.                                                                                                             |
+| `MINECRAFT_CONTROLLER_PORT`     | `8001`                           | Loopback-only host port for the controller (dev); a host-run controller also listens on it.                                                                                                                                |
+| `MINECRAFT_CONTROLLER_TOKEN`    | _(generate one)_                 | Bearer token the backend must present to the controller. Lives only in this file.                                                                                                                                          |
+| `MINECRAFT_BACKUP_TIMEZONE`     | `America/Edmonton`               | IANA timezone for the four independent schedules.                                                                                                                                                                          |
+| `MINECRAFT_BACKUP_KEEP_HOURLY`  | `6`                              | Successful backups retained in the hourly pool.                                                                                                                                                                            |
+| `MINECRAFT_BACKUP_KEEP_DAILY`   | `5`                              | Successful backups retained in the daily pool.                                                                                                                                                                             |
+| `MINECRAFT_BACKUP_KEEP_WEEKLY`  | `3`                              | Successful backups retained in the weekly pool.                                                                                                                                                                            |
+| `MINECRAFT_BACKUP_KEEP_MONTHLY` | `2`                              | Successful backups retained in the monthly pool.                                                                                                                                                                           |
 
 ### `apps/backend/.env` (application settings)
 
-| Variable                 | Example                              | Purpose |
-| ------------------------ | ------------------------------------ | ------- |
-| `SESSION_SECRET`         | `secret`                             | Required by `config/env.ts` but currently unused (sessions store hashed random tokens, no signing). |
-| `SESSION_TTL_DAYS`       | `7`                                  | Session lifetime (days). |
-| `CSRF_TTL_DAYS`          | `7`                                  | CSRF cookie lifetime (days). |
-| `MINECRAFT_CONTROLLER_URL` | `http://localhost:8001`             | Minecraft-controller base URL (host-dev default; compose overrides it to `http://minecraft-controller:8000`). |
-| `BOOTSTRAP_OWNER_EMAIL`  | `owner@domain.com`                   | May create the very first account — as the owner — while no owner exists yet. |
+| Variable                   | Example                 | Purpose                                                                                                       |
+| -------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `SESSION_SECRET`           | `secret`                | Required by `config/env.ts` but currently unused (sessions store hashed random tokens, no signing).           |
+| `SESSION_TTL_DAYS`         | `7`                     | Session lifetime (days).                                                                                      |
+| `CSRF_TTL_DAYS`            | `7`                     | CSRF cookie lifetime (days).                                                                                  |
+| `MINECRAFT_CONTROLLER_URL` | `http://localhost:8001` | Minecraft-controller base URL (host-dev default; compose overrides it to `http://minecraft-controller:8000`). |
+| `BOOTSTRAP_OWNER_EMAIL`    | `owner@domain.com`      | May create the very first account — as the owner — while no owner exists yet.                                 |
 
 ### `apps/frontend/.env`
 
-| Variable                | Example                          | Purpose |
-| ----------------------- | -------------------------------- | ------- |
+| Variable                | Example                          | Purpose                                                                                                          |
+| ----------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `VITE_GOOGLE_CLIENT_ID` | `xxx.apps.googleusercontent.com` | Google sign-in button (host dev; same client as the root `GOOGLE_CLIENT_ID`, which supplies it for prod builds). |
 
 > **Caveat:** keep `POSTGRES_PORT=5432`. The Postgres container always listens on
@@ -354,6 +363,7 @@ whitelist over RCON (`ENFORCE_WHITELIST=true`).
 ## Current State
 
 Implemented:
+
 - pnpm monorepo + Docker Compose dev stack (db, backend, frontend, minecraft)
 - Backend features: auth (Google OAuth, owner-provisioned accounts + bootstrap
   owner email), users (single owner role, owner-only provisioning + ownership
@@ -368,9 +378,97 @@ Implemented:
   (`pnpm deploy`), Caddy TLS edge, migrate-on-boot ([Deployment](#deployment))
 
 Not yet implemented:
+
 - User deletion (when built, the owner must transfer ownership before deletion)
 - The firewall / IP-access layer in front of the Minecraft server
 
 ## License
 
 [MIT](LICENSE) © 2026 Remi Lemire
+
+## Backups and assisted recovery
+
+The Backups panel is available to every signed-in user. **Back up now** captures
+worlds, player data, mods, libraries, launch files, and configuration. Logs, caches,
+temporary files, and existing backups are excluded. Archives are streamed to
+`data/backups`, verified against file manifests and SHA-256 checksums, and only
+then added to the catalogue. These are local rollback copies on the server's disk;
+copy the backup directory to separate storage for protection against disk loss.
+
+Schedules start disabled. Users independently enable hourly (on the hour), daily
+(midnight), weekly (Monday midnight), and monthly (first day at midnight) backups.
+Hourly backups cover both occurrences of the repeated hour when daylight saving time ends.
+The timezone defaults to `America/Edmonton`. Retention defaults are 6 hourly,
+5 daily, 3 weekly, and 2 monthly backups, configured with the root environment
+variables above. Counts must be positive integers. Coinciding schedules share one
+archive with independent retention memberships. Failed backups do not prune good
+ones. Disabling a schedule preserves its existing backups; missed periods collapse
+into one current snapshot after the controller returns. Changing the timezone
+recalculates the next runs in the new timezone. Manual backups and pre-restore
+safety copies remain until explicitly deleted.
+
+When Minecraft is stopped, backup leaves it stopped. With no players online, the
+controller stops it gracefully and restarts it after verification. With players
+online, it disables saving, flushes world data, captures the archive, and re-enables
+saving. An unavailable player count aborts the request. Live backup is best effort
+for mods that write outside Minecraft saving controls; changing source files cause
+the attempt to fail rather than publishing an incomplete archive.
+
+### First-time setup with FTB Backups 3
+
+1. Deploy the updated controller/backend/frontend through the normal Makefile flow.
+2. Stop Minecraft from the panel, then run `make backup-migrate` from the repository
+   root. The command talks to the existing controller, imports and verifies ZIP
+   files from `data/minecraft/ftbbackups3`, retains originals, and writes a world
+   `serverconfig/ftbbackups3-server.snbt` override disabling FTB automatic and
+   shutdown backups. The override is also reapplied after full restores.
+3. Start Minecraft and enable the desired schedules in the panel.
+
+Keep FTB's own scheduler disabled after migration. Archives in a custom FTB
+backup directory must first be copied into `data/minecraft/ftbbackups3`. Imported
+archives are labelled **world only** and never automatically deleted. Their old
+records lack verifiable modpack versions, so assisted restore remains disabled.
+Servers without FTB Backups 3 need no migration.
+
+### Restoring and recovering interrupted work
+
+**Review restore** shows the snapshot, recorded and current versions, online
+players, and required disk space. **Confirm restore** starts a durable operation:
+validate and stage the archive, announce 30 seconds if players are online, stop
+Minecraft, create a permanent safety backup, and replace the server data. Current
+RCON and management credentials and whitelist enforcement are kept in
+`server.properties` while its gameplay settings are restored. RCON helper files,
+EULA, whitelist, operators, and ban lists remain in place; deployment settings and
+panel accounts are not restored.
+Minecraft restarts only if it was running before the operation, and recovery checks
+RCON readiness before reporting success.
+
+Version information is recorded automatically from the installed server. FTBA
+uses `.manifest.json` and `.ftb-installed`; Paper uses `.papermc-manifest.json`;
+Vanilla locates the installed JAR through `.vanilla-manifest.json` and checks its
+embedded `version.json`. Recovery requires
+matching resolved versions and pinned startup settings: `FTB_MODPACK_ID` plus
+`FTB_MODPACK_VERSION_ID` for FTBA, `VERSION` plus `PAPER_BUILD` for Paper, and
+`VERSION` for Vanilla. Floating selectors, unsupported server types, or unavailable
+metadata block assisted restore. Match the deployment settings first; the panel
+does not rewrite Compose or select another modpack version. FTB explicitly documents
+[updating on restart when the version is not pinned](https://docker-minecraft-server.readthedocs.io/en/latest/types-and-platforms/mod-platforms/ftb/#upgrading).
+
+The controller persists state in `data/backup-state` and staging/rollback files in
+`data/backup-recovery`. Keep these directories outside the Minecraft snapshot and
+on the same filesystem. Do not delete them while maintenance is active. One
+controller process must own a data root. Console commands and power controls are
+gated during maintenance, while logs remain readable and whitelist delivery waits
+without consuming retries.
+
+If the controller restarts during restoration, it rolls back the interrupted file
+replacement before accepting mutations. If the selected snapshot fails to start,
+it restores the prior data. A **Recovery needs attention** state holds the gate:
+keep Minecraft stopped, inspect the controller logs and remaining recovery files,
+then run `make backup-recover`. A graceful-stop timeout never forcibly kills the
+server to label a backup successful. Avoid external Docker/Compose changes while
+an operation is active; a changed container identity blocks recovery for inspection.
+
+Run the opt-in disposable Minecraft drill described in
+[the controller guide](apps/minecraft-controller/CLAUDE.md) before deployment. No
+migration or restore command should be tested against the live world.

@@ -5,6 +5,7 @@
 import "@/features/auth/auth.openapi.js";
 import "@/features/minecraft/profiles/profiles.openapi.js";
 import "@/features/minecraft/server/server.openapi.js";
+import "@/features/minecraft/backups/backups.openapi.js";
 import "@/features/users/users.openapi.js";
 
 import { OpenApiGeneratorV31 } from "@asteasolutions/zod-to-openapi";

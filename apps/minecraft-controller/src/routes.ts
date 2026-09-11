@@ -3,11 +3,15 @@
 import {
   minecraftConsoleLogEventSchema,
   minecraftServerStatusResponseSchema,
+  controllerRconRequestSchema,
+  controllerRconResponseSchema,
 } from "@minecraft-control-plane/shared/minecraft";
 import { Router, type RequestHandler } from "express";
 import { timingSafeEqual } from "node:crypto";
 import { once } from "node:events";
 import type { MinecraftDockerApi } from "./docker.js";
+import type { BackupManager } from "./backups/manager.js";
+import { createBackupRoutes } from "./backups/routes.js";
 
 export function createRequireBearerToken(token: string): RequestHandler {
   const expected = Buffer.from(`Bearer ${token}`);
@@ -29,31 +33,40 @@ export function createRequireBearerToken(token: string): RequestHandler {
 
 export interface CreateRoutesOptions {
   readonly docker: MinecraftDockerApi;
+  readonly backups: BackupManager;
 }
 
 // Express 5 forwards rejected async handlers to the error middleware natively,
 // so failures land in the app's terminal error handler without wrappers.
-export function createRoutes({ docker }: CreateRoutesOptions): Router {
+export function createRoutes({ docker, backups }: CreateRoutesOptions): Router {
   const router = Router();
 
   router.post("/start", async (_req, res) => {
-    await docker.start();
+    await backups.power("start");
     res.status(204).end();
   });
 
   router.post("/stop", async (_req, res) => {
-    await docker.stop();
+    await backups.power("stop");
     res.status(204).end();
   });
 
   router.post("/restart", async (_req, res) => {
-    await docker.restart();
+    await backups.power("restart");
     res.status(204).end();
   });
 
   router.get("/status", async (_req, res) => {
     const status = await docker.getStatus();
-    res.json(minecraftServerStatusResponseSchema.parse({ status }));
+    res.json(
+      minecraftServerStatusResponseSchema.parse({ status, maintenance: backups.activeOperation() }),
+    );
+  });
+
+  router.use("/backups", createBackupRoutes(backups));
+  router.post("/rcon", async (req, res) => {
+    const { command } = controllerRconRequestSchema.parse(req.body);
+    res.json(controllerRconResponseSchema.parse({ output: await backups.execute(command) }));
   });
 
   router.get("/logs", async (_req, res) => {

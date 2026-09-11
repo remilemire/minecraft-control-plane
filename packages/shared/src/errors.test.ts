@@ -7,6 +7,7 @@ import {
   minecraftClientErrorMeta,
   minecraftProfileErrorMeta,
   minecraftServerErrorMeta,
+  minecraftBackupErrorMeta,
 } from "./features/minecraft/index.js";
 import { userErrorMeta } from "./features/users/index.js";
 import { errorMeta, errorCodeSchema, errorResponseSchema } from "./errors.js";
@@ -20,6 +21,7 @@ const featureMetas = {
   session: sessionErrorMeta,
   minecraftProfile: minecraftProfileErrorMeta,
   minecraftServer: minecraftServerErrorMeta,
+  minecraftBackup: minecraftBackupErrorMeta,
   minecraftClient: minecraftClientErrorMeta,
   user: userErrorMeta,
 };

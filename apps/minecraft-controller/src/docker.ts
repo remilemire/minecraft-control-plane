@@ -62,6 +62,11 @@ export class DockerClient implements MinecraftDockerApi {
     await swallowStatus(304, () => this.docker.getContainer(container.Id).start());
   }
 
+  public async getManagedContainer(): Promise<Dockerode.Container> {
+    const container = await this.findContainer();
+    return this.docker.getContainer(container.Id);
+  }
+
   public async stop(): Promise<void> {
     const container = await this.findContainer();
     // 304 = already stopped; parity with `docker compose stop` again.

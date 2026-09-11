@@ -7,6 +7,7 @@ import { FakeGoogleOauthClient } from "@test/fakes/fake-google-oauth.client.js";
 import { FakeMojangClient } from "@test/fakes/fake-mojang.client.js";
 import { FakeProcessClient } from "@test/fakes/fake-process.client.js";
 import { FakeRconClient } from "@test/fakes/fake-rcon.client.js";
+import { FakeBackupsClient } from "@test/fakes/fake-backups.client.js";
 
 export interface TestApp {
   readonly app: Backend["app"];
@@ -16,6 +17,7 @@ export interface TestApp {
   readonly mojangClient: FakeMojangClient;
   readonly rconClient: FakeRconClient;
   readonly processClient: FakeProcessClient;
+  readonly backupsClient: FakeBackupsClient;
 }
 
 // The full express app wired against this worker's test database, with fakes
@@ -26,6 +28,7 @@ export function createTestApp(overrides: Partial<AppDeps> = {}): TestApp {
   const mojangClient = new FakeMojangClient();
   const rconClient = new FakeRconClient();
   const processClient = new FakeProcessClient();
+  const backupsClient = new FakeBackupsClient();
 
   const { app, outboxDispatcher } = createBackend({
     db,
@@ -33,8 +36,17 @@ export function createTestApp(overrides: Partial<AppDeps> = {}): TestApp {
     mojangClient,
     rconClient,
     processClient,
+    backupsClient,
     ...overrides,
   });
 
-  return { app, outboxDispatcher, googleOauthClient, mojangClient, rconClient, processClient };
+  return {
+    app,
+    outboxDispatcher,
+    googleOauthClient,
+    mojangClient,
+    rconClient,
+    processClient,
+    backupsClient,
+  };
 }

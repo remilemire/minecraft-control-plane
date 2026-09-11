@@ -25,7 +25,7 @@ describe("ServerPanel", () => {
   });
 
   it("disables Start while the server is running", async () => {
-    statusMock.mockResolvedValue("RUNNING");
+    statusMock.mockResolvedValue({ status: "RUNNING", maintenance: null });
 
     render(<ServerPanel />);
 
@@ -34,9 +34,29 @@ describe("ServerPanel", () => {
     expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Restart" })).toBeEnabled();
   });
+  it("disables power controls when status reports maintenance", async () => {
+    statusMock.mockResolvedValue({
+      status: "RUNNING",
+      maintenance: {
+        id: crypto.randomUUID(),
+        kind: "restore",
+        status: "running",
+        phase: "Replacing server data",
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        backupId: null,
+        safetyBackupId: null,
+        error: null,
+      },
+    });
+    render(<ServerPanel />);
+    await screen.findByText("RUNNING");
+    for (const name of ["Start", "Stop", "Restart"])
+      expect(screen.getByRole("button", { name })).toBeDisabled();
+  });
 
   it("disables Stop and Restart while the server is stopped", async () => {
-    statusMock.mockResolvedValue("STOPPED");
+    statusMock.mockResolvedValue({ status: "STOPPED", maintenance: null });
 
     render(<ServerPanel />);
 
@@ -48,8 +68,8 @@ describe("ServerPanel", () => {
 
   it("starts the server and refreshes the status", async () => {
     const user = userEvent.setup();
-    statusMock.mockResolvedValueOnce("STOPPED");
-    statusMock.mockResolvedValue("RUNNING");
+    statusMock.mockResolvedValueOnce({ status: "STOPPED", maintenance: null });
+    statusMock.mockResolvedValue({ status: "RUNNING", maintenance: null });
     startMock.mockResolvedValue(undefined);
 
     render(<ServerPanel />);
@@ -63,7 +83,7 @@ describe("ServerPanel", () => {
 
   it("restarts the server", async () => {
     const user = userEvent.setup();
-    statusMock.mockResolvedValue("RUNNING");
+    statusMock.mockResolvedValue({ status: "RUNNING", maintenance: null });
     restartMock.mockResolvedValue(undefined);
 
     render(<ServerPanel />);
@@ -77,8 +97,8 @@ describe("ServerPanel", () => {
   it("polls the status and picks up a change made outside the panel", async () => {
     vi.useFakeTimers();
     try {
-      statusMock.mockResolvedValueOnce("RUNNING");
-      statusMock.mockResolvedValue("STOPPED");
+      statusMock.mockResolvedValueOnce({ status: "RUNNING", maintenance: null });
+      statusMock.mockResolvedValue({ status: "STOPPED", maintenance: null });
 
       render(<ServerPanel />);
       // Flush the initial load without waitFor, which fake timers would stall.
@@ -99,7 +119,7 @@ describe("ServerPanel", () => {
   it("keeps the badge and the controls live while a poll is in flight", async () => {
     vi.useFakeTimers();
     try {
-      statusMock.mockResolvedValue("RUNNING");
+      statusMock.mockResolvedValue({ status: "RUNNING", maintenance: null });
 
       render(<ServerPanel />);
       await act(async () => {});
@@ -121,7 +141,7 @@ describe("ServerPanel", () => {
 
   it("shows action errors", async () => {
     const user = userEvent.setup();
-    statusMock.mockResolvedValue("RUNNING");
+    statusMock.mockResolvedValue({ status: "RUNNING", maintenance: null });
     stopMock.mockRejectedValue(
       new ApiError("SERVICE_UNAVAILABLE", "SERVICE_UNAVAILABLE", "Docker unreachable."),
     );

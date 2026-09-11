@@ -61,6 +61,30 @@ describe("ConsolePanel", () => {
     expect(screen.getByText("A warning")).toBeInTheDocument();
     expect(screen.queryByText("No console output yet.")).not.toBeInTheDocument();
   });
+  it("keeps logs readable while maintenance disables command entry", () => {
+    render(
+      <ConsolePanel
+        maintenance={{
+          id: crypto.randomUUID(),
+          kind: "backup",
+          status: "running",
+          phase: "Creating backup",
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+          backupId: null,
+          safetyBackupId: null,
+          error: null,
+        }}
+      />,
+    );
+    act(() => {
+      handlers.onOpen();
+      handlers.onLog({ stream: "stdout", line: "Saved the game" });
+    });
+    expect(screen.getByText("Saved the game")).toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+  });
 
   it("keeps the RCON polling churn out of the log view", () => {
     render(<ConsolePanel />);

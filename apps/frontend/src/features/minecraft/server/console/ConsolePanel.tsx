@@ -6,7 +6,10 @@ import { McButton } from "@/components/McButton";
 import { McInput } from "@/components/McInput";
 import { McPanel } from "@/components/McPanel";
 import { toApiError, type ApiError } from "@/lib/apiClient";
-import { minecraftConsoleCommandSchema } from "@minecraft-control-plane/shared/minecraft";
+import {
+  minecraftConsoleCommandSchema,
+  type MaintenanceOperation,
+} from "@minecraft-control-plane/shared/minecraft";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { openConsoleLogStream, sendConsoleCommand, type MinecraftConsoleLogEvent } from "./api";
 import { isNoise } from "./noise";
@@ -53,7 +56,11 @@ function ConsoleLine({ entry }: { entry: ConsoleEntry }) {
   );
 }
 
-export function ConsolePanel() {
+export function ConsolePanel({
+  maintenance = null,
+}: {
+  maintenance?: MaintenanceOperation | null;
+}) {
   const [entries, setEntries] = useState<ConsoleEntry[]>([]);
   const [connection, setConnection] = useState<ConnectionStatus>("connecting");
   const [streamEpoch, setStreamEpoch] = useState(0);
@@ -136,6 +143,7 @@ export function ConsolePanel() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (maintenance) return;
 
     const parsed = minecraftConsoleCommandSchema.safeParse({ command });
     if (!parsed.success) {
@@ -200,12 +208,21 @@ export function ConsolePanel() {
             autoComplete="off"
             spellCheck={false}
             className="min-w-0 flex-1"
+            disabled={maintenance !== null}
           />
-          <McButton type="submit" disabled={sending || command.trim() === ""}>
+          <McButton
+            type="submit"
+            disabled={sending || maintenance !== null || command.trim() === ""}
+          >
             {sending ? "Sending..." : "Send"}
           </McButton>
         </div>
         <ErrorText error={commandError} className="mt-2 text-sm" />
+        {maintenance && (
+          <p className="text-highlight mt-2 text-sm">
+            Commands are paused during {maintenance.kind}. Logs remain available.
+          </p>
+        )}
       </form>
     </McPanel>
   );

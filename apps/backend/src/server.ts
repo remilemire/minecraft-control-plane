@@ -7,6 +7,7 @@ import { GoogleOauthClient } from "./features/auth/clients/google-oauth.client.j
 import { MojangClient } from "./features/minecraft/clients/mojang.client.js";
 import { ProcessClient } from "./features/minecraft/clients/process.client.js";
 import { RconClient } from "./features/minecraft/clients/rcon.client.js";
+import { BackupsClient } from "./features/minecraft/clients/backups.client.js";
 
 const port = Number(env.BACKEND_PORT);
 
@@ -22,11 +23,14 @@ const { app, outboxDispatcher, closeConsoleStreams } = createBackend({
   googleOauthClient: new GoogleOauthClient({ clientId: env.GOOGLE_CLIENT_ID }),
   mojangClient: new MojangClient(),
   rconClient: new RconClient({
-    host: env.MINECRAFT_RCON_HOST,
-    port: env.MINECRAFT_RCON_PORT,
-    password: env.MINECRAFT_RCON_PASSWORD,
+    baseUrl: env.MINECRAFT_CONTROLLER_URL,
+    token: env.MINECRAFT_CONTROLLER_TOKEN,
   }),
   processClient: new ProcessClient({
+    baseUrl: env.MINECRAFT_CONTROLLER_URL,
+    token: env.MINECRAFT_CONTROLLER_TOKEN,
+  }),
+  backupsClient: new BackupsClient({
     baseUrl: env.MINECRAFT_CONTROLLER_URL,
     token: env.MINECRAFT_CONTROLLER_TOKEN,
   }),

@@ -14,7 +14,9 @@ import "@/openapi/zod-extend.js";
 // test run can never touch a real database, and so parallel workers never
 // share state. Keep the Postgres defaults in sync with global-setup.ts.
 
-const poolId = process.env.VITEST_POOL_ID ?? "1";
+// Pool slots can be reused across projects. The worker ID is unique for each
+// isolated execution, so another test cannot truncate this file's database.
+const workerId = process.env.VITEST_WORKER_ID ?? process.env.VITEST_POOL_ID ?? "1";
 
 process.env.APP_ENV = "dev";
 process.env.BACKEND_PORT ??= "8000";
@@ -28,14 +30,11 @@ const baseDatabase = (process.env.POSTGRES_DATABASE ?? "minecraft_server").repla
   /_test_w\d+$/,
   "",
 );
-process.env.POSTGRES_DATABASE = `${baseDatabase}_test_w${poolId}`;
+process.env.POSTGRES_DATABASE = `${baseDatabase}_test_w${workerId}`;
 
 process.env.SESSION_SECRET ??= "test-session-secret";
 process.env.GOOGLE_CLIENT_ID ??= "test-client-id.apps.googleusercontent.com";
 process.env.BOOTSTRAP_OWNER_EMAIL ??= "bootstrap@example.com";
 
-process.env.MINECRAFT_RCON_HOST ??= "localhost";
-process.env.MINECRAFT_RCON_PORT ??= "25575";
-process.env.MINECRAFT_RCON_PASSWORD ??= "test-rcon-password";
 process.env.MINECRAFT_CONTROLLER_URL ??= "http://minecraft-controller:8000";
 process.env.MINECRAFT_CONTROLLER_TOKEN ??= "test-controller-token";

@@ -22,8 +22,8 @@ describe("GET /api/minecraft/server/status", () => {
       .get("/api/minecraft/server/status")
       .set("Cookie", [auth.cookie]);
 
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({ status: "STOPPED" });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(response.body).toEqual({ status: "STOPPED", maintenance: null });
   });
 
   it("requires a session", async () => {

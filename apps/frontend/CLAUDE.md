@@ -130,3 +130,14 @@ patterns narrow enough that an RCON line reporting an actual failure survives.
   tests stub global `fetch`, and the console's `api.test.ts` stubs global
   `EventSource` (jsdom ships none). Fake-timer tests (McConfirmButton) use
   `fireEvent`, not `userEvent` (which hangs under fake timers).
+
+## Backups panel
+
+`minecraft/backups` owns archive listing, four independent schedule toggles, and
+the restore preview/confirmation. Use the shared schemas and `apiRequest` as for
+other features. Poll maintenance every 3 seconds while active and every 15 seconds
+otherwise; the controller journal restores progress after page reloads. HomePage
+passes maintenance state to power and console controls, while the server status
+response also carries maintenance. Frontend disabling is explanatory; controller
+coordination enforces conflicts. Retain request UUIDs after uncertain submission
+failures so retries refer to the same durable operation.

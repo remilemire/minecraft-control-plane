@@ -15,7 +15,7 @@ import type {
   OutboxMessageRepository,
 } from "./outbox.repository.js";
 import type { OutboxMessage } from "./outbox.schema.js";
-import { defineOutboxMessage, type OutboxHandler } from "./outbox.types.js";
+import { defineOutboxMessage, OutboxDeferredError, type OutboxHandler } from "./outbox.types.js";
 
 const NOW = new Date("2026-07-24T12:00:00Z");
 
@@ -154,6 +154,35 @@ describe("OutboxDispatcher", () => {
   }
 
   describe("tick", () => {
+    it("defers maintenance without dead-lettering an otherwise final attempt", async () => {
+      const pending = message({ attempts: OUTBOX_DISPATCHER_DEFAULTS.maxAttempts });
+      const { repository, failures, completions } = recordingRepository([[pending]]);
+      const deferred = vi.fn().mockResolvedValue(true);
+      repository.markDeferred = deferred;
+      const onDeadLetter = vi.fn();
+      const dispatcher = new OutboxDispatcher(
+        repository,
+        registryWith([
+          handlerFor(
+            alphaMessage,
+            async () => {
+              throw new OutboxDeferredError();
+            },
+            onDeadLetter,
+          ),
+          handlerFor(betaMessage),
+        ]),
+      );
+      await dispatcher.tick();
+      expect(deferred).toHaveBeenCalledWith({
+        id: pending.id,
+        claimId: pending.claimId,
+        nextAttemptAt: new Date(NOW.getTime() + 5000),
+      });
+      expect(failures).toEqual([]);
+      expect(completions).toEqual([]);
+      expect(onDeadLetter).not.toHaveBeenCalled();
+    });
     it("claims with the configured window and processes in order", async () => {
       const handled: unknown[] = [];
       const first = message({ id: "00000000-0000-0000-0000-000000000001", payload: { value: 1 } });

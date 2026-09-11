@@ -17,6 +17,12 @@ const EXPECTED_PATHS = [
   "/minecraft/server/start",
   "/minecraft/server/stop",
   "/minecraft/server/restart",
+  "/minecraft/backups",
+  "/minecraft/backups/schedules",
+  "/minecraft/backups/operations/{id}",
+  "/minecraft/backups/{id}",
+  "/minecraft/backups/{id}/restore-preview",
+  "/minecraft/backups/{id}/restore",
 ] as const;
 
 describe("OpenAPI document", () => {

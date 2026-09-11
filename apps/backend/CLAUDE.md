@@ -95,7 +95,7 @@ Composition is explicit DI:
   the prod image sets `SPA_DIR`, dev/tests leave it unset), then the error
   handler (which always logs 5xx; everything only in debug).
 - `AppDeps` are the external boundaries: `{ db, googleTokenVerifier, mojangClient,
-rconClient, processClient }`, each an **interface**. `server.ts` (the production
+rconClient, processClient, backupsClient }`, each an **interface**. `server.ts` (the production
   composition root) injects the real clients, starts the dispatcher's poll loop, and
   owns graceful shutdown (SIGTERM/SIGINT: `server.close()` → `dispatcher.stop()` →
   `pool.end()`); tests inject fakes and never `start()` the dispatcher.
@@ -104,12 +104,20 @@ To add a dependency on an outside system, define an interface (a "seam"), implem
 as a client (real in `server.ts`, fake in `test/fakes/`), and thread it through
 `AppDeps`.
 
-**`RconClient` serializes its commands** behind a promise chain, so only one RCON
-connection is ever open. Vanilla bleeds one connection's command output into
-another's response when they overlap — and `@minecraft-js/rcon` pipelines a bogus
-`me` command after every real one to detect fragmentation, so the leaked text is
-that probe's "Unknown or incomplete command" error, which corrupted `list` replies.
-Like the outbox's ordering guarantee, this assumes the single backend process.
+**RCON is coordinated by the Minecraft controller.** The backend's `RconClient`
+implements the existing `RconApi` through authenticated controller HTTP. The
+controller executes one bounded `rcon-cli` process at a time and prevents console,
+whitelist, and power operations from racing backup/recovery work. Do not add a
+second direct RCON connection from the backend.
+
+`minecraft/backups` is a sibling feature with its own external `BackupsApi` seam.
+The controller owns archives, schedules, retention, and durable operation state;
+Postgres is not a second backup catalogue. Restore checks the preview at the
+backend boundary and the controller repeats preflight before replacing any data.
+
+Whitelist handlers translate the controller's maintenance/recovery gate into
+`OutboxDeferredError`. The dispatcher releases the fenced claim and refunds that
+attempt, preserving retries for actual delivery failures.
 
 ## Request flow
 

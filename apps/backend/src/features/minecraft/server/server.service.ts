@@ -55,4 +55,8 @@ export class MinecraftServerService {
   public async getStatus(): Promise<MinecraftServerStatus> {
     return await this.processClient.getStatus();
   }
+
+  public getStatusDetails() {
+    return this.processClient.getStatusDetails();
+  }
 }

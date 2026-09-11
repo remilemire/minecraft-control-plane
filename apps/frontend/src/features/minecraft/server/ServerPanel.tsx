@@ -9,6 +9,7 @@ import { toApiError, type ApiError } from "@/lib/apiClient";
 import { usePoll } from "@/lib/usePoll";
 import { useRequest } from "@/lib/useRequest";
 import { useState } from "react";
+import type { MaintenanceOperation } from "@minecraft-control-plane/shared/minecraft";
 import { fetchServerStatus, restartServer, startServer, stopServer } from "./api";
 
 type ServerAction = "start" | "stop" | "restart";
@@ -18,7 +19,7 @@ type ServerAction = "start" | "stop" | "restart";
 // status is polled rather than trusted until the next action.
 const STATUS_POLL_MS = 15_000;
 
-export function ServerPanel() {
+export function ServerPanel({ maintenance = null }: { maintenance?: MaintenanceOperation | null }) {
   const { data: status, error, loading, reload } = useRequest(fetchServerStatus);
   const [pending, setPending] = useState<ServerAction | null>(null);
   const [actionError, setActionError] = useState<ApiError | null>(null);
@@ -41,8 +42,9 @@ export function ServerPanel() {
   // A poll is not something the user is waiting on: only the first load may
   // blank the badge or disable the controls.
   const initialLoad = loading && status === null;
-  const busy = pending !== null || initialLoad;
-  const running = status === "RUNNING";
+  const currentMaintenance = maintenance ?? status?.maintenance ?? null;
+  const busy = pending !== null || initialLoad || currentMaintenance !== null;
+  const running = status?.status === "RUNNING";
 
   return (
     <McPanel title="Server">
@@ -51,7 +53,7 @@ export function ServerPanel() {
         {initialLoad ? (
           <LoadingText />
         ) : status !== null ? (
-          <McBadge variant={running ? "success" : "danger"}>{status}</McBadge>
+          <McBadge variant={running ? "success" : "danger"}>{status.status}</McBadge>
         ) : (
           <McBadge variant="muted">Unknown</McBadge>
         )}
@@ -73,6 +75,11 @@ export function ServerPanel() {
       </div>
 
       <ErrorText error={error ?? actionError} className="mt-4" />
+      {currentMaintenance && (
+        <p className="text-highlight mt-3 text-sm">
+          {currentMaintenance.phase}. Server controls are paused.
+        </p>
+      )}
     </McPanel>
   );
 }

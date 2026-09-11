@@ -36,6 +36,10 @@ import {
 } from "@/infrastructure/outbox/index.js";
 import { outboxMessageDefinitions } from "@/infrastructure/outbox/outbox.registry.js";
 import { Router } from "express";
+import type { BackupsApi } from "@/features/minecraft/backups/backups.types.js";
+import { MinecraftBackupService } from "@/features/minecraft/backups/backups.service.js";
+import { MinecraftBackupController } from "@/features/minecraft/backups/backups.controller.js";
+import { createMinecraftBackupRoutes } from "@/features/minecraft/backups/backups.routes.js";
 
 // The external boundaries of the app. Production wires the real ones in
 // server.ts; tests substitute fakes (see test/helpers/create-test-app.ts).
@@ -45,6 +49,7 @@ export interface AppDeps {
   readonly mojangClient: MojangApi;
   readonly rconClient: RconApi;
   readonly processClient: ProcessApi;
+  readonly backupsClient: BackupsApi;
 }
 
 // The wired dependency graph: the HTTP surface plus the background pieces the
@@ -105,9 +110,16 @@ export function createRouter(deps: AppDeps): AppWiring {
   const minecraftProfileController = new MinecraftProfileController(minecraftProfileService);
   const minecraftServerController = new MinecraftServerController(minecraftServerService);
   const minecraftConsoleController = new MinecraftConsoleController(minecraftConsoleService);
+  const minecraftBackupController = new MinecraftBackupController(
+    new MinecraftBackupService(deps.backupsClient),
+  );
 
   router.use("/users", createUserRoutes(userController, requireAuth, requireOwner));
   router.use("/auth", createAuthRoutes(authController, requireAuth));
+  router.use(
+    "/minecraft/backups",
+    createMinecraftBackupRoutes(minecraftBackupController, requireAuth),
+  );
   router.use(
     "/minecraft",
     createMinecraftRoutes(
