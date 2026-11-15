@@ -141,3 +141,7 @@ passes maintenance state to power and console controls, while the server status
 response also carries maintenance. Frontend disabling is explanatory; controller
 coordination enforces conflicts. Retain request UUIDs after uncertain submission
 failures so retries refer to the same durable operation.
+
+Archive pagination stays in the frontend: show five newest-first records per
+page, preserve the selected page across polls, and clamp it when deletion removes
+the last page. An accepted manual backup returns the user to the newest page.

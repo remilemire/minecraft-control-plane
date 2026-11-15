@@ -25,6 +25,7 @@ import {
 } from "./api";
 
 const TIERS: BackupTier[] = ["hourly", "daily", "weekly", "monthly"];
+const BACKUPS_PER_PAGE = 5;
 function bytes(size: number): string {
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KiB`;
   if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MiB`;
@@ -60,12 +61,21 @@ export function BackupsPanel({
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState<ApiError | null>(null);
   const [preview, setPreview] = useState<BackupRestorePreview | null>(null);
+  const [page, setPage] = useState(1);
   const manualRequest = useRef<string | null>(null);
   const restoreRequest = useRef<string | null>(null);
   const operation = backups.data?.activeOperation ?? backups.data?.latestOperation ?? null;
   const active = backups.data?.activeOperation ?? null;
   const busy = pending || active !== null || submitted !== null;
   const initial = backups.loading && backups.data === null;
+  const records = backups.data?.backups ?? [];
+  const pageCount = Math.max(1, Math.ceil(records.length / BACKUPS_PER_PAGE));
+  const currentPage = Math.min(page, pageCount);
+  const firstIndex = (currentPage - 1) * BACKUPS_PER_PAGE;
+  const visibleBackups = records.slice(firstIndex, firstIndex + BACKUPS_PER_PAGE);
+
+  // Persist the clamp so a later poll cannot jump back to a page removed by deletion.
+  if (page !== currentPage) setPage(currentPage);
 
   usePoll(backups.reload, active || submitted ? 3000 : 15_000);
   usePoll(schedules.reload, 15_000);
@@ -92,6 +102,7 @@ export function BackupsPanel({
     manualRequest.current = null;
     submittedRequest.current = accepted.operationId;
     setSubmitted(accepted.operationId);
+    setPage(1);
   }
   async function showPreview(id: string) {
     setPreview(null);
@@ -260,8 +271,37 @@ export function BackupsPanel({
       {backups.data?.backups.length === 0 && (
         <p className="text-muted">No backups yet. Create one now or enable a schedule.</p>
       )}
+      {records.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-sm">
+          <p className="text-muted" role="status">
+            Showing {firstIndex + 1}–{firstIndex + visibleBackups.length} of {records.length}{" "}
+            {records.length === 1 ? "backup" : "backups"}
+          </p>
+          {pageCount > 1 && (
+            <nav aria-label="Backup pagination" className="flex flex-wrap items-center gap-3">
+              <McButton
+                className="px-2 py-1 text-sm"
+                disabled={currentPage === 1}
+                onClick={() => setPage(currentPage - 1)}
+              >
+                Previous
+              </McButton>
+              <span>
+                Page {currentPage} of {pageCount}
+              </span>
+              <McButton
+                className="px-2 py-1 text-sm"
+                disabled={currentPage === pageCount}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                Next
+              </McButton>
+            </nav>
+          )}
+        </div>
+      )}
       <div className="grid gap-3">
-        {backups.data?.backups.map((backup) => (
+        {visibleBackups.map((backup) => (
           <article key={backup.id} className="mc-inset p-4">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <time dateTime={backup.createdAt}>{date(backup.createdAt)}</time>

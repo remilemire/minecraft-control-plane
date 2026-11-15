@@ -390,10 +390,37 @@ Not yet implemented:
 
 The Backups panel is available to every signed-in user. **Back up now** captures
 worlds, player data, mods, libraries, launch files, and configuration. Logs, caches,
-temporary files, and existing backups are excluded. Archives are streamed to
-`data/backups`, verified against file manifests and SHA-256 checksums, and only
+temporary files, and existing backups are excluded. Archives are streamed to the
+`backups` child of the data root, verified against file manifests and SHA-256 checksums, and only
 then added to the catalogue. These are local rollback copies on the server's disk;
 copy the backup directory to separate storage for protection against disk loss.
+
+Set `MINECRAFT_DATA_ROOT` in the root `.env` to an absolute host directory, such as
+`/srv/minecraft-data`, to keep persistent Minecraft storage outside the source
+checkout. When unset, Compose and host development use the repository's `data`
+directory. Its layout is unchanged:
+
+```text
+/srv/minecraft-data/
+├── minecraft/        # Live worlds and server installation
+├── backups/          # Verified archives and manifests
+├── backup-state/     # Catalogue, schedules, and operation journal
+└── backup-recovery/  # Restore staging and rollback data
+```
+
+Compose mounts the parent at `/server-data` in the controller and its `minecraft`
+child at `/data` in Minecraft. Host-run controller development uses the same
+configured host path. The container's environment always overrides that setting
+to `/server-data`.
+
+For an existing deployment, first take a verified backup, disable schedules, and
+stop Minecraft through the panel. Once no maintenance operation is active, stop
+the backend and controller, move the **entire** data root (including the journal
+and all archives), and set the new absolute path in `.env`. Recreate the stopped
+Minecraft container and the controller/backend through the Makefile before
+starting Minecraft and restoring the schedules. Confirm the existing backup IDs
+and restore previews before starting; an empty destination must not replace the
+existing catalogue. Never move live data or change containers during maintenance.
 
 Schedules start disabled. Users independently enable hourly (on the hour), daily
 (midnight), weekly (Monday midnight), and monthly (first day at midnight) backups.
@@ -419,13 +446,13 @@ the attempt to fail rather than publishing an incomplete archive.
 1. Deploy the updated controller/backend/frontend through the normal Makefile flow.
 2. Stop Minecraft from the panel, then run `make backup-migrate` from the repository
    root. The command talks to the existing controller, imports and verifies ZIP
-   files from `data/minecraft/ftbbackups3`, retains originals, and writes a world
+   files from `<data-root>/minecraft/ftbbackups3`, retains originals, and writes a world
    `serverconfig/ftbbackups3-server.snbt` override disabling FTB automatic and
    shutdown backups. The override is also reapplied after full restores.
 3. Start Minecraft and enable the desired schedules in the panel.
 
 Keep FTB's own scheduler disabled after migration. Archives in a custom FTB
-backup directory must first be copied into `data/minecraft/ftbbackups3`. Imported
+backup directory must first be copied into `<data-root>/minecraft/ftbbackups3`. Imported
 archives are labelled **world only** and never automatically deleted. Their old
 records lack verifiable modpack versions, so assisted restore remains disabled.
 Servers without FTB Backups 3 need no migration.
@@ -454,9 +481,10 @@ metadata block assisted restore. Match the deployment settings first; the panel
 does not rewrite Compose or select another modpack version. FTB explicitly documents
 [updating on restart when the version is not pinned](https://docker-minecraft-server.readthedocs.io/en/latest/types-and-platforms/mod-platforms/ftb/#upgrading).
 
-The controller persists state in `data/backup-state` and staging/rollback files in
-`data/backup-recovery`. Keep these directories outside the Minecraft snapshot and
-on the same filesystem. Do not delete them while maintenance is active. One
+The controller persists state in `<data-root>/backup-state` and staging/rollback
+files in `<data-root>/backup-recovery`. Keep these directories outside the Minecraft
+snapshot. Live data and recovery staging must share a filesystem. Do not delete
+them while maintenance is active. One
 controller process must own a data root. Console commands and power controls are
 gated during maintenance, while logs remain readable and whitelist delivery waits
 without consuming retries.

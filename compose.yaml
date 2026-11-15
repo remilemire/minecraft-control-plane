@@ -38,7 +38,7 @@ services:
       - "25565:25565"
 
     volumes:
-      - ./data/minecraft:/data
+      - ${MINECRAFT_DATA_ROOT:-./data}/minecraft:/data
 
     # No env_file: this container must not see the rest of the root .env —
     # notably MINECRAFT_CONTROLLER_TOKEN, which guards the controller against
@@ -88,9 +88,9 @@ services:
     # The docker socket is the service's whole purpose — not a dev-only mount.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # One parent mount keeps recovery renames on the same filesystem;
-      # archives and journals are outside minecraft's /data snapshot.
-      - ./data:/server-data
+      # Keep persistent data outside the checkout by setting an absolute
+      # MINECRAFT_DATA_ROOT in .env. One parent mount preserves recovery renames.
+      - ${MINECRAFT_DATA_ROOT:-./data}:/server-data
 
     stop_grace_period: 30m
 

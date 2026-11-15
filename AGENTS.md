@@ -102,7 +102,10 @@ Three gitignored `.env` files (each has a committed `.env.example`):
   `name:` and used by the controller's label-based container lookup), and the
   controller (`MINECRAFT_CONTROLLER_PORT`, `MINECRAFT_CONTROLLER_TOKEN` — the
   token lives **only** here; backend host dev reads it via
-  `--env-file-if-exists=../../.env`).
+  `--env-file-if-exists=../../.env`). Optional `MINECRAFT_DATA_ROOT` selects an
+  absolute host directory for persistent Minecraft data, archives, and recovery
+  state; Compose defaults to `./data` and pins the controller's in-container
+  path to `/server-data`.
 - **`apps/backend/.env`** — app settings: `SESSION_SECRET` (required but currently
   unused), `*_TTL_DAYS`, `MINECRAFT_CONTROLLER_URL` (host-dev default
   `http://localhost:8001`; compose overrides it to
@@ -168,6 +171,9 @@ The controller owns persistent archives and the operation journal outside Minecr
 `/data`. Backend RCON now goes through the controller's operation coordinator.
 Full restore requires verified matching versions and pinned startup selectors.
 Keep current panel-managed access files and deployment credentials during restore.
+Keep `minecraft`, `backups`, `backup-state`, and `backup-recovery` together when
+relocating `MINECRAFT_DATA_ROOT`. Live data and recovery staging must share a
+filesystem; stop Minecraft and the controller before moving their parent.
 
 Use `make backup-migrate` with Minecraft stopped for the one-time FTB migration;
 `make backup-recover` retries recovery after inspection. Never operate on live

@@ -11,11 +11,19 @@ the persistent journal, migration, and orchestration. The controller uses one
 process against one data root. CLI migration and recovery call the running HTTP
 coordinator rather than starting a second scheduler or writing the journal directly.
 
-Compose mounts the parent `./data` at `/server-data`. Minecraft itself mounts only
-`./data/minecraft` at `/data`. Archives (`backups`), state (`backup-state`), and
-restore staging (`backup-recovery`) are siblings of `minecraft`; they must remain
-on the same filesystem for recovery renames. Host development defaults to the
-repository's data directory; `MINECRAFT_DATA_ROOT` can explicitly override it.
+`MINECRAFT_DATA_ROOT` in the root `.env` selects an absolute host directory for
+all persistent Minecraft data. Compose defaults to `./data` when it is unset,
+mounts that parent at `/server-data` in the controller, and mounts only its
+`minecraft` child at `/data` in Minecraft. The controller's process env pins
+`MINECRAFT_DATA_ROOT=/server-data`; host development reads the configured host
+path directly and otherwise defaults to the repository's data directory.
+
+Archives (`backups`), state (`backup-state`), and restore staging
+(`backup-recovery`) are siblings of `minecraft`. Live data and recovery staging
+must share a filesystem for atomic renames. Keep the common parent intact when
+relocating storage, including its journal and catalogue; never move it while an
+operation or Minecraft is running. Recreate the stopped containers after changing
+the host path so their bind mounts use the new location.
 
 Operation intent must be durably recorded before disabling saving/restarts or
 moving files. A failed state write must not release the maintenance gate.
