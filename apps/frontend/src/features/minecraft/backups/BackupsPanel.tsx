@@ -354,8 +354,13 @@ export function BackupsPanel({
       </div>
       <ErrorText error={actionError ?? backups.error ?? schedules.error} className="mt-4" />
       <p className="text-muted mt-4 text-sm">
-        Backups are stored on the server’s disk. Live backups use Minecraft saving controls; some
-        mods may write files independently.
+        Backups are kept on this server. Copy them to another device or offsite storage to protect
+        against disk failure.
+      </p>
+      <p className="text-muted mt-2 text-sm">
+        With players online, the server stays running during backups, so some mod data may be
+        inconsistent. When no players are online, a running server stops for the backup and restarts
+        afterward.
       </p>
     </McPanel>
   );
