@@ -50,6 +50,9 @@ RUN pnpm --filter @minecraft-control-plane/minecraft-controller --prod deploy --
 # remain the security boundary.
 FROM node:22-alpine AS prod
 
+ARG VCS_REF=unknown
+LABEL org.opencontainers.image.revision=$VCS_REF
+
 ENV NODE_ENV=production
 
 WORKDIR /app

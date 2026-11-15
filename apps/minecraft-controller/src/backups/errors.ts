@@ -1,13 +1,5 @@
-import type { MinecraftBackupErrorCode } from "@minecraft-control-plane/shared/minecraft";
-
-export class BackupError extends Error {
-  public constructor(
-    public readonly code: MinecraftBackupErrorCode,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+import { MaintenanceError as BackupError } from "@/maintenance/errors.js";
+export { MaintenanceError as BackupError } from "@/maintenance/errors.js";
 
 export function isMissing(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";

@@ -172,7 +172,12 @@ The controller owns persistent archives and the operation journal outside Minecr
 Full restore requires verified matching versions and pinned startup selectors.
 Keep current panel-managed access files and deployment credentials during restore.
 Keep `minecraft`, `backups`, `backup-state`, and `backup-recovery` together when
-relocating `MINECRAFT_DATA_ROOT`. Live data and recovery staging must share a
+relocating `MINECRAFT_DATA_ROOT`, along with `startup-gate` (per-boot requests and
+read-only authorization). All mutations use the shared maintenance coordinator;
+new destructive task definitions must provide verified safety and repeatable
+recovery handlers. Minecraft's entrypoint waits for the controller to validate
+the journal and authorize its fresh boot challenge. Never bypass this gate or
+erase initialized state to clear maintenance. Live data and recovery staging must share a
 filesystem; stop Minecraft and the controller before moving their parent.
 
 Use `make backup-migrate` with Minecraft stopped for the one-time FTB migration;

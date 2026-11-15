@@ -34,6 +34,13 @@ import {
 } from "./store.js";
 import { compareVersions, readInstallation, type Installation } from "./versions.js";
 import { preserveCredentials } from "./credentials.js";
+import {
+  MaintenanceCoordinator,
+  type MaintenanceTask,
+  type TaskContext,
+} from "@/maintenance/coordinator.js";
+import type { StartupAuthorization } from "@/maintenance/startup-gate.js";
+import { atomicText } from "@/maintenance/atomic-files.js";
 
 export interface BackupManagerOptions {
   dataRoot: string;
@@ -42,6 +49,8 @@ export interface BackupManagerOptions {
   runtime: BackupRuntime;
   now?: () => Date;
   countdown?: () => Promise<void>;
+  startupGate?: StartupAuthorization | undefined;
+  observer?: (operation: OperationJournal, event: string) => Promise<void>;
 }
 
 export class BackupManager {
@@ -50,20 +59,31 @@ export class BackupManager {
   private readonly workRoot: string;
   private readonly store: BackupStore;
   private state!: BackupState;
-  private initialized = false;
-  private shuttingDown = false;
-  private inFlightCommands = 0;
-  private activeTask: Promise<void> | undefined;
-  private executingOperation: OperationJournal | null = null;
+  private readonly coordinator: MaintenanceCoordinator<OperationJournal>;
   private timer: NodeJS.Timeout | undefined;
   private readonly now: () => Date;
 
   public constructor(private readonly options: BackupManagerOptions) {
     this.dataPath = join(options.dataRoot, "minecraft");
-    this.storage = new ArchiveStorage(join(options.dataRoot, "backups"));
+    this.storage = new ArchiveStorage(join(options.dataRoot, "backups"), async (event) => {
+      const operation = this.coordinator.active();
+      if (operation) await options.observer?.(operation, event);
+    });
     this.workRoot = join(options.dataRoot, "backup-recovery");
     this.store = new BackupStore(join(options.dataRoot, "backup-state"));
     this.now = options.now ?? (() => new Date());
+    this.coordinator = new MaintenanceCoordinator({
+      operations: () => this.state.operations,
+      persist: () => this.save(),
+      tasks: this.tasks(),
+      gate: options.startupGate,
+      available: async () => {
+        await options.runtime.inspect();
+      },
+      describe: publicFailure,
+      now: this.now,
+      observer: options.observer,
+    });
   }
 
   public async initialize(): Promise<void> {
@@ -78,8 +98,7 @@ export class BackupManager {
           : null;
     }
     // Restore saving and safe server data before potentially slow archive verification.
-    const interrupted = this.state.operations.find((op) => op.status === "running");
-    if (interrupted) await this.recoverOperation(interrupted);
+    await this.coordinator.recoverInterrupted();
     // A committed archive can precede its catalogue write if the controller dies.
     for (const name of await readdir(this.storage.root)) {
       if (name.startsWith(".partial-") && backupIdSchema.safeParse(name.slice(9)).success) {
@@ -93,17 +112,19 @@ export class BackupManager {
     }
     for (const operation of this.state.operations) this.releaseFailedPools(operation);
     await this.save();
-    this.initialized = true;
+    await atomicText(join(this.store.root, "initialized"), "1\n");
+    await this.coordinator.ready();
   }
 
   public startScheduler(): void {
     const tick = async () => {
       try {
+        await this.coordinator.retry();
         await this.tick();
       } catch (error) {
         console.error("Backup scheduler", error);
       }
-      if (!this.shuttingDown)
+      if (!this.coordinator.closing)
         this.timer = setTimeout(() => {
           void tick();
         }, 1000);
@@ -113,49 +134,43 @@ export class BackupManager {
     }, 1000);
   }
   public async close(): Promise<void> {
-    this.shuttingDown = true;
     if (this.timer) clearTimeout(this.timer);
-    await this.activeTask;
+    await this.coordinator.close();
   }
   public activeOperation(): MaintenanceOperation | null {
-    if (this.executingOperation)
-      return maintenanceOperationSchema.parse({
-        ...this.executingOperation,
-        status: "running",
-        finishedAt: null,
-      });
-    const op = this.state?.operations.find(
-      (o) => o.status === "running" || o.status === "recoveryRequired",
-    );
-    return op ? maintenanceOperationSchema.parse(op) : null;
+    const operation = this.coordinator.active();
+    return operation ? this.publicOperation(operation) : null;
   }
   public operation(id: string): MaintenanceOperation {
-    const op = this.state.operations.find((o) => o.id === id);
-    if (!op) throw new BackupError("BACKUP_NOT_FOUND", "The requested operation was not found.");
-    return maintenanceOperationSchema.parse(
-      this.executingOperation?.id === id ? { ...op, status: "running", finishedAt: null } : op,
-    );
+    const operation = this.coordinator.operation(id);
+    if (!operation)
+      throw new BackupError("BACKUP_NOT_FOUND", "The requested operation was not found.");
+    return this.publicOperation(operation);
   }
-  private save(): Promise<void> {
-    return this.store.save(this.state);
+  private publicOperation(operation: OperationJournal): MaintenanceOperation {
+    const status = this.coordinator.status(operation);
+    const cleanupBlocked = status === "recoveryRequired" && operation.status !== "recoveryRequired";
+    return maintenanceOperationSchema.parse({
+      ...operation,
+      status,
+      phase: cleanupBlocked ? "Cleanup needs attention" : operation.phase,
+      error: cleanupBlocked
+        ? "The result is committed, but cleanup needs attention. Inspect storage and run make backup-recover."
+        : operation.error,
+      finishedAt:
+        status === "running" || status === "recoveryRequired" ? null : operation.finishedAt,
+    });
   }
-  private assertAvailable(): void {
-    if (!this.initialized || this.shuttingDown)
-      throw new BackupError(
-        "BACKUP_CONTROLLER_ERROR",
-        "The backup controller is starting or shutting down.",
-      );
-    const active = this.activeOperation();
-    if (active?.status === "recoveryRequired")
+  private async save(): Promise<void> {
+    try {
+      await this.store.save(this.state);
+    } catch (error) {
       throw new BackupError(
         "BACKUP_RECOVERY_REQUIRED",
-        "Recovery requires attention. Inspect the controller logs, then run make backup-recover.",
+        "The maintenance journal could not be persisted. Startup remains blocked.",
+        { cause: error },
       );
-    if (active || this.inFlightCommands > 0)
-      throw new BackupError(
-        "MINECRAFT_MAINTENANCE",
-        "A Minecraft operation is already in progress. Try again after it finishes.",
-      );
+    }
   }
   public async setupRequired(): Promise<boolean> {
     return !this.state.migrated && (await ftbConfigExists(this.dataPath));
@@ -195,31 +210,25 @@ export class BackupManager {
     };
   }
   public async updateSchedules(enabled: BackupSchedulesInput): Promise<BackupSchedulesResponse> {
-    this.assertAvailable();
-    if (Object.values(enabled).some(Boolean) && (await this.setupRequired()))
-      throw new BackupError(
-        "BACKUP_SETUP_REQUIRED",
-        "Run make backup-migrate with Minecraft stopped before enabling panel backups.",
-      );
-    this.assertAvailable();
-    for (const tier of TIERS) {
-      if (enabled[tier] !== this.state.enabled[tier])
-        this.state.nextRuns[tier] = enabled[tier]
-          ? nextOccurrence(tier, this.now(), this.options.timezone)
-          : null;
-    }
-    this.state.enabled = { ...enabled };
-    await this.save();
-    return this.schedules();
+    return this.coordinator.exclusive(async () => {
+      if (Object.values(enabled).some(Boolean) && (await this.setupRequired()))
+        throw new BackupError(
+          "BACKUP_SETUP_REQUIRED",
+          "Run make backup-migrate with Minecraft stopped before enabling panel backups.",
+        );
+      for (const tier of TIERS) {
+        if (enabled[tier] !== this.state.enabled[tier])
+          this.state.nextRuns[tier] = enabled[tier]
+            ? nextOccurrence(tier, this.now(), this.options.timezone)
+            : null;
+      }
+      this.state.enabled = { ...enabled };
+      await this.save();
+      return this.schedules();
+    });
   }
   public async tick(): Promise<void> {
-    if (
-      !this.initialized ||
-      this.shuttingDown ||
-      this.activeOperation() ||
-      this.inFlightCommands > 0
-    )
-      return;
+    if (!this.coordinator.initialized || this.coordinator.closing || this.activeOperation()) return;
     const now = this.now();
     const due = TIERS.filter(
       (t) =>
@@ -230,14 +239,8 @@ export class BackupManager {
     if (!due.length) return;
     await this.submit("backup", randomUUID(), null, "scheduled", due);
   }
-  public async execute(command: string): Promise<string> {
-    this.assertAvailable();
-    this.inFlightCommands++;
-    try {
-      return await this.options.runtime.execute(command);
-    } finally {
-      this.inFlightCommands--;
-    }
+  public execute(command: string): Promise<string> {
+    return this.coordinator.exclusive(() => this.options.runtime.execute(command));
   }
   public async create(requestId: string): Promise<string> {
     return this.submit("backup", requestId, null);
@@ -250,7 +253,7 @@ export class BackupManager {
   }
   public async power(kind: "start" | "stop" | "restart"): Promise<void> {
     const id = await this.submit(kind, randomUUID(), null);
-    await this.activeTask;
+    await this.coordinator.wait();
     const operation = this.operation(id);
     if (operation.status !== "succeeded")
       throw new BackupError(
@@ -267,18 +270,9 @@ export class BackupManager {
     origin: "manual" | "scheduled" = "manual",
     tiers: BackupTier[] = [],
   ): Promise<string> {
-    const previous = this.state.operations.find((o) => o.id === requestId);
-    if (previous) {
-      if (previous.kind !== kind || (kind === "restore" && previous.backupId !== backupId))
-        throw new BackupError(
-          "BACKUP_REQUEST_CONFLICT",
-          "This request ID was already used for another operation.",
-        );
-      return previous.id;
-    }
-    this.assertAvailable();
     const op = journalSchema.parse({
       id: requestId,
+      taskVersion: 1,
       kind,
       status: "running",
       phase: "Preparing",
@@ -290,26 +284,14 @@ export class BackupManager {
       origin,
       tiers,
     });
-    this.state.operations.push(op); // Reserve before the first await.
-    this.executingOperation = op;
-    // Persist the consumed schedule and operation together; restart never replays a backlog.
-    for (const tier of tiers)
-      this.state.nextRuns[tier] = nextOccurrence(tier, this.now(), this.options.timezone);
-    try {
-      await this.save();
-    } catch (error) {
-      op.status = "recoveryRequired";
-      this.executingOperation = null;
-      throw error;
-    }
-    this.activeTask = this.run(op).finally(() => {
-      this.executingOperation = null;
+    return this.coordinator.submit(op, () => {
+      for (const tier of tiers)
+        this.state.nextRuns[tier] = nextOccurrence(tier, this.now(), this.options.timezone);
     });
-    return op.id;
   }
   private async phase(op: OperationJournal, phase: string): Promise<void> {
     op.phase = phase;
-    await this.save();
+    await this.coordinator.checkpoint(op, phase);
   }
   private async identity(op: OperationJournal): Promise<void> {
     const current = await this.options.runtime.inspect();
@@ -341,6 +323,7 @@ export class BackupManager {
       throw new BackupError(
         "BACKUP_RECOVERY_REQUIRED",
         `${publicFailure(error)} The stop outcome must be checked before recovery continues.`,
+        { cause: error },
       );
     }
     await this.assertStopped(op);
@@ -349,8 +332,11 @@ export class BackupManager {
     await this.identity(op);
     if (op.wasRunning && op.stoppedByOperation) {
       await this.phase(op, "Starting Minecraft and checking readiness");
-      if (!(await this.options.runtime.inspect()).running) await this.options.runtime.start();
-      await this.options.runtime.waitReady();
+      await this.coordinator.boot(op, op.containerId!, async () => {
+        if (!(await this.options.runtime.inspect()).running) await this.options.runtime.start();
+        await this.options.observer?.(op, "verification-boot");
+        await this.options.runtime.waitReady();
+      });
     }
     if (op.restartPolicy) {
       await this.options.runtime.setRestartPolicy(op.restartPolicy);
@@ -437,14 +423,8 @@ export class BackupManager {
     await this.enableSaving(op);
     await this.resume(op);
   }
-  public async preview(id: string): Promise<BackupRestorePreview> {
-    this.assertAvailable();
-    this.inFlightCommands++;
-    try {
-      return await this.buildPreview(id);
-    } finally {
-      this.inFlightCommands--;
-    }
+  public preview(id: string): Promise<BackupRestorePreview> {
+    return this.coordinator.exclusive(() => this.buildPreview(id));
   }
   private async buildPreview(id: string): Promise<BackupRestorePreview> {
     const record = this.record(id);
@@ -491,7 +471,7 @@ export class BackupManager {
     if (!record) throw new BackupError("BACKUP_NOT_FOUND", "The backup no longer exists.");
     return record;
   }
-  private async restoreBackup(op: OperationJournal): Promise<void> {
+  private async prepareRestore(op: OperationJournal): Promise<void> {
     const record = this.record(op.backupId!);
     let installation = await this.installation();
     const check = () => {
@@ -550,13 +530,22 @@ export class BackupManager {
     await this.suspend(op);
     installation = await this.installation();
     check();
+  }
+  private async safetyBackup(op: OperationJournal): Promise<void> {
+    const installation = await this.installation();
     op.safetyBackupId = randomUUID();
     await this.save();
     await this.createArchive(op, "safety", "offline", installation, op.safetyBackupId);
+  }
+  private async applyRestore(op: OperationJournal): Promise<void> {
+    const work = join(this.workRoot, op.id);
+    const staged = join(work, "staged");
+    const previous = join(work, "previous");
+    const installation = await this.installation();
+    if (!compareVersions(this.record(op.backupId!).version, installation).compatible)
+      throw new BackupError("BACKUP_INCOMPATIBLE", "The installation changed during restore.");
     await this.assertStopped(op);
     await preserveCredentials(this.dataPath, staged);
-    installation = await this.installation();
-    check();
     op.originalNames = (await readdir(this.dataPath)).filter((n) => !preserved(n));
     op.stagedNames = (await readdir(staged)).filter((n) => !preserved(n));
     op.replacementStarted = true;
@@ -572,12 +561,13 @@ export class BackupManager {
     await disableFtbScheduling(this.dataPath, installation.worldName);
     op.replacementComplete = true;
     await this.save();
-    await this.resume(op);
   }
   private async move(from: string, to: string): Promise<void> {
     await rename(from, to);
     await syncDirectory(join(from, ".."));
     await syncDirectory(join(to, ".."));
+    const operation = this.coordinator.active();
+    if (operation) await this.coordinator.checkpoint(operation, `moved:${from.split("/").at(-1)}`);
   }
   private async rollback(op: OperationJournal): Promise<void> {
     if (!op.replacementStarted) return;
@@ -615,6 +605,7 @@ export class BackupManager {
         await this.move(join(previous, name), join(this.dataPath, name));
       }
     }
+    await syncDirectory(this.dataPath);
     op.replacementStarted = false;
     op.replacementComplete = false;
     await this.save();
@@ -656,37 +647,79 @@ export class BackupManager {
       op.error = `${op.error ?? ""} Keep Minecraft stopped and inspect the recovery journal before retrying.`;
     }
   }
-  public async delete(id: string): Promise<void> {
-    this.assertAvailable();
-    this.record(id);
-    // Hold a synchronous reservation across disk IO so restore cannot acquire the archive.
-    this.inFlightCommands++;
-    try {
+  public delete(id: string): Promise<void> {
+    return this.coordinator.exclusive(async () => {
+      this.record(id);
       await this.storage.remove(id);
       this.state.backups = this.state.backups.filter((b) => b.id !== id);
       await this.save();
-    } finally {
-      this.inFlightCommands--;
-    }
+    });
   }
-  private async run(op: OperationJournal): Promise<void> {
-    try {
-      const current = await this.options.runtime.inspect();
-      op.containerId = current.containerId;
-      op.wasRunning = current.running;
+  private async recoverTask(op: OperationJournal, interrupted: boolean): Promise<void> {
+    if (!op.containerId) return;
+    if (op.kind === "restore" && (interrupted || op.stoppedByOperation || op.replacementStarted)) {
+      // A Docker/Compose start may already be waiting in the entrypoint. Fence
+      // and stop it even if replacement had not begun; retain wasRunning.
+      await this.identity(op);
+      op.restartPolicy ??= (await this.options.runtime.inspect()).restartPolicy;
+      op.stoppedByOperation = true;
       await this.save();
-      switch (op.kind) {
-        case "backup":
-          await this.backup(op);
-          break;
-        case "restore":
-          await this.restoreBackup(op);
-          break;
-        case "migration": {
-          if (current.running)
+      await this.options.runtime.setRestartPolicy({ Name: "no" });
+      await this.options.runtime.stop();
+      await this.assertStopped(op);
+    }
+    await this.enableSaving(op);
+    await this.rollback(op);
+    await this.resume(op);
+  }
+  private tasks(): ReadonlyMap<string, MaintenanceTask<OperationJournal>> {
+    const recover = ({ operation, interrupted }: TaskContext<OperationJournal>) =>
+      this.recoverTask(operation, interrupted);
+    const hold = ({ operation }: { operation: OperationJournal }) => this.holdStopped(operation);
+    const cleanup = async ({ operation }: { operation: OperationJournal }) => {
+      this.releaseFailedPools(operation);
+      if (operation.kind === "backup" && operation.status === "succeeded") await this.prune();
+      await rm(join(this.workRoot, operation.id), { recursive: true, force: true });
+      await syncDirectory(this.workRoot);
+    };
+    const task = (
+      apply: (op: OperationJournal) => Promise<void>,
+    ): MaintenanceTask<OperationJournal> => ({
+      version: 1,
+      legacyVersions: [0],
+      apply: ({ operation }) => apply(operation),
+      recover,
+      hold,
+      cleanup,
+      prepare: async ({ operation }) => {
+        const current = await this.options.runtime.inspect();
+        operation.containerId = current.containerId;
+        operation.wasRunning = current.running;
+        await this.save();
+      },
+    });
+    const restore = task((op) => this.applyRestore(op));
+    const capture = restore.prepare!;
+    restore.prepare = async (context) => {
+      await capture(context);
+      await this.prepareRestore(context.operation);
+    };
+    restore.destructive = true;
+    restore.matchesRequest = (previous, incoming) => previous.backupId === incoming.backupId;
+    restore.safetyBackup = ({ operation }) => this.safetyBackup(operation);
+    restore.safetyBackupVerified = (operation) =>
+      this.state.backups.some((b) => b.id === operation.safetyBackupId && b.origin === "safety");
+    restore.verify = ({ operation }) => this.resume(operation);
+    return new Map([
+      ["backup", task((op) => this.backup(op))],
+      ["restore", restore],
+      [
+        "migration",
+        task(async (op) => {
+          if ((await this.options.runtime.inspect()).running)
             throw new BackupError(
               "BACKUP_SETUP_REQUIRED",
-              "Stop Minecraft through the panel before running make backup-migrate.",
+              "Stop Minecraft through the panel before migration.",
             );
           const installation = await this.installation();
           if (!installation.version)
@@ -696,108 +729,42 @@ export class BackupManager {
           await disableFtbScheduling(this.dataPath, installation.worldName);
           this.state.migrated = true;
           await this.save();
-          break;
-        }
-        case "start":
-          await this.options.runtime.start();
-          break;
-        case "stop":
+        }),
+      ],
+      [
+        "start",
+        task(async (op) => {
+          await this.phase(op, "Starting Minecraft and checking readiness");
+          await this.coordinator.boot(op, op.containerId!, async () => {
+            await this.options.runtime.start();
+            await this.options.runtime.waitReady();
+          });
+        }),
+      ],
+      [
+        "stop",
+        task(async () => {
           await this.options.runtime.stop();
-          break;
-        case "restart":
+        }),
+      ],
+      [
+        "restart",
+        task(async (op) => {
           await this.suspend(op);
           op.wasRunning = true;
           await this.resume(op);
-          break;
-      }
-      op.status = "succeeded";
-      op.phase = "Complete";
-      op.finishedAt = this.now().toISOString();
-      await this.save();
-      if (op.kind === "backup") {
-        try {
-          await this.prune();
-        } catch (error) {
-          console.error("Backup succeeded but retention cleanup failed", error);
-          op.phase = "Backup complete; retention cleanup needs attention";
-          op.error =
-            "The backup is verified. Expired archives could not all be removed; check controller logs and available space.";
-          await this.save().catch((journalError: unknown) =>
-            console.error("Cannot persist retention cleanup warning", journalError),
-          );
-        }
-      }
-      await rm(join(this.workRoot, op.id), { recursive: true, force: true }).catch(
-        (error: unknown) => console.error("Recovery staging cleanup failed", error),
-      );
-    } catch (error) {
-      console.error("Minecraft maintenance failed", op.id, error);
-      op.error = publicFailure(error);
-      if (error instanceof BackupError && error.code === "BACKUP_RECOVERY_REQUIRED") {
-        op.status = "recoveryRequired";
-        op.phase = "Recovery needs attention";
-      } else {
-        try {
-          if (op.containerId) {
-            await this.enableSaving(op);
-            await this.rollback(op);
-            await this.resume(op);
-          }
-          op.status = "failed";
-          op.phase = "Failed; previous state preserved";
-          await rm(join(this.workRoot, op.id), { recursive: true, force: true });
-        } catch (recoveryError) {
-          console.error("Minecraft recovery failed", recoveryError);
-          op.status = "recoveryRequired";
-          op.phase = "Recovery needs attention";
-          op.error += ` ${publicFailure(recoveryError)}`;
-        }
-      }
-      if (op.status === "recoveryRequired") await this.holdStopped(op);
-      this.releaseFailedPools(op);
-      op.finishedAt = this.now().toISOString();
-      try {
-        await this.save();
-      } catch (journalError) {
-        console.error("Cannot persist recovery state", journalError);
-        op.status = "recoveryRequired";
-      }
-    }
-  }
-  private async recoverOperation(op: OperationJournal): Promise<void> {
-    try {
-      if (op.containerId) {
-        await this.enableSaving(op);
-        await this.rollback(op);
-        await this.resume(op);
-      }
-      op.status = "failed";
-      op.phase = "Interrupted operation recovered";
-      op.error =
-        "The controller restarted during this operation. Previous server data was preserved.";
-      op.finishedAt = this.now().toISOString();
-      await this.save();
-      await rm(join(this.workRoot, op.id), { recursive: true, force: true });
-    } catch (error) {
-      console.error("Interrupted operation needs recovery", error);
-      op.status = "recoveryRequired";
-      op.phase = "Recovery needs attention";
-      op.error = publicFailure(error);
-      await this.holdStopped(op);
-      await this.save();
-    }
+        }),
+      ],
+    ]);
   }
   public async recover(): Promise<void> {
-    if (this.executingOperation || this.inFlightCommands > 0)
-      throw new BackupError("MINECRAFT_MAINTENANCE", "An operation is still running.");
-    const op = this.state.operations.find((o) => o.status === "recoveryRequired");
-    if (!op) return;
-    this.executingOperation = op;
-    this.activeTask = this.recoverOperation(op).finally(() => {
-      this.executingOperation = null;
-    });
-    await this.activeTask;
-    if (op.status === "recoveryRequired")
-      throw new BackupError("BACKUP_RECOVERY_REQUIRED", op.error ?? "Recovery needs attention.");
+    const operation = this.coordinator.active();
+    if (!operation) return;
+    await this.coordinator.recover(operation);
+    if (this.coordinator.active())
+      throw new BackupError(
+        "BACKUP_RECOVERY_REQUIRED",
+        operation.error ?? "Recovery needs attention.",
+      );
   }
 }

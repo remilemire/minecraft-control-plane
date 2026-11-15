@@ -147,7 +147,10 @@ export async function sha256File(path: string): Promise<string> {
 }
 
 export class ArchiveStorage {
-  public constructor(public readonly root: string) {}
+  public constructor(
+    public readonly root: string,
+    private readonly observe?: (event: string) => Promise<void>,
+  ) {}
   public directory(id: string): string {
     return join(this.root, id);
   }
@@ -239,6 +242,7 @@ export class ArchiveStorage {
           item.sha256 = hash.digest("hex");
         }
         entries.push(entrySchema.parse(item));
+        await this.observe?.(`archive-entry:${item.path}`);
       }
       pack.finalize();
       await output;
@@ -359,6 +363,7 @@ export class ArchiveStorage {
             }
           }
         }
+        if (destination) await this.observe?.(`staged-entry:${name}`);
       }
       await input;
       if (seen.size !== expected.size)

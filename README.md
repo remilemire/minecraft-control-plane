@@ -398,20 +398,35 @@ copy the backup directory to separate storage for protection against disk loss.
 Set `MINECRAFT_DATA_ROOT` in the root `.env` to an absolute host directory, such as
 `/srv/minecraft-data`, to keep persistent Minecraft storage outside the source
 checkout. When unset, Compose and host development use the repository's `data`
-directory. Its layout is unchanged:
+directory. Keep all of these children together:
 
 ```text
 /srv/minecraft-data/
 ├── minecraft/        # Live worlds and server installation
 ├── backups/          # Verified archives and manifests
 ├── backup-state/     # Catalogue, schedules, and operation journal
-└── backup-recovery/  # Restore staging and rollback data
+├── backup-recovery/  # Restore staging and rollback data
+└── startup-gate/     # Per-boot requests and read-only startup permits
 ```
 
 Compose mounts the parent at `/server-data` in the controller and its `minecraft`
 child at `/data` in Minecraft. Host-run controller development uses the same
 configured host path. The container's environment always overrides that setting
 to `/server-data`.
+
+For production releases, set `MINECRAFT_RELEASE` in the root `.env` to the clean
+checkout's full git commit before building. Compose tags the controller and
+backend images with that commit and records the OCI revision label. Keep the
+previous images until the release has been verified.
+
+When first deploying the startup gate, capture the catalogue and schedules,
+pause schedules, stop Minecraft through the existing controller, and create a
+fresh verified backup. With no active operation, stop the backend/controller and
+recreate Minecraft **stopped** with the guarded entrypoint. Start the updated
+controller/backend, verify the old backup IDs/checksums, start Minecraft through
+the coordinator, then restore schedules after RCON and HTTPS checks pass. Only
+roll back images/entrypoint while Minecraft is stopped and the journal proves
+there is no unsafe or unfinished task.
 
 For an existing deployment, first take a verified backup, disable schedules, and
 stop Minecraft through the panel. Once no maintenance operation is active, stop
@@ -485,17 +500,41 @@ The controller persists state in `<data-root>/backup-state` and staging/rollback
 files in `<data-root>/backup-recovery`. Keep these directories outside the Minecraft
 snapshot. Live data and recovery staging must share a filesystem. Do not delete
 them while maintenance is active. One
-controller process must own a data root. Console commands and power controls are
+controller process must own a data root. A shared maintenance coordinator owns
+exclusive admission, durable task checkpoints, recovery, and cleanup. Restore is
+its first destructive task; future tasks must supply their own recovery handlers
+and a verified safety backup before changing active server data. Console commands and power controls are
 gated during maintenance, while logs remain readable and whitelist delivery waits
 without consuming retries.
 
-If the controller restarts during restoration, it rolls back the interrupted file
-replacement before accepting mutations. If the selected snapshot fails to start,
-it restores the prior data. A **Recovery needs attention** state holds the gate:
+Every Minecraft container start first runs a read-only wrapper, then waits for
+the controller to authorize that boot's fresh random challenge. Requests and
+permits live outside `/data`; Minecraft cannot write permits or access the
+journal or controller token. Persisted permission from an earlier boot cannot be
+reused. This covers Docker/Compose starts, daemon restarts, and host restarts.
+The controller starts with permission blocked and validates the journal before
+authorizing normal startup. During a task it permits only the recorded container
+to boot after live files are safe, and checks RCON readiness. If the controller
+is unavailable, a new game process waits indefinitely and logs why; an already
+running game continues.
+
+If the controller, Docker daemon, or host crashes during an uncommitted restore,
+the controller fences startup, stops any waiting or unexpectedly running game,
+and rolls back before accepting mutations. Recovery restores the previous
+running/stopped state when safe, and can itself be interrupted and repeated.
+After the success record is durable, recovery keeps the restored data and only
+finishes cleanup. A known Docker API outage waits for reconnection, then invokes
+recovery instead of replaying the destructive task. If the selected snapshot
+fails to start, recovery restores the prior data. A **Recovery needs attention** state holds the gate:
 keep Minecraft stopped, inspect the controller logs and remaining recovery files,
 then run `make backup-recover`. A graceful-stop timeout never forcibly kills the
 server to label a backup successful. Avoid external Docker/Compose changes while
 an operation is active; a changed container identity blocks recovery for inspection.
+Unknown task versions, corrupt or missing initialized state, and unresolved I/O
+failures also block startup. Never delete the journal or initialization marker to
+clear maintenance mode. The gate is single-host protection, not a replacement
+for off-host backups: disk destruction, missing journal/backup storage, malicious
+host-root changes, and unsaved gameplay ticks are outside this guarantee.
 
 Run the opt-in disposable Minecraft drill described in
 [the controller guide](apps/minecraft-controller/CLAUDE.md) before deployment. No

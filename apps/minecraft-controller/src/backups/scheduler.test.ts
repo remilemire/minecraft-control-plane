@@ -34,7 +34,7 @@ describe("durable scheduler", () => {
     });
     now = new Date("2026-09-10T20:00:00Z");
     await manager.tick();
-    expect((await finish(manager, manager.activeOperation()!.id)).status).toBe("failed");
+    expect((await finish(manager, manager.activeOperation()!.id)).status).toBe("recoveryRequired");
     expect((await manager.list()).backups.find((backup) => backup.id === previous)?.tiers).toEqual([
       "hourly",
     ]);

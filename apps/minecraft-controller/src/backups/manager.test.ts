@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { BackupManager } from "./manager.js";
 import { fixture, finish, takeBackup } from "./test-fixtures.js";
-import { atomicJson } from "./store.js";
+import { atomicJson, BackupStore, journalSchema } from "./store.js";
 import { BackupError } from "./errors.js";
 
 const roots: string[] = [];
@@ -277,5 +277,40 @@ describe("manual backups and recovery", () => {
     await recovered.initialize();
     expect(runtime.commands).toEqual(["save-on"]);
     expect(recovered.activeOperation()).toBeNull();
+  });
+  it("holds startup without touching live files when the recorded container changes", async () => {
+    const { options, runtime, root, data } = await setup();
+    const store = new BackupStore(join(root, "backup-state"));
+    const state = await store.load(options.timezone);
+    state.operations.push(
+      journalSchema.parse({
+        id: randomUUID(),
+        kind: "restore",
+        taskVersion: 1,
+        status: "running",
+        phase: "Replacing server data",
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        backupId: null,
+        safetyBackupId: null,
+        error: null,
+        containerId: "a-different-container",
+        wasRunning: true,
+        stoppedByOperation: true,
+        replacementStarted: true,
+      }),
+    );
+    await store.save(state);
+    const gate = {
+      block: vi.fn(async () => {}),
+      open: vi.fn(async () => {}),
+      boot: async <T>(_container: string, action: () => Promise<T>) => action(),
+    };
+    const recovered = new BackupManager({ ...options, startupGate: gate });
+    await recovered.initialize();
+    expect(recovered.activeOperation()?.status).toBe("recoveryRequired");
+    expect(gate.open).not.toHaveBeenCalled();
+    expect(runtime.calls).toEqual([]);
+    expect(await readFile(join(data, "world/level.dat"), "utf8")).toBe("original world data");
   });
 });

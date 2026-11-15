@@ -3,7 +3,8 @@
 The controller is the only Docker and RCON execution authority. Compose still
 creates the Minecraft container; lookup must use both project and service labels.
 All power operations, backup/restore work, and panel RCON commands go through
-`BackupManager`. Never add a route that bypasses that coordinator for mutations.
+`BackupManager` through `maintenance/MaintenanceCoordinator`. Never add a route
+that bypasses that coordinator for mutations.
 Logs and Docker status remain readable during maintenance.
 
 `backups/` separates archive IO, scheduling/retention, installation version checks,
@@ -30,6 +31,23 @@ moving files. A failed state write must not release the maintenance gate.
 Restore keeps the mount root itself in place and journals changes to its children.
 Do not delete rollback data before a successful operation record is durable.
 On restart, interrupted restore work rolls back before new mutations are accepted.
+Terminal results commit before cleanup; a committed restore must never roll back.
+Task definitions are versioned and register preparation, safety, application,
+verification, recovery, hold, and cleanup handlers. Recovery is task-specific.
+Keep catalogue changes, schedules, and admission in the same aggregate state write.
+Legacy journal entries use task version 0. Unknown versions hold startup.
+
+`startup-gate/` is another data-root sibling. The read-only Minecraft entrypoint
+wrapper sends its hostname and a fresh per-boot UUID; only the controller writes
+the read-only permit mount after checking the expected managed container.
+Production mounts host `/var/run` read-only at `/docker-host-run` and selects
+its Docker socket there, so socket recreation does not strand a surviving
+controller on an old inode. Docker Desktop dev keeps its direct socket mount.
+Only the already Docker-privileged controller receives either mount.
+Startup is blocked until initialization/recovery completes. Controlled task
+boots require a durable safe checkpoint and exact container ID. Never give
+Minecraft journal access or the controller token. Include this directory when
+relocating the data root. Missing initialized journals fail closed.
 
 Backup archives stream through tar/gzip with a file manifest and SHA-256 checks.
 No extraction into live data. Reject traversal, links, devices, duplicate paths,
@@ -49,3 +67,9 @@ tests actual Minecraft save/backup/restore/readiness, then removes only that
 container. Set `BACKUP_DRILL_DOCKER_SOCKET` when the local socket is not
 `/var/run/docker.sock`. It uses the cached `itzg/minecraft-server:latest` image and
 downloads Minecraft 1.21.1 into its temporary directory.
+
+For crash validation, use [test/crash-vm/README.md](test/crash-vm/README.md).
+It uses its own QEMU/HVF Debian VM and Docker daemon, never Docker Desktop or
+production for failure injection. Test-only observers block in memory at durable
+checkpoints or archive/file progress. They are injected by the separate test
+worker; production has no fault-control endpoint or environment switch.

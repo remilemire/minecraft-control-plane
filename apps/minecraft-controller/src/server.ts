@@ -7,6 +7,8 @@ import { DockerClient } from "./docker.js";
 import { createRoutes } from "./routes.js";
 import { BackupManager } from "./backups/manager.js";
 import { DockerBackupRuntime } from "./backups/runtime.js";
+import { StartupGate } from "./maintenance/startup-gate.js";
+import { join } from "node:path";
 
 const docker = new Dockerode({ socketPath: env.DOCKER_SOCKET });
 const dockerClient = new DockerClient({
@@ -15,6 +17,8 @@ const dockerClient = new DockerClient({
   serviceName: env.MINECRAFT_COMPOSE_SERVICE,
 });
 
+const startupGate = new StartupGate(join(env.MINECRAFT_DATA_ROOT, "startup-gate"), dockerClient);
+await startupGate.initialize();
 const backups = new BackupManager({
   dataRoot: env.MINECRAFT_DATA_ROOT,
   timezone: env.MINECRAFT_BACKUP_TIMEZONE,
@@ -25,6 +29,7 @@ const backups = new BackupManager({
     monthly: env.MINECRAFT_BACKUP_KEEP_MONTHLY,
   },
   runtime: new DockerBackupRuntime(dockerClient, docker),
+  startupGate,
 });
 await backups.initialize();
 backups.startScheduler();
@@ -48,7 +53,10 @@ function shutdown(): void {
   dockerClient.closeLogStreams();
 
   server.close(() => {
-    void backups.close().then(() => process.exit(0));
+    void backups
+      .close()
+      .then(() => startupGate.close())
+      .then(() => process.exit(0));
   });
   // close() only refuses new connections; drop idle keep-alives so it
   // actually settles.

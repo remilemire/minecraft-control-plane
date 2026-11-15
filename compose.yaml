@@ -33,12 +33,16 @@ services:
 
   minecraft:
     image: itzg/minecraft-server
+    entrypoint: ["/bin/sh", "/startup-gate.sh"]
 
     ports:
       - "25565:25565"
 
     volumes:
       - ${MINECRAFT_DATA_ROOT:-./data}/minecraft:/data
+      - ./docker/minecraft/startup-gate.sh:/startup-gate.sh:ro
+      - ${MINECRAFT_DATA_ROOT:-./data}/startup-gate/requests:/startup-requests
+      - ${MINECRAFT_DATA_ROOT:-./data}/startup-gate/permits:/startup-permits:ro
 
     # No env_file: this container must not see the rest of the root .env —
     # notably MINECRAFT_CONTROLLER_TOKEN, which guards the controller against
@@ -85,9 +89,9 @@ services:
     networks:
       - minecraft-controller
 
-    # The docker socket is the service's whole purpose — not a dev-only mount.
+    # Docker access is mounted by the environment overlay: Desktop's socket
+    # in dev; its replaceable runtime directory read-only on production Linux.
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       # Keep persistent data outside the checkout by setting an absolute
       # MINECRAFT_DATA_ROOT in .env. One parent mount preserves recovery renames.
       - ${MINECRAFT_DATA_ROOT:-./data}:/server-data

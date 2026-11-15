@@ -13,15 +13,26 @@ services:
     restart: unless-stopped
 
   minecraft-controller:
-    restart: unless-stopped
-    build:
-      target: prod
-
-  backend:
+    image: ${MINECRAFT_COMPOSE_PROJECT}-minecraft-controller:${MINECRAFT_RELEASE:-latest}
+    environment:
+      DOCKER_SOCKET: /docker-host-run/docker.sock
+    # Mount the parent so a recreated Unix socket is visible after a daemon
+    # outage. Only this already Docker-privileged service sees host runtime IPC.
+    volumes:
+      - /var/run:/docker-host-run:ro
     restart: unless-stopped
     build:
       target: prod
       args:
+        VCS_REF: ${MINECRAFT_RELEASE:-unknown}
+
+  backend:
+    image: ${MINECRAFT_COMPOSE_PROJECT}-backend:${MINECRAFT_RELEASE:-latest}
+    restart: unless-stopped
+    build:
+      target: prod
+      args:
+        VCS_REF: ${MINECRAFT_RELEASE:-unknown}
         # Baked into the SPA bundle at build time (public, not a secret).
         VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
 

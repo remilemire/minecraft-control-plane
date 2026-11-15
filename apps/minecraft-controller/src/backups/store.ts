@@ -4,9 +4,10 @@ import {
   maintenanceOperationSchema,
   backupTierSchema,
 } from "@minecraft-control-plane/shared/minecraft";
-import { mkdir, open, readFile, rename } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { atomicJson } from "@/maintenance/atomic-files.js";
+export { atomicJson, atomicText, syncDirectory } from "@/maintenance/atomic-files.js";
 import { z } from "zod";
 import { DISABLED_SCHEDULES } from "./schedules.js";
 import { isMissing } from "./errors.js";
@@ -17,6 +18,10 @@ export const restartPolicySchema = z.object({
 });
 export type RestartPolicy = z.infer<typeof restartPolicySchema>;
 export const journalSchema = maintenanceOperationSchema.extend({
+  taskVersion: z.number().int().nonnegative().default(0),
+  checkpoint: z.string().nullable().default(null),
+  recoverOnReconnect: z.boolean().default(false),
+  cleanupComplete: z.boolean().default(false),
   origin: z.enum(["manual", "scheduled"]).default("manual"),
   tiers: z.array(backupTierSchema).default([]),
   containerId: z.string().nullable().default(null),
@@ -36,44 +41,36 @@ const scheduleTimesSchema = z.object({
   weekly: z.iso.datetime().nullable(),
   monthly: z.iso.datetime().nullable(),
 });
-const stateSchema = z.object({
-  schemaVersion: z.literal(1),
-  enabled: backupSchedulesInputSchema,
-  nextRuns: scheduleTimesSchema,
-  timezone: z.string(),
-  migrated: z.boolean(),
-  backups: z.array(backupRecordSchema),
-  operations: z.array(journalSchema),
-  legacySources: z.array(z.string()),
-});
+const stateSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    enabled: backupSchedulesInputSchema,
+    nextRuns: scheduleTimesSchema,
+    timezone: z.string(),
+    migrated: z.boolean(),
+    backups: z.array(backupRecordSchema),
+    operations: z.array(journalSchema),
+    legacySources: z.array(z.string()),
+  })
+  .superRefine((state, context) => {
+    if (
+      state.operations.filter((op) => op.status === "running" || op.status === "recoveryRequired")
+        .length > 1
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Multiple active maintenance operations are unsafe.",
+      });
+    if (
+      new Set(state.operations.map((op) => op.id)).size !== state.operations.length ||
+      new Set(state.backups.map((backup) => backup.id)).size !== state.backups.length
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Duplicate journal or catalogue identifiers are unsafe.",
+      });
+  });
 export type BackupState = z.infer<typeof stateSchema>;
-
-export async function atomicJson(path: string, value: unknown): Promise<void> {
-  await atomicText(path, JSON.stringify(value));
-}
-
-export async function atomicText(path: string, value: string): Promise<void> {
-  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-  const temp = `${path}.${randomUUID()}.tmp`;
-  const file = await open(temp, "wx", 0o600);
-  try {
-    await file.writeFile(value);
-    await file.sync();
-  } finally {
-    await file.close();
-  }
-  await rename(temp, path);
-  await syncDirectory(dirname(path));
-}
-
-export async function syncDirectory(path: string): Promise<void> {
-  const directory = await open(path, "r");
-  try {
-    await directory.sync();
-  } finally {
-    await directory.close();
-  }
-}
 
 export class BackupStore {
   private writes: Promise<void> = Promise.resolve();
@@ -85,6 +82,29 @@ export class BackupStore {
       return stateSchema.parse(JSON.parse(await readFile(join(this.root, "state.json"), "utf8")));
     } catch (error) {
       if (!isMissing(error)) throw error; // Never reset damaged state around live recovery data.
+      const exists = async (path: string) => {
+        try {
+          await stat(path);
+          return true;
+        } catch (error) {
+          if (isMissing(error)) return false;
+          throw error;
+        }
+      };
+      const parent = dirname(this.root);
+      const remnants = async (name: string) => {
+        const path = join(parent, name);
+        return (await exists(path)) && (await readdir(path)).length > 0;
+      };
+      if (
+        (await exists(join(this.root, "initialized"))) ||
+        (await remnants("backup-recovery")) ||
+        (await remnants("backups")) ||
+        (await readdir(this.root)).length > 0
+      )
+        throw new Error(
+          "The maintenance journal is missing from an initialized installation. Startup remains blocked.",
+        );
       return {
         schemaVersion: 1,
         enabled: { ...DISABLED_SCHEDULES },
