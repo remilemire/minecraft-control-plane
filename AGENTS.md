@@ -167,6 +167,9 @@ Gotchas:
 Every signed-in user can create/delete backups, enable hourly/daily/weekly/monthly
 schedules, and restore compatible snapshots. Schedules default off. Retention caps
 and timezone are deployment env settings; manual and safety backups never expire.
+The controller composition root owns the shared coordinator; backup, restore, and
+power are separate typed tasks. Runtime adapters never import feature/workflow
+modules. One state store atomically commits catalogue, schedules, and journal.
 The controller owns persistent archives and the operation journal outside Minecraft
 `/data`. Backend RCON now goes through the controller's operation coordinator.
 Full restore requires verified matching versions and pinned startup selectors.
@@ -180,9 +183,11 @@ the journal and authorize its fresh boot challenge. Never bypass this gate or
 erase initialized state to clear maintenance. Live data and recovery staging must share a
 filesystem; stop Minecraft and the controller before moving their parent.
 
-Use `make backup-migrate` with Minecraft stopped for the one-time FTB migration;
-`make backup-recover` retries recovery after inspection. Never operate on live
-Minecraft files or run Compose lifecycle commands during backup/recovery work.
+`make backup-recover` retries recovery after inspection. FTB migration commands
+and ZIP archive reading are retired; historical journal recovery remains
+supported, and existing ZIP files are left untouched. Runtime files under `/data/`
+are gitignored in full. Never operate on live Minecraft files or run Compose
+lifecycle commands during backup/recovery work.
 
 ## Not built yet — don't assume it exists
 

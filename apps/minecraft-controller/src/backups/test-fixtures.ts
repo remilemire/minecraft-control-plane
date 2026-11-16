@@ -4,13 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { vi } from "vitest";
-import { BackupManager, type BackupManagerOptions } from "./manager.js";
-import type { BackupRuntime, RuntimeState } from "./runtime.js";
-import type { RestartPolicy } from "./store.js";
+import { createController, type ControllerOptions } from "@/composition.js";
+import type { MaintenanceService } from "@/maintenance/service.js";
+import type { BackupService } from "./service.js";
+import type { MinecraftRuntime, RuntimeState } from "@/runtime/contracts.js";
+import type { RestartPolicy } from "@/runtime/contracts.js";
 
-export class FakeRuntime implements BackupRuntime {
+export class FakeRuntime implements MinecraftRuntime {
   public state: RuntimeState = {
     containerId: "test-container",
+    hostname: "test-host",
     running: true,
     env: { TYPE: "FTBA", LEVEL: "world", FTB_MODPACK_ID: "130", FTB_MODPACK_VERSION_ID: "100440" },
     restartPolicy: { Name: "unless-stopped" },
@@ -21,6 +24,15 @@ export class FakeRuntime implements BackupRuntime {
   public readyFailures = 0;
   public commandFailure: string | null = null;
   public onReady: (() => Promise<void>) | undefined;
+  public async getStatus() {
+    return this.state.running ? ("RUNNING" as const) : ("STOPPED" as const);
+  }
+  public async openLogStream() {
+    return (async function* () {
+      yield { stream: "stdout" as const, line: "test" };
+    })();
+  }
+  public closeLogStreams(): void {}
   public async inspect() {
     return structuredClone(this.state);
   }
@@ -53,7 +65,7 @@ export class FakeRuntime implements BackupRuntime {
   }
 }
 
-export async function fixture(overrides: Partial<BackupManagerOptions> = {}) {
+export async function fixture(overrides: Partial<ControllerOptions> = {}) {
   const root = await mkdtemp(join(tmpdir(), "minecraft-backup-test-"));
   const data = join(root, "minecraft");
   await mkdir(join(data, "world"), { recursive: true });
@@ -75,7 +87,7 @@ export async function fixture(overrides: Partial<BackupManagerOptions> = {}) {
     }),
   );
   const runtime = new FakeRuntime();
-  const options: BackupManagerOptions = {
+  const options: ControllerOptions = {
     dataRoot: root,
     runtime,
     timezone: "America/Edmonton",
@@ -83,22 +95,22 @@ export async function fixture(overrides: Partial<BackupManagerOptions> = {}) {
     countdown: async () => {},
     ...overrides,
   };
-  const manager = new BackupManager(options);
-  await manager.initialize();
-  return { root, data, runtime, manager, options };
+  const controller = createController(options);
+  await controller.initialize();
+  return { root, data, runtime, controller, options };
 }
 
-export async function finish(manager: BackupManager, id: string) {
+export async function finish(maintenance: MaintenanceService, id: string) {
   await vi.waitFor(
     () => {
-      if (manager.operation(id).status === "running") throw new Error("still running");
+      if (maintenance.operation(id).status === "running") throw new Error("still running");
     },
     { timeout: 10_000, interval: 10 },
   );
-  return manager.operation(id);
+  return maintenance.operation(id);
 }
-export async function takeBackup(manager: BackupManager) {
-  const operation = await finish(manager, await manager.create(randomUUID()));
+export async function takeBackup(backups: BackupService, maintenance: MaintenanceService) {
+  const operation = await finish(maintenance, await backups.create(randomUUID()));
   if (operation.status !== "succeeded" || !operation.backupId)
     throw new Error(JSON.stringify(operation));
   return operation.backupId;

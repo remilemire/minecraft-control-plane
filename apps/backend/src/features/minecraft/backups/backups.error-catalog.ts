@@ -16,7 +16,8 @@ export const minecraftBackupErrorCatalog = {
     message: "There is not enough disk space for the backup and recovery files.",
   },
   BACKUP_SETUP_REQUIRED: {
-    message: "Stop Minecraft and run make backup-migrate before using panel backups.",
+    message:
+      "Legacy FTB backup setup is incomplete. The server administrator must inspect its configuration before using panel backups.",
   },
   BACKUP_REQUEST_CONFLICT: { message: "This request was already used for a different operation." },
   BACKUP_RECOVERY_REQUIRED: {

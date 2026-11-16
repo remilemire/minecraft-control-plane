@@ -13,35 +13,16 @@ import {
   rm,
   statfs,
 } from "node:fs/promises";
-import { dirname, join, posix } from "node:path";
+import { dirname, join } from "node:path";
 import { Transform, Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { createGunzip, createGzip, crc32 } from "node:zlib";
+import { createGunzip, createGzip } from "node:zlib";
 import tar from "tar-stream";
 import { z } from "zod";
-import { BackupError } from "./errors.js";
-import { atomicJson, syncDirectory } from "./store.js";
-import { openZip, zipEntries, zipStream } from "./zip.js";
+import { ControllerError } from "@/errors.js";
+import { atomicJson, syncDirectory } from "@/state/atomic-files.js";
+import { excluded, safeArchivePath } from "@/runtime/data-policy.js";
 
-const EXCLUDED_ROOTS = new Set([
-  "logs",
-  "cache",
-  ".cache",
-  ".mixin.out",
-  "ftbbackups3",
-  "backups",
-  "backup-state",
-  "backup-recovery",
-]);
-export const PRESERVED_ROOTS = new Set([
-  "eula.txt",
-  "whitelist.json",
-  "ops.json",
-  "banned-ips.json",
-  "banned-players.json",
-  ".rcon-cli.env",
-  ".rcon-cli.yaml",
-]);
 const entrySchema = z.object({
   path: z.string(),
   type: z.enum(["file", "directory"]),
@@ -62,38 +43,13 @@ const manifestSchema = z.object({
 });
 export type ArchiveManifest = z.infer<typeof manifestSchema>;
 
-export function excluded(path: string): boolean {
-  return (
-    EXCLUDED_ROOTS.has(path.split("/")[0] ?? "") ||
-    /(?:^|\/)(?:session\.lock|.*\.(?:tmp|log|neoforge-tmp))$/.test(path)
-  );
-}
-export function preserved(name: string): boolean {
-  return PRESERVED_ROOTS.has(name) || excluded(name);
-}
-
-export function safeArchivePath(name: string): string {
-  const normalized = name.replace(/\/$/, "");
-  if (
-    !normalized ||
-    name.includes("\\") ||
-    [...name].some((c) => c.charCodeAt(0) < 32) ||
-    name.startsWith("/") ||
-    /^[a-z]:/i.test(name) ||
-    normalized.split("/").some((p) => p === ".." || p === "." || p === "")
-  ) {
-    throw new BackupError("BACKUP_INVALID", "The archive contains an unsafe file path.");
-  }
-  return normalized;
-}
-
 export async function availableSpace(path: string): Promise<number> {
   const fs = await statfs(path);
   return fs.bavail * fs.bsize;
 }
 export async function requireSpace(path: string, bytes: number): Promise<void> {
   if ((await availableSpace(path)) < bytes)
-    throw new BackupError(
+    throw new ControllerError(
       "BACKUP_STORAGE_FULL",
       "There is not enough space for the archive, staging files, and safety backup.",
     );
@@ -115,7 +71,7 @@ async function inventory(root: string): Promise<SourceEntry[]> {
       safeArchivePath(path);
       const stat = await lstat(join(root, path));
       if (!stat.isDirectory() && !stat.isFile())
-        throw new BackupError(
+        throw new ControllerError(
           "BACKUP_INVALID",
           "Backups support regular files and directories only; remove unsupported links or special files first.",
         );
@@ -162,7 +118,7 @@ export class ArchiveStorage {
       manifest.entries.reduce((sum, e) => sum + e.size, 0) !== manifest.backup.expandedBytes ||
       manifest.entries.filter((e) => e.type === "file").length !== manifest.backup.fileCount
     )
-      throw new BackupError(
+      throw new ControllerError(
         "BACKUP_INVALID",
         "The archive size or file count does not match its manifest.",
       );
@@ -183,7 +139,7 @@ export class ArchiveStorage {
       metadata.origin !== "safety" &&
       !sourceEntries.some((e) => e.path === `${metadata.worldName}/level.dat` && e.size > 0)
     )
-      throw new BackupError(
+      throw new ControllerError(
         "BACKUP_INVALID",
         "The configured world's level.dat is missing or empty.",
       );
@@ -204,7 +160,7 @@ export class ArchiveStorage {
     try {
       for (const item of sourceEntries) {
         if (fingerprint(await lstat(join(source, item.path))) !== item.fingerprint)
-          throw new BackupError(
+          throw new ControllerError(
             "BACKUP_INVALID",
             "Files changed while the backup was being read. Retry when the server is empty.",
           );
@@ -231,7 +187,7 @@ export class ArchiveStorage {
           );
           try {
             if (fingerprint(await sourceFile.stat()) !== item.fingerprint)
-              throw new BackupError(
+              throw new ControllerError(
                 "BACKUP_INVALID",
                 "A source file changed before it could be opened.",
               );
@@ -254,7 +210,7 @@ export class ArchiveStorage {
             e.path !== sourceEntries[i]?.path || e.fingerprint !== sourceEntries[i]?.fingerprint,
         )
       )
-        throw new BackupError(
+        throw new ControllerError(
           "BACKUP_INVALID",
           "Files changed during the backup. No successful backup was created; retry when the server is empty.",
         );
@@ -288,16 +244,23 @@ export class ArchiveStorage {
 
   public async verify(id: string, destination?: string): Promise<ArchiveManifest> {
     const manifest = await this.manifest(id);
+    if (manifest.backup.format !== "tar.gz")
+      throw new ControllerError(
+        "BACKUP_INCOMPATIBLE",
+        "Legacy ZIP archives are no longer supported.",
+      );
     if (manifest.backup.id !== id)
-      throw new BackupError("BACKUP_INVALID", "The archive identity does not match its record.");
+      throw new ControllerError(
+        "BACKUP_INVALID",
+        "The archive identity does not match its record.",
+      );
     const path = join(this.directory(id), `archive.${manifest.backup.format}`);
     if ((await sha256File(path)) !== manifest.backup.sha256)
-      throw new BackupError(
+      throw new ControllerError(
         "BACKUP_INVALID",
         "The backup checksum does not match. The archive may be damaged.",
       );
-    if (manifest.backup.format === "tar.gz") await this.readTar(path, manifest, destination);
-    else await readLegacyZip(path); // Legacy restoration is disabled until version metadata is verifiable.
+    await this.readTar(path, manifest, destination);
     return manifest;
   }
 
@@ -308,7 +271,7 @@ export class ArchiveStorage {
   ): Promise<void> {
     const expected = new Map(manifest.entries.map((e) => [e.path, e]));
     if (expected.size !== manifest.entries.length)
-      throw new BackupError("BACKUP_INVALID", "Duplicate archive paths.");
+      throw new ControllerError("BACKUP_INVALID", "Duplicate archive paths.");
     const extract = tar.extract();
     const input = pipeline(createReadStream(path), createGunzip(), extract);
     void input.catch(() => undefined);
@@ -324,7 +287,7 @@ export class ArchiveStorage {
           item.size !== entry.header.size ||
           excluded(name)
         )
-          throw new BackupError(
+          throw new ControllerError(
             "BACKUP_INVALID",
             "The archive contents do not match the verified file manifest.",
           );
@@ -351,7 +314,10 @@ export class ArchiveStorage {
               });
           await pipeline(entry, hasher, sink);
           if (hash.digest("hex") !== item.sha256)
-            throw new BackupError("BACKUP_INVALID", "An archived file failed its checksum check.");
+            throw new ControllerError(
+              "BACKUP_INVALID",
+              "An archived file failed its checksum check.",
+            );
           if (target) {
             await chown(target, item.uid, item.gid);
             await chmod(target, item.mode & 0o777);
@@ -367,7 +333,7 @@ export class ArchiveStorage {
       }
       await input;
       if (seen.size !== expected.size)
-        throw new BackupError("BACKUP_INVALID", "The archive is missing files.");
+        throw new ControllerError("BACKUP_INVALID", "The archive is missing files.");
       if (destination) {
         for (const item of [...manifest.entries].reverse())
           if (item.type === "directory") {
@@ -382,72 +348,5 @@ export class ArchiveStorage {
       await input.catch(() => undefined);
       throw error;
     }
-  }
-}
-
-export async function readLegacyZip(
-  path: string,
-): Promise<{ entries: ArchiveEntry[]; worldName: string }> {
-  const zip = await openZip(path);
-  const entries: ArchiveEntry[] = [];
-  const seen = new Set<string>();
-  let archiveError: Error | undefined;
-  zip.on("error", (error: Error) => {
-    archiveError = error;
-  });
-  try {
-    for await (const entry of zipEntries(zip)) {
-      const name = safeArchivePath(entry.fileName);
-      const kind = (entry.externalFileAttributes >>> 16) & 0o170000;
-      if (
-        seen.has(name) ||
-        (kind !== 0 && kind !== 0o100000 && kind !== 0o040000) ||
-        (entry.generalPurposeBitFlag & 1) !== 0
-      )
-        throw new BackupError("BACKUP_INVALID", "Unsupported or duplicate ZIP entry.");
-      seen.add(name);
-      const directory = entry.fileName.endsWith("/");
-      let hash: string | null = null;
-      if (!directory) {
-        const content = await zipStream(zip, entry);
-        const digest = createHash("sha256");
-        let crc = 0;
-        for await (const chunk of content) {
-          const data = Buffer.from(chunk as Uint8Array);
-          digest.update(data);
-          crc = crc32(data, crc);
-        }
-        if (crc !== entry.crc32)
-          throw new BackupError("BACKUP_INVALID", "A legacy ZIP entry failed its integrity check.");
-        hash = digest.digest("hex");
-      }
-      entries.push({
-        path: name,
-        type: directory ? "directory" : "file",
-        size: entry.uncompressedSize,
-        mode: directory ? 0o755 : 0o644,
-        uid: 0,
-        gid: 0,
-        sha256: hash,
-      });
-    }
-    if (archiveError) throw archiveError;
-    const worlds = entries.filter(
-      (e) => e.path.split("/").length === 2 && posix.basename(e.path) === "level.dat" && e.size > 0,
-    );
-    if (worlds.length !== 1 || !worlds[0])
-      throw new BackupError("BACKUP_INVALID", "The legacy archive must contain exactly one world.");
-    const worldName = worlds[0].path.split("/")[0];
-    if (
-      !worldName ||
-      entries.some((e) => e.path !== worldName && !e.path.startsWith(`${worldName}/`))
-    )
-      throw new BackupError(
-        "BACKUP_INVALID",
-        "The legacy archive contains files outside its world.",
-      );
-    return { entries, worldName };
-  } finally {
-    zip.close();
   }
 }

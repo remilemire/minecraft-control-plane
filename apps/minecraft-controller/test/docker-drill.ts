@@ -7,9 +7,9 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import assert from "node:assert/strict";
-import { DockerClient } from "@/docker.js";
-import { DockerBackupRuntime } from "@/backups/runtime.js";
-import { BackupManager } from "@/backups/manager.js";
+import { DockerClient } from "@/runtime/docker-client.js";
+import { DockerMinecraftRuntime } from "@/runtime/minecraft-runtime.js";
+import { createController, type ControllerApplication } from "@/composition.js";
 
 const socketPath = process.env.BACKUP_DRILL_DOCKER_SOCKET ?? "/var/run/docker.sock";
 const docker = new Dockerode({ socketPath });
@@ -18,7 +18,7 @@ const root = await mkdtemp(join(tmpdir(), "minecraft-docker-drill-"));
 const data = join(root, "minecraft");
 await mkdir(data);
 let container: Dockerode.Container | undefined;
-let manager: BackupManager | undefined;
+let controller: ControllerApplication | undefined;
 try {
   container = await docker.createContainer({
     name: project,
@@ -49,7 +49,7 @@ try {
     },
   });
   const client = new DockerClient({ docker, projectName: project, serviceName: "minecraft" });
-  const runtime = new DockerBackupRuntime(client, docker);
+  const runtime = new DockerMinecraftRuntime(client, docker);
   await container.start();
   console.log("Disposable Minecraft container started; waiting for readiness.");
   await runtime.waitReady();
@@ -59,18 +59,18 @@ try {
   assert.match(await runtime.execute("execute if block 0 100 0 minecraft:stone"), /Test passed/);
   await mkdir(join(data, "mods"), { recursive: true });
   await writeFile(join(data, "mods/backup-drill.txt"), "original server file");
-  manager = new BackupManager({
+  controller = createController({
     dataRoot: root,
     runtime,
     timezone: "America/Edmonton",
     retention: { hourly: 6, daily: 5, weekly: 3, monthly: 2 },
   });
-  await manager.initialize();
+  await controller.initialize();
   async function finish(id: string) {
     const deadline = Date.now() + 15 * 60_000;
     let phase = "";
     while (Date.now() < deadline) {
-      const op = manager!.operation(id);
+      const op = controller!.maintenance.operation(id);
       if (op.phase !== phase) {
         console.log(op.phase);
         phase = op.phase;
@@ -83,7 +83,7 @@ try {
     }
     throw new Error("The disposable drill exceeded its operation deadline.");
   }
-  const backup = await finish(await manager.create(randomUUID()));
+  const backup = await finish(await controller.backups.create(randomUUID()));
   assert.ok(backup.backupId);
   await runtime.execute("setblock 0 100 0 minecraft:gold_block");
   assert.match(
@@ -91,9 +91,9 @@ try {
     /Test passed/,
   );
   await writeFile(join(data, "mods/backup-drill.txt"), "changed server file");
-  const preview = await manager.preview(backup.backupId);
+  const preview = await controller.backups.preview(backup.backupId);
   assert.ok(preview.canRestore, preview.reasons.join(" "));
-  const restored = await finish(await manager.restore(backup.backupId, randomUUID()));
+  const restored = await finish(await controller.backups.restore(backup.backupId, randomUUID()));
   assert.ok(restored.safetyBackupId);
   assert.equal(await readFile(join(data, "mods/backup-drill.txt"), "utf8"), "original server file");
   assert.match(await runtime.execute("execute if block 0 100 0 minecraft:stone"), /Test passed/);
@@ -101,7 +101,7 @@ try {
     "PASS: real Minecraft world and server files restored; safety backup retained; RCON ready.",
   );
 } finally {
-  if (manager) await manager.close();
+  if (controller) await controller.close();
   if (container) await container.remove({ force: true });
   await rm(root, { recursive: true, force: true });
   console.log("Disposable container and test data removed.");

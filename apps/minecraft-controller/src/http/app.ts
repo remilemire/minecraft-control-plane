@@ -1,9 +1,7 @@
-// apps/minecraft-controller/src/app.ts
-
 import express, { type ErrorRequestHandler, type Express, type Router } from "express";
-import { ContainerNotFoundError } from "./docker.js";
-import { createRequireBearerToken } from "./routes.js";
-import { BackupError } from "./backups/errors.js";
+import { ContainerNotFoundError } from "@/runtime/docker-client.js";
+import { createRequireBearerToken } from "./auth.js";
+import { ControllerError } from "@/errors.js";
 import { minecraftBackupErrorMeta } from "@minecraft-control-plane/shared/minecraft";
 import { ZodError } from "zod";
 
@@ -13,7 +11,7 @@ import { ZodError } from "zod";
 // exactly four parameters, so `_next` must stay even though it is unused.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- see above
 const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
-  if (error instanceof BackupError) {
+  if (error instanceof ControllerError) {
     const kind = minecraftBackupErrorMeta[error.code].kind;
     const status = { CONFLICT: 409, NOT_FOUND: 404, VALIDATION: 400, SERVICE_UNAVAILABLE: 503 }[
       kind
@@ -38,7 +36,7 @@ export interface CreateAppOptions {
 }
 
 // Pure HTTP assembly: the auth gate, the wired routes, then the terminal error
-// handler. Wiring lives in server.ts. Parse bounded JSON only after authentication.
+// handler. Parse bounded JSON only after authentication.
 // The explicit return type keeps the declaration emit portable (TS2883 under a
 // clean build, where the inferred type must reference express internals).
 export function createApp({ router, token }: CreateAppOptions): Express {

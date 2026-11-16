@@ -1,8 +1,9 @@
+import { journalSchema } from "@/tasks/operations.js";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { BackupStore, journalSchema } from "./store.js";
+import { ControllerStore } from "./store.js";
 const roots: string[] = [];
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -10,7 +11,7 @@ afterEach(async () => {
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "maintenance-store-"));
   roots.push(root);
-  return { root, store: new BackupStore(join(root, "backup-state")) };
+  return { root, store: new ControllerStore(join(root, "backup-state")) };
 }
 it("initializes an empty store only for a new installation", async () => {
   const { store } = await fixture();
@@ -49,4 +50,35 @@ it("loads legacy operation metadata without changing public identifiers", () => 
   expect(operation.taskVersion).toBe(0);
   expect(operation.checkpoint).toBeNull();
   expect(operation.recoverOnReconnect).toBe(false);
+});
+it("rejects restore checkpoints on power tasks while accepting old default metadata", () => {
+  const original = {
+    id: "09bf8563-2114-4af0-a4c7-215e30a7d2b9",
+    kind: "start",
+    status: "running",
+    phase: "Preparing",
+    startedAt: "2026-11-15T00:00:00Z",
+    finishedAt: null,
+    backupId: null,
+    safetyBackupId: null,
+    error: null,
+  };
+  expect(journalSchema.safeParse({ ...original, replacementStarted: true }).success).toBe(false);
+  expect(
+    journalSchema.safeParse({
+      ...original,
+      replacementStarted: false,
+      replacementComplete: false,
+      originalNames: [],
+      stagedNames: [],
+    }).success,
+  ).toBe(true);
+  expect(
+    journalSchema.parse({
+      ...original,
+      kind: "restore",
+      replacementStarted: true,
+      originalNames: ["world"],
+    }).kind,
+  ).toBe("restore");
 });

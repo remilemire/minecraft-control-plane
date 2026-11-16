@@ -1,5 +1,3 @@
-// apps/minecraft-controller/src/app.test.ts
-
 import type {
   MinecraftConsoleLogEvent,
   MinecraftServerStatus,
@@ -7,17 +5,23 @@ import type {
 import supertest from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
-import { ContainerNotFoundError, type MinecraftDockerApi } from "./docker.js";
+import { ContainerNotFoundError } from "@/runtime/docker-client.js";
+import type { MinecraftReader } from "@/runtime/contracts.js";
+import type { ServerService } from "@/server/service.js";
+import type { BackupService } from "@/backups/service.js";
+import type { BackupScheduler } from "@/backups/scheduler.js";
+import type { MaintenanceService } from "@/maintenance/service.js";
 import { createRoutes } from "./routes.js";
-import type { BackupManager } from "./backups/manager.js";
 
 const TOKEN = "test-token";
 const AUTHORIZATION = `Bearer ${TOKEN}`;
 
-class FakeMinecraftDocker implements MinecraftDockerApi {
+class FakeMinecraftDocker implements MinecraftReader {
   public readonly calls: ("start" | "stop" | "restart")[] = [];
   public status: MinecraftServerStatus = "RUNNING";
   public logEvents: MinecraftConsoleLogEvent[] = [];
+
+  public closeLogStreams(): void {}
 
   public async start(): Promise<void> {
     this.calls.push("start");
@@ -51,12 +55,22 @@ class FakeMinecraftDocker implements MinecraftDockerApi {
   }
 }
 
-function createTestApp(docker: MinecraftDockerApi = new FakeMinecraftDocker()) {
-  const backups = {
+function createTestApp(docker: FakeMinecraftDocker = new FakeMinecraftDocker()) {
+  const server = {
     power: (kind: "start" | "stop" | "restart") => docker[kind](),
-    activeOperation: () => null,
-  } as unknown as BackupManager;
-  return createApp({ router: createRoutes({ docker, backups }), token: TOKEN });
+    getStatus: async () => ({ status: await docker.getStatus(), maintenance: null }),
+    openLogStream: (signal: AbortSignal) => docker.openLogStream(signal),
+  } as ServerService;
+  const maintenance = { activeOperation: () => null } as MaintenanceService;
+  return createApp({
+    router: createRoutes({
+      server,
+      maintenance,
+      backups: {} as BackupService,
+      scheduler: {} as BackupScheduler,
+    }),
+    token: TOKEN,
+  });
 }
 
 describe("createApp", () => {

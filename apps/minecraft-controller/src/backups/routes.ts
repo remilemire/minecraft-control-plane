@@ -7,11 +7,11 @@ import {
   backupRestorePreviewSchema,
   backupSchedulesInputSchema,
   backupSchedulesResponseSchema,
-  maintenanceOperationSchema,
 } from "@minecraft-control-plane/shared/minecraft";
-import type { BackupManager } from "./manager.js";
+import type { BackupService } from "./service.js";
+import type { BackupScheduler } from "./scheduler.js";
 
-export function createBackupRoutes(backups: BackupManager): Router {
+export function createBackupRoutes(backups: BackupService, scheduler: BackupScheduler): Router {
   const router = Router();
   router.get("/", async (_req, res) => {
     res.json(backupListResponseSchema.parse(await backups.list()));
@@ -23,29 +23,14 @@ export function createBackupRoutes(backups: BackupManager): Router {
       .json(backupOperationAcceptedSchema.parse({ operationId: await backups.create(requestId) }));
   });
   router.get("/schedules", (_req, res) => {
-    res.json(backupSchedulesResponseSchema.parse(backups.schedules()));
+    res.json(backupSchedulesResponseSchema.parse(scheduler.schedules()));
   });
   router.put("/schedules", async (req, res) => {
     res.json(
       backupSchedulesResponseSchema.parse(
-        await backups.updateSchedules(backupSchedulesInputSchema.parse(req.body)),
+        await scheduler.updateSchedules(backupSchedulesInputSchema.parse(req.body)),
       ),
     );
-  });
-  router.get("/operations/:id", (req, res) => {
-    res.json(
-      maintenanceOperationSchema.parse(backups.operation(backupIdSchema.parse(req.params.id))),
-    );
-  });
-  router.post("/migrate", async (req, res) => {
-    const { requestId } = backupRequestSchema.parse(req.body);
-    res
-      .status(202)
-      .json(backupOperationAcceptedSchema.parse({ operationId: await backups.migrate(requestId) }));
-  });
-  router.post("/recover", async (_req, res) => {
-    await backups.recover();
-    res.status(204).end();
   });
   router.get("/:id/restore-preview", async (req, res) => {
     res.json(

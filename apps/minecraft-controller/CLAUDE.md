@@ -1,16 +1,44 @@
 # Minecraft controller
 
-The controller is the only Docker and RCON execution authority. Compose still
-creates the Minecraft container; lookup must use both project and service labels.
-All power operations, backup/restore work, and panel RCON commands go through
-`BackupManager` through `maintenance/MaintenanceCoordinator`. Never add a route
-that bypasses that coordinator for mutations.
-Logs and Docker status remain readable during maintenance.
+The controller is the only Docker and RCON execution authority. Compose creates
+Minecraft; container lookup must use both project and service labels.
 
-`backups/` separates archive IO, scheduling/retention, installation version checks,
-the persistent journal, migration, and orchestration. The controller uses one
-process against one data root. CLI migration and recovery call the running HTTP
-coordinator rather than starting a second scheduler or writing the journal directly.
+`composition.ts` constructs the shared state store, runtime, coordinator, services,
+and typed task registry. It owns initialization/shutdown ordering, not workflows.
+
+- `runtime/`: Docker transport, RCON execution, readiness, and shared server-data
+  path policy. It cannot import backup, task, maintenance, or state modules.
+- `maintenance/`: task-neutral admission/checkpoints/recovery, startup gate,
+  operation status, and the independent Docker-reconnect recovery loop.
+- `tasks/`: separate power, backup, and restore handlers; typed task journal
+  variants; request creation; shared server checkpoints; restore file replacement.
+  Each task defines its own recovery. Destructive restore requires verified safety.
+- `backups/`: native archive IO, catalogue/compatibility, capture service, and
+  scheduling/retention. It owns neither the coordinator nor power/RCON commands.
+- `state/`: one atomic aggregate containing catalogue, schedules, and journal.
+  Keep admission and schedule consumption in that same transaction. Do not split
+  these into independently committed files. Existing schema-version-1 files and
+  supported task versions remain readable; task-specific fields are discriminated
+  by operation kind. Inconsistent restore checkpoints fail closed.
+- `server/`: admitted power/console service and read-only status/log routes.
+- `http/`: authentication, error mapping, and router composition.
+
+External mutations go through the shared maintenance service; task handlers use
+raw runtime adapters only while holding the coordinator's reservation. Reads and
+logs remain available during active maintenance. ESLint enforces dependency
+direction for runtime adapters, feature routes, and the generic maintenance engine.
+
+Native snapshots use tar/gzip. FTB ZIP import/reading, migration commands, and
+legacy setup gating are retired. Existing ZIP bytes and historical metadata are
+left intact but omitted from the usable backup catalogue. The small historical
+migration journal handler only recovers/cleans up interrupted old operations; it
+never imports. Restore settings retain current credentials/access controls and
+prevent older native snapshots from re-enabling the modpack backup scheduler.
+
+Canonical operation/recovery routes live under `/maintenance`; existing
+`/backups/operations/:id` and `/backups/recover` URLs remain compatibility aliases.
+`make backup-recover` calls the running HTTP service via `maintenance/cli.ts`;
+never start a second controller/scheduler against the same root.
 
 `MINECRAFT_DATA_ROOT` in the root `.env` selects an absolute host directory for
 all persistent Minecraft data. Compose defaults to `./data` when it is unset,
@@ -56,9 +84,10 @@ Safety backups may preserve an already-damaged world, including a missing
 `level.dat`; normal backups require a populated world.
 
 Only scheduled archives enter retention. Each archive can belong to several
-pools, and expires only when every active membership has expired. Manual, safety,
-and imported legacy backups require explicit deletion. Schedule consumption is
-persisted with operation creation, so missed runs collapse without a replay storm.
+pools, and expires only when every active membership has expired. Manual and
+safety backups require explicit deletion; retired ZIP files are never deleted
+automatically. Schedule consumption is persisted with operation creation, so
+missed runs collapse without a replay storm.
 
 Use `make test pkg=minecraft-controller` for unit/HTTP tests. The opt-in
 `pnpm --filter @minecraft-control-plane/minecraft-controller test:drill` creates

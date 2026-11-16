@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { Readable } from "node:stream";
 import { z } from "zod";
 
-export function openZip(path: string): Promise<ZipFile> {
+function openZip(path: string): Promise<ZipFile> {
   return new Promise((resolve, reject) => {
     yauzl.open(
       path,
@@ -16,7 +16,7 @@ export function openZip(path: string): Promise<ZipFile> {
   });
 }
 
-export async function* zipEntries(zip: ZipFile): AsyncGenerator<Entry> {
+async function* zipEntries(zip: ZipFile): AsyncGenerator<Entry> {
   for (;;) {
     const entry = await new Promise<Entry | null>((resolve, reject) => {
       const clean = () => {
@@ -46,7 +46,7 @@ export async function* zipEntries(zip: ZipFile): AsyncGenerator<Entry> {
   }
 }
 
-export function zipStream(zip: ZipFile, entry: Entry): Promise<Readable> {
+function zipStream(zip: ZipFile, entry: Entry): Promise<Readable> {
   return new Promise((resolve, reject) => {
     zip.openReadStream(entry, (error, stream) => {
       if (error || !stream) reject(error ?? new Error("Cannot read ZIP entry."));

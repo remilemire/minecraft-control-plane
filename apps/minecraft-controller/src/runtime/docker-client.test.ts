@@ -3,7 +3,11 @@
 import type Dockerode from "dockerode";
 import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
-import { ContainerNotFoundError, DockerClient, MultipleContainersFoundError } from "./docker.js";
+import {
+  ContainerNotFoundError,
+  DockerClient,
+  MultipleContainersFoundError,
+} from "./docker-client.js";
 
 const PROJECT = "minecraft-control-plane";
 const SERVICE = "minecraft";
@@ -59,15 +63,11 @@ function createClient(docker: ReturnType<typeof fakeDockerode>["docker"]) {
   });
 }
 
-function dockerStatusError(statusCode: number): Error & { statusCode: number } {
-  return Object.assign(new Error(`(HTTP code ${statusCode})`), { statusCode });
-}
-
 describe("DockerClient", () => {
   it("looks the container up by both compose project and service labels, including stopped ones", async () => {
     const { docker } = fakeDockerode();
 
-    await createClient(docker).start();
+    await createClient(docker).getManagedContainer();
 
     expect(docker.listContainers).toHaveBeenCalledWith({
       all: true,
@@ -78,50 +78,11 @@ describe("DockerClient", () => {
     expect(docker.getContainer).toHaveBeenCalledWith(CONTAINER_ID);
   });
 
-  it("starts the container", async () => {
-    const { docker, container } = fakeDockerode();
-
-    await createClient(docker).start();
-
-    expect(container.start).toHaveBeenCalledOnce();
-  });
-
-  it("stops and restarts with the graceful timeout", async () => {
-    const { docker, container } = fakeDockerode();
-    const client = createClient(docker);
-
-    await client.stop();
-    await client.restart();
-
-    expect(container.stop).toHaveBeenCalledWith({ t: 30 });
-    expect(container.restart).toHaveBeenCalledWith({ t: 30 });
-  });
-
-  it("treats starting an already-started container as success (304)", async () => {
-    const { docker } = fakeDockerode({ start: async () => Promise.reject(dockerStatusError(304)) });
-
-    await expect(createClient(docker).start()).resolves.toBeUndefined();
-  });
-
-  it("treats stopping an already-stopped container as success (304)", async () => {
-    const { docker } = fakeDockerode({ stop: async () => Promise.reject(dockerStatusError(304)) });
-
-    await expect(createClient(docker).stop()).resolves.toBeUndefined();
-  });
-
-  it("propagates non-304 docker errors", async () => {
-    const { docker } = fakeDockerode({ start: async () => Promise.reject(dockerStatusError(500)) });
-
-    await expect(createClient(docker).start()).rejects.toMatchObject({ statusCode: 500 });
-  });
-
   it("throws ContainerNotFoundError from every method when no container matches", async () => {
     const { docker } = fakeDockerode({ containers: [] });
     const client = createClient(docker);
 
-    await expect(client.start()).rejects.toBeInstanceOf(ContainerNotFoundError);
-    await expect(client.stop()).rejects.toBeInstanceOf(ContainerNotFoundError);
-    await expect(client.restart()).rejects.toBeInstanceOf(ContainerNotFoundError);
+    await expect(client.getManagedContainer()).rejects.toBeInstanceOf(ContainerNotFoundError);
     await expect(client.getStatus()).rejects.toBeInstanceOf(ContainerNotFoundError);
     await expect(client.openLogStream(new AbortController().signal)).rejects.toBeInstanceOf(
       ContainerNotFoundError,
@@ -136,7 +97,9 @@ describe("DockerClient", () => {
       ],
     });
 
-    await expect(createClient(docker).start()).rejects.toBeInstanceOf(MultipleContainersFoundError);
+    await expect(createClient(docker).getManagedContainer()).rejects.toBeInstanceOf(
+      MultipleContainersFoundError,
+    );
   });
 
   it("reports RUNNING for a running container", async () => {

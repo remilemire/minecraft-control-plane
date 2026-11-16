@@ -1,13 +1,13 @@
 // apps/minecraft-controller/src/server.ts
 
 import Dockerode from "dockerode";
-import { createApp } from "./app.js";
+import { createApp } from "@/http/app.js";
 import { env } from "./config.js";
-import { DockerClient } from "./docker.js";
-import { createRoutes } from "./routes.js";
-import { BackupManager } from "./backups/manager.js";
-import { DockerBackupRuntime } from "./backups/runtime.js";
-import { StartupGate } from "./maintenance/startup-gate.js";
+import { DockerClient } from "@/runtime/docker-client.js";
+import { createRoutes } from "@/http/routes.js";
+import { createController } from "./composition.js";
+import { DockerMinecraftRuntime } from "@/runtime/minecraft-runtime.js";
+import { StartupGate } from "@/maintenance/startup-gate.js";
 import { join } from "node:path";
 
 const docker = new Dockerode({ socketPath: env.DOCKER_SOCKET });
@@ -17,9 +17,10 @@ const dockerClient = new DockerClient({
   serviceName: env.MINECRAFT_COMPOSE_SERVICE,
 });
 
-const startupGate = new StartupGate(join(env.MINECRAFT_DATA_ROOT, "startup-gate"), dockerClient);
+const runtime = new DockerMinecraftRuntime(dockerClient, docker);
+const startupGate = new StartupGate(join(env.MINECRAFT_DATA_ROOT, "startup-gate"), runtime);
 await startupGate.initialize();
-const backups = new BackupManager({
+const controller = createController({
   dataRoot: env.MINECRAFT_DATA_ROOT,
   timezone: env.MINECRAFT_BACKUP_TIMEZONE,
   retention: {
@@ -28,14 +29,14 @@ const backups = new BackupManager({
     weekly: env.MINECRAFT_BACKUP_KEEP_WEEKLY,
     monthly: env.MINECRAFT_BACKUP_KEEP_MONTHLY,
   },
-  runtime: new DockerBackupRuntime(dockerClient, docker),
+  runtime,
   startupGate,
 });
-await backups.initialize();
-backups.startScheduler();
+await controller.initialize();
+controller.start();
 
 const app = createApp({
-  router: createRoutes({ docker: dockerClient, backups }),
+  router: createRoutes(controller),
   token: env.MINECRAFT_CONTROLLER_TOKEN,
 });
 
@@ -50,10 +51,10 @@ function shutdown(): void {
     return;
   }
   shuttingDown = true;
-  dockerClient.closeLogStreams();
+  controller.server.closeLogStreams();
 
   server.close(() => {
-    void backups
+    void controller
       .close()
       .then(() => startupGate.close())
       .then(() => process.exit(0));

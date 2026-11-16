@@ -8,15 +8,8 @@ import type Dockerode from "dockerode";
 import type { Readable } from "node:stream";
 import { createDockerLogEventStream } from "./docker-log-stream.js";
 
-const STOP_TIMEOUT_S = 30;
-
-export interface MinecraftDockerApi {
-  start(): Promise<void>;
-  stop(): Promise<void>;
-  restart(): Promise<void>;
-  getStatus(): Promise<MinecraftServerStatus>;
-  openLogStream(signal: AbortSignal): Promise<AsyncIterable<MinecraftConsoleLogEvent>>;
-}
+export type { MinecraftReader } from "./contracts.js";
+import type { MinecraftReader } from "./contracts.js";
 
 // A missing container is a misconfiguration (or a torn-down stack), never
 // "STOPPED" — STOPPED strictly means the container exists and is not running.
@@ -42,7 +35,7 @@ export interface DockerClientOptions {
   readonly serviceName: string;
 }
 
-export class DockerClient implements MinecraftDockerApi {
+export class DockerClient implements MinecraftReader {
   private readonly docker: Dockerode;
   private readonly projectName: string;
   private readonly serviceName: string;
@@ -56,28 +49,9 @@ export class DockerClient implements MinecraftDockerApi {
     this.serviceName = serviceName;
   }
 
-  public async start(): Promise<void> {
-    const container = await this.findContainer();
-    // 304 = already started; `docker compose start` treats that as success.
-    await swallowStatus(304, () => this.docker.getContainer(container.Id).start());
-  }
-
   public async getManagedContainer(): Promise<Dockerode.Container> {
     const container = await this.findContainer();
     return this.docker.getContainer(container.Id);
-  }
-
-  public async stop(): Promise<void> {
-    const container = await this.findContainer();
-    // 304 = already stopped; parity with `docker compose stop` again.
-    await swallowStatus(304, () =>
-      this.docker.getContainer(container.Id).stop({ t: STOP_TIMEOUT_S }),
-    );
-  }
-
-  public async restart(): Promise<void> {
-    const container = await this.findContainer();
-    await this.docker.getContainer(container.Id).restart({ t: STOP_TIMEOUT_S });
   }
 
   public async getStatus(): Promise<MinecraftServerStatus> {
@@ -161,23 +135,4 @@ export class DockerClient implements MinecraftDockerApi {
     source.once("close", unregister);
     return unregister;
   }
-}
-
-async function swallowStatus(statusCode: number, operation: () => Promise<unknown>): Promise<void> {
-  try {
-    await operation();
-  } catch (error) {
-    if (!isDockerStatusError(error, statusCode)) {
-      throw error;
-    }
-  }
-}
-
-function isDockerStatusError(error: unknown, statusCode: number): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "statusCode" in error &&
-    error.statusCode === statusCode
-  );
 }

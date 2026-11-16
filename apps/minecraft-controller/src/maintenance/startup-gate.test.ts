@@ -1,10 +1,8 @@
-import Dockerode from "dockerode";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { DockerClient } from "@/docker.js";
 import { StartupGate } from "./startup-gate.js";
 const roots: string[] = [];
 const gates: StartupGate[] = [];
@@ -15,20 +13,14 @@ afterEach(async () => {
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "startup-gate-"));
   roots.push(root);
-  const client = new DockerClient({
-    docker: new Dockerode(),
-    projectName: "test",
-    serviceName: "minecraft",
-  });
   const inspect = vi.fn(async () => ({
-    Id: "expected-container",
-    Config: { Hostname: "minecraft-host" },
-    State: { Running: true },
+    containerId: "expected-container",
+    hostname: "minecraft-host",
+    running: true,
+    env: {},
+    restartPolicy: { Name: "no" },
   }));
-  vi.spyOn(client, "getManagedContainer").mockResolvedValue({
-    inspect,
-  } as unknown as Dockerode.Container);
-  const gate = new StartupGate(root, client);
+  const gate = new StartupGate(root, { inspect });
   gates.push(gate);
   await gate.initialize();
   const request = (host = "minecraft-host") => `${host}\n${randomUUID()}\n`;

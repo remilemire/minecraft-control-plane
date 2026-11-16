@@ -4,17 +4,17 @@ import process from "node:process";
 import console from "node:console";
 import { readFile } from "node:fs/promises";
 import Dockerode from "dockerode";
-import { DockerClient } from "./dist/docker.js";
-import { DockerBackupRuntime } from "./dist/backups/runtime.js";
-import { BackupManager } from "./dist/backups/manager.js";
+import { DockerClient } from "./dist/runtime/docker-client.js";
+import { DockerMinecraftRuntime } from "./dist/runtime/minecraft-runtime.js";
+import { createController } from "./dist/composition.js";
 import { StartupGate } from "./dist/maintenance/startup-gate.js";
-import { createApp } from "./dist/app.js";
-import { createRoutes } from "./dist/routes.js";
+import { createApp } from "./dist/http/app.js";
+import { createRoutes } from "./dist/http/routes.js";
 const token = process.env.DRILL_TOKEN;
 const docker = new Dockerode({ socketPath: "/docker-host-run/docker.sock" });
 const client = new DockerClient({ docker, projectName: "crash-drill", serviceName: "minecraft" });
-const runtime = new DockerBackupRuntime(client, docker);
-const gate = new StartupGate("/server-data/startup-gate", client);
+const runtime = new DockerMinecraftRuntime(client, docker);
+const gate = new StartupGate("/server-data/startup-gate", runtime);
 let armed = process.env.DRILL_BARRIER ? JSON.parse(process.env.DRILL_BARRIER) : null;
 let reached = null;
 let releaseBarrier;
@@ -51,7 +51,7 @@ const control = createServer(async (req, res) => {
 });
 control.listen(8999);
 await gate.initialize();
-const manager = new BackupManager({
+const controller = createController({
   dataRoot: "/server-data",
   timezone: "UTC",
   retention: { hourly: 6, daily: 5, weekly: 3, monthly: 2 },
@@ -73,12 +73,9 @@ const manager = new BackupManager({
     }
   },
 });
-await manager.initialize();
-manager.startScheduler();
-createApp({ token, router: createRoutes({ docker: client, backups: manager }) }).listen(
-  8000,
-  () => {
-    initialized = true;
-    console.log("TEST CONTROLLER READY");
-  },
-);
+await controller.initialize();
+controller.start();
+createApp({ token, router: createRoutes(controller) }).listen(8000, () => {
+  initialized = true;
+  console.log("TEST CONTROLLER READY");
+});

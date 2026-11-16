@@ -456,21 +456,13 @@ saving. An unavailable player count aborts the request. Live backup is best effo
 for mods that write outside Minecraft saving controls; changing source files cause
 the attempt to fail rather than publishing an incomplete archive.
 
-### First-time setup with FTB Backups 3
+### Existing legacy archives
 
-1. Deploy the updated controller/backend/frontend through the normal Makefile flow.
-2. Stop Minecraft from the panel, then run `make backup-migrate` from the repository
-   root. The command talks to the existing controller, imports and verifies ZIP
-   files from `<data-root>/minecraft/ftbbackups3`, retains originals, and writes a world
-   `serverconfig/ftbbackups3-server.snbt` override disabling FTB automatic and
-   shutdown backups. The override is also reapplied after full restores.
-3. Start Minecraft and enable the desired schedules in the panel.
-
-Keep FTB's own scheduler disabled after migration. Archives in a custom FTB
-backup directory must first be copied into `<data-root>/minecraft/ftbbackups3`. Imported
-archives are labelled **world only** and never automatically deleted. Their old
-records lack verifiable modpack versions, so assisted restore remains disabled.
-Servers without FTB Backups 3 need no migration.
+FTB migration commands and ZIP import/reading support have been removed. The
+panel uses its own tar/gzip snapshot format. Existing ZIP files are left on disk
+and their historical metadata remains readable in the state file, but they are
+omitted from the usable panel catalogue. No backup files are deleted by this
+architecture change.
 
 ### Restoring and recovering interrupted work
 

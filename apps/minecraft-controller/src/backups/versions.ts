@@ -6,7 +6,7 @@ import {
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { isMissing } from "./errors.js";
+import { isMissing } from "@/errors.js";
 
 export interface Installation {
   version: ServerVersion | null;
@@ -96,7 +96,7 @@ export async function readInstallation(
         (!env.PAPER_PROJECT || env.PAPER_PROJECT === "paper");
     } else if (type === "VANILLA") {
       // The server JAR contains its resolved version, independent of a floating VERSION selector.
-      const { jarVersion } = await import("./zip.js");
+      const { jarVersion } = await import("./jar-metadata.js");
       let manifest: z.infer<typeof vanillaManifestSchema> | null = null;
       try {
         manifest = vanillaManifestSchema.parse(

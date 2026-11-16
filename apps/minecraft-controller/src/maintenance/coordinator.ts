@@ -1,4 +1,4 @@
-import { MaintenanceError, dockerUnavailable } from "./errors.js";
+import { ControllerError, dockerUnavailable } from "@/errors.js";
 import type { StartupAuthorization } from "./startup-gate.js";
 
 export interface JournalEntry {
@@ -17,21 +17,28 @@ export interface TaskContext<J extends JournalEntry> {
   operation: J;
   interrupted: boolean;
   checkpoint(name: string): Promise<void>;
+  boot<T>(containerId: string, action: () => Promise<T>): Promise<T>;
 }
-export interface MaintenanceTask<J extends JournalEntry> {
+export interface TaskHandlers<J extends JournalEntry> {
   version: number;
   legacyVersions?: readonly number[];
   matchesRequest?(previous: J, incoming: J): boolean;
   prepare?(context: TaskContext<J>): Promise<void>;
-  safetyBackup?: (context: TaskContext<J>) => Promise<void>;
-  destructive?: boolean;
-  safetyBackupVerified?: (operation: J) => boolean;
   apply(context: TaskContext<J>): Promise<void>;
   verify?(context: TaskContext<J>): Promise<void>;
   recover(context: TaskContext<J>): Promise<void>;
   hold(context: TaskContext<J>): Promise<void>;
   cleanup?(context: TaskContext<J>): Promise<void>;
 }
+export type MaintenanceTask<J extends JournalEntry> = TaskHandlers<J> &
+  (
+    | {
+        destructive: true;
+        safetyBackup(context: TaskContext<J>): Promise<void>;
+        safetyBackupVerified(operation: J): boolean;
+      }
+    | { destructive?: false; safetyBackup?: never; safetyBackupVerified?: never }
+  );
 export interface CoordinatorOptions<J extends JournalEntry> {
   operations(): J[];
   persist(): Promise<void>;
@@ -48,7 +55,7 @@ export interface CoordinatorOptions<J extends JournalEntry> {
 export class MaintenanceCoordinator<J extends JournalEntry> {
   public initialized = false;
   public closing = false;
-  private readers = 0;
+  private reservations = 0;
   private executing: J | null = null;
   private work: Promise<void> | undefined;
   public constructor(private readonly options: CoordinatorOptions<J>) {}
@@ -80,29 +87,29 @@ export class MaintenanceCoordinator<J extends JournalEntry> {
   }
   public assertAvailable(): void {
     if (!this.initialized || this.closing)
-      throw new MaintenanceError(
+      throw new ControllerError(
         "BACKUP_CONTROLLER_ERROR",
         "The controller is starting or shutting down.",
       );
     const active = this.active();
     if (active && this.status(active) === "recoveryRequired")
-      throw new MaintenanceError(
+      throw new ControllerError(
         "BACKUP_RECOVERY_REQUIRED",
         "Recovery requires attention. Inspect the controller logs, then run make backup-recover.",
       );
-    if (this.active() || this.readers)
-      throw new MaintenanceError(
+    if (this.active() || this.reservations)
+      throw new ControllerError(
         "MINECRAFT_MAINTENANCE",
         "A Minecraft operation is already in progress. Try again after it finishes.",
       );
   }
   public async exclusive<T>(action: () => Promise<T>): Promise<T> {
     this.assertAvailable();
-    this.readers++;
+    this.reservations++;
     try {
       return await action();
     } finally {
-      this.readers--;
+      this.reservations--;
     }
   }
   public async checkpoint(operation: J, name: string): Promise<void> {
@@ -110,7 +117,7 @@ export class MaintenanceCoordinator<J extends JournalEntry> {
     try {
       await this.options.persist();
     } catch (error) {
-      throw new MaintenanceError(
+      throw new ControllerError(
         "BACKUP_RECOVERY_REQUIRED",
         "The maintenance checkpoint could not be persisted. Startup remains blocked.",
         { cause: error },
@@ -147,7 +154,7 @@ export class MaintenanceCoordinator<J extends JournalEntry> {
         previous.kind !== operation.kind ||
         this.task(operation).matchesRequest?.(previous, operation) === false
       )
-        throw new MaintenanceError(
+        throw new ControllerError(
           "BACKUP_REQUEST_CONFLICT",
           "This request ID was already used for another operation.",
         );
@@ -183,7 +190,7 @@ export class MaintenanceCoordinator<J extends JournalEntry> {
       !this.initialized ||
       this.closing ||
       this.executing ||
-      this.readers ||
+      this.reservations ||
       !operation?.recoverOnReconnect
     )
       return;
@@ -195,8 +202,8 @@ export class MaintenanceCoordinator<J extends JournalEntry> {
     await this.recover(operation);
   }
   public async recover(operation: J): Promise<void> {
-    if (this.executing || this.readers)
-      throw new MaintenanceError("MINECRAFT_MAINTENANCE", "An operation is still running.");
+    if (this.executing || this.reservations)
+      throw new ControllerError("MINECRAFT_MAINTENANCE", "An operation is still running.");
     this.executing = operation;
     // A terminal result is irrevocable. Only retry cleanup after its commit.
     const recovering =
@@ -213,7 +220,7 @@ export class MaintenanceCoordinator<J extends JournalEntry> {
       (operation.taskVersion !== task.version &&
         !task.legacyVersions?.includes(operation.taskVersion))
     )
-      throw new MaintenanceError(
+      throw new ControllerError(
         "BACKUP_RECOVERY_REQUIRED",
         "The operation journal uses an unsupported task version. Keep Minecraft stopped and inspect it.",
       );
@@ -222,7 +229,12 @@ export class MaintenanceCoordinator<J extends JournalEntry> {
     return task;
   }
   private context(operation: J, interrupted = false): TaskContext<J> {
-    return { operation, interrupted, checkpoint: (name) => this.checkpoint(operation, name) };
+    return {
+      operation,
+      interrupted,
+      checkpoint: (name) => this.checkpoint(operation, name),
+      boot: (id, action) => this.boot(operation, id, action),
+    };
   }
   private async release(): Promise<void> {
     this.executing = null;
@@ -296,8 +308,8 @@ export class MaintenanceCoordinator<J extends JournalEntry> {
       await this.checkpoint(operation, "admitted");
       await task.prepare?.(context);
       if (task.destructive) {
-        await task.safetyBackup!(context);
-        if (!task.safetyBackupVerified!(operation))
+        await task.safetyBackup(context);
+        if (!task.safetyBackupVerified(operation))
           throw new Error("The safety backup is not verified.");
         await this.checkpoint(operation, "safety-ready");
       }
@@ -310,7 +322,7 @@ export class MaintenanceCoordinator<J extends JournalEntry> {
       if (
         operation.status === "recoveryRequired" ||
         dockerUnavailable(error) ||
-        (error instanceof MaintenanceError && error.code === "BACKUP_RECOVERY_REQUIRED")
+        (error instanceof ControllerError && error.code === "BACKUP_RECOVERY_REQUIRED")
       ) {
         await this.failed(operation, error);
       } else {

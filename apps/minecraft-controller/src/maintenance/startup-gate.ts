@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import type { DockerClient } from "@/docker.js";
-import { atomicText, syncDirectory } from "./atomic-files.js";
+import type { MinecraftRuntime } from "@/runtime/contracts.js";
+import { atomicText, syncDirectory } from "@/state/atomic-files.js";
 
 export interface StartupAuthorization {
   block(): Promise<void>;
@@ -20,7 +20,7 @@ export class StartupGate implements StartupAuthorization {
   private lastGrant: string | null = null;
   public constructor(
     private readonly root: string,
-    private readonly client: DockerClient,
+    private readonly runtime: Pick<MinecraftRuntime, "inspect">,
   ) {}
 
   public async initialize(): Promise<void> {
@@ -84,12 +84,12 @@ export class StartupGate implements StartupAuthorization {
     const [hostname] = request.split("\n");
     let container;
     try {
-      container = await (await this.client.getManagedContainer()).inspect();
+      container = await this.runtime.inspect();
     } catch {
       return;
     } // Missing containers/daemon outages never grant startup.
-    if (!container.State.Running || container.Config.Hostname !== hostname) return;
-    if (!this.idle && this.target !== container.Id) return;
+    if (!container.running || container.hostname !== hostname) return;
+    if (!this.idle && this.target !== container.containerId) return;
     if (this.closed || (!this.idle && !this.target) || request === this.lastGrant) return;
     await atomicText(join(this.root, "permits/current"), request);
     this.lastGrant = request;

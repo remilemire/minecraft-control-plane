@@ -22,12 +22,9 @@ RUN  = $(PNPM) $(SEL) --no-bail --if-present run
 
 .DEFAULT_GOAL := help
 
-.PHONY: backup-migrate backup-recover
-backup-migrate: ## Import legacy backups and disable FTB scheduling (Minecraft must be stopped)
-	$(COMPOSE) exec minecraft-controller $(if $(filter prod,$(APP_ENV)),node dist/backups/cli.js,pnpm exec tsx src/backups/cli.ts) migrate
-
+.PHONY: backup-recover
 backup-recover: ## Retry an interrupted backup recovery after inspecting the server
-	$(COMPOSE) exec minecraft-controller $(if $(filter prod,$(APP_ENV)),node dist/backups/cli.js,pnpm exec tsx src/backups/cli.ts) recover
+	$(COMPOSE) exec minecraft-controller $(if $(filter prod,$(APP_ENV)),node dist/maintenance/cli.js,pnpm exec tsx src/maintenance/cli.ts) recover
 
 # ---- Meta -------------------------------------------------------------------
 

@@ -1,3 +1,4 @@
+import { safeArchivePath } from "@/runtime/data-policy.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   appendFile,
@@ -15,9 +16,9 @@ import { createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { createGzip } from "node:zlib";
 import tar from "tar-stream";
-import { safeArchivePath, sha256File } from "./archive.js";
+import { sha256File } from "./archive.js";
 import { fixture, finish, takeBackup } from "./test-fixtures.js";
-import { atomicJson } from "./store.js";
+import { atomicJson } from "@/state/store.js";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -26,15 +27,18 @@ afterEach(async () => {
 });
 describe("archive safety", () => {
   it("can restore over a damaged world while keeping its damaged state in the safety backup", async () => {
-    const { manager, root, data, runtime } = await fixture();
+    const { controller, root, data, runtime } = await fixture();
     roots.push(root);
-    const id = await takeBackup(manager);
+    const id = await takeBackup(controller.backups, controller.maintenance);
     runtime.state.running = false;
     await rm(join(data, "world/level.dat"));
-    const restored = await finish(manager, await manager.restore(id, randomUUID()));
+    const restored = await finish(
+      controller.maintenance,
+      await controller.backups.restore(id, randomUUID()),
+    );
     expect(restored.status).toBe("succeeded");
     expect(await readFile(join(data, "world/level.dat"), "utf8")).toBe("original world data");
-    const safety = await manager.storage.manifest(restored.safetyBackupId!);
+    const safety = await controller.backups.storage.manifest(restored.safetyBackupId!);
     expect(safety.entries.some((entry) => entry.path === "world/level.dat")).toBe(false);
     expect(runtime.state.running).toBe(false);
   });
@@ -45,7 +49,7 @@ describe("archive safety", () => {
     },
   );
   it("excludes logs and old backups and preserves executable permissions", async () => {
-    const { manager, root, data } = await fixture();
+    const { controller, root, data } = await fixture();
     roots.push(root);
     await mkdir(join(data, "logs"));
     await writeFile(join(data, "logs/latest.log"), "log noise");
@@ -53,26 +57,28 @@ describe("archive safety", () => {
     await writeFile(join(data, "ftbbackups3/old.zip"), "not nested");
     await writeFile(join(data, "run.sh"), "#!/bin/sh\n");
     await chmod(join(data, "run.sh"), 0o755);
-    const id = await takeBackup(manager);
-    const manifest = await manager.storage.manifest(id);
+    const id = await takeBackup(controller.backups, controller.maintenance);
+    const manifest = await controller.backups.storage.manifest(id);
     expect(
       manifest.entries.some((e) => e.path.startsWith("logs") || e.path.startsWith("ftbbackups3")),
     ).toBe(false);
     const stage = join(root, "staging");
     await mkdir(stage);
-    await manager.storage.verify(id, stage);
+    await controller.backups.storage.verify(id, stage);
     expect((await lstat(join(stage, "run.sh"))).mode & 0o777).toBe(0o755);
     expect((await lstat(join(stage, "run.sh"))).uid).toBe((await lstat(join(data, "run.sh"))).uid);
   });
   it("refuses symlinks instead of following them outside the snapshot", async () => {
-    const { manager, root, data } = await fixture();
+    const { controller, root, data } = await fixture();
     roots.push(root);
     await symlink("/etc/passwd", join(data, "escape"));
-    expect((await finish(manager, await manager.create(randomUUID()))).status).toBe("failed");
-    expect((await manager.list()).backups).toHaveLength(0);
+    expect(
+      (await finish(controller.maintenance, await controller.backups.create(randomUUID()))).status,
+    ).toBe("failed");
+    expect((await controller.backups.list()).backups).toHaveLength(0);
   });
   it("detects live file changes and re-enables saving", async () => {
-    const { manager, root, data, runtime } = await fixture();
+    const { controller, root, data, runtime } = await fixture();
     roots.push(root);
     runtime.players = 1;
     const path = join(data, "world/growing.dat");
@@ -82,8 +88,11 @@ describe("archive safety", () => {
       writes.push(appendFile(path, "changing"));
     }, 2);
     try {
-      expect((await finish(manager, await manager.create(randomUUID()))).status).toBe("failed");
-      expect((await manager.list()).backups).toHaveLength(0);
+      expect(
+        (await finish(controller.maintenance, await controller.backups.create(randomUUID())))
+          .status,
+      ).toBe("failed");
+      expect((await controller.backups.list()).backups).toHaveLength(0);
       expect(runtime.commands.at(-1)).toBe("save-on");
     } finally {
       clearInterval(timer);
@@ -91,21 +100,21 @@ describe("archive safety", () => {
     }
   });
   it("rejects a traversal archive even if its outer checksum was changed to match", async () => {
-    const { manager, root } = await fixture();
+    const { controller, root } = await fixture();
     roots.push(root);
-    const id = await takeBackup(manager);
-    const file = join(manager.storage.directory(id), "archive.tar.gz");
+    const id = await takeBackup(controller.backups, controller.maintenance);
+    const file = join(controller.backups.storage.directory(id), "archive.tar.gz");
     const pack = tar.pack();
     const output = pipeline(pack, createGzip(), createWriteStream(file));
     pack.entry({ name: "../escaped", size: 1 }, "x");
     pack.finalize();
     await output;
-    const manifest = await manager.storage.manifest(id);
+    const manifest = await controller.backups.storage.manifest(id);
     manifest.backup.sha256 = await sha256File(file);
-    await atomicJson(join(manager.storage.directory(id), "manifest.json"), manifest);
+    await atomicJson(join(controller.backups.storage.directory(id), "manifest.json"), manifest);
     const stage = join(root, "staging");
     await mkdir(stage);
-    await expect(manager.storage.verify(id, stage)).rejects.toMatchObject({
+    await expect(controller.backups.storage.verify(id, stage)).rejects.toMatchObject({
       code: "BACKUP_INVALID",
     });
     await expect(readFile(join(root, "escaped"))).rejects.toMatchObject({ code: "ENOENT" });
