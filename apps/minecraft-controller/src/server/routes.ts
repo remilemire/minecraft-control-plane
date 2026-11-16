@@ -6,8 +6,8 @@ import {
   controllerRconRequestSchema,
   controllerRconResponseSchema,
 } from "@minecraft-control-plane/shared/minecraft";
-import type { ServerService } from "./service.js";
-export function createServerRoutes(server: ServerService): Router {
+import type { ServerApi } from "./service.js";
+export function createServerRoutes(server: ServerApi): Router {
   const router = Router();
   router.post("/start", async (_req, res) => {
     await server.power("start");

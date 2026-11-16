@@ -1,6 +1,7 @@
 import type Dockerode from "dockerode";
 import { Writable } from "node:stream";
 import { finished } from "node:stream/promises";
+import { StringDecoder } from "node:string_decoder";
 import { ControllerError } from "@/errors.js";
 import type { DockerClient } from "./docker-client.js";
 export function parseOnlinePlayerCount(output: string): number {
@@ -47,36 +48,43 @@ export class DockerRcon {
     const source = await exec.start({ hijack: true, stdin: false });
     let output = "";
     let length = 0;
-    const sink = new Writable({
-      write(chunk: Buffer, _encoding, callback) {
-        length += chunk.length;
-        if (length > 1024 * 1024) {
-          callback(new Error("RCON output exceeded its limit"));
-          return;
-        }
-        output += chunk.toString("utf8");
-        callback();
-      },
-    });
-    sink.on("error", (error) => {
-      source.destroy(error);
-    });
+    const stdoutDecoder = new StringDecoder("utf8"),
+      stderrDecoder = new StringDecoder("utf8");
+    const sink = (decoder: StringDecoder) =>
+      new Writable({
+        write(chunk: Buffer, _encoding, callback) {
+          length += chunk.length;
+          if (length > 1024 * 1024) {
+            callback(new Error("RCON output exceeded its limit"));
+            return;
+          }
+          output += decoder.write(chunk);
+          callback();
+        },
+      });
+    const stdout = sink(stdoutDecoder),
+      stderr = sink(stderrDecoder);
+    for (const stream of [stdout, stderr])
+      stream.on("error", (error) => {
+        source.destroy(error);
+      });
     const timer = setTimeout(
       () => source.destroy(new Error("Docker RCON execution timed out")),
       (timeoutSeconds + 5) * 1000,
     );
     try {
-      this.docker.modem.demuxStream(source, sink, sink);
+      this.docker.modem.demuxStream(source, stdout, stderr);
       await finished(source);
       if ((await exec.inspect()).ExitCode !== 0)
         throw new ControllerError(
           "BACKUP_CONTROLLER_ERROR",
           "Minecraft did not accept the RCON command. Check server readiness and RCON configuration.",
         );
-      return output;
+      return output + stdoutDecoder.end() + stderrDecoder.end();
     } finally {
       clearTimeout(timer);
-      sink.destroy();
+      stdout.destroy();
+      stderr.destroy();
       source.destroy();
     }
   }

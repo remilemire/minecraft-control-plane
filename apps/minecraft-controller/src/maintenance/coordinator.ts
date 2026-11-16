@@ -1,92 +1,89 @@
-import { ControllerError, dockerUnavailable } from "@/errors.js";
-import type { StartupAuthorization } from "./startup-gate.js";
+import { randomUUID } from "node:crypto";
+import { ControllerError, dockerUnavailable, publicFailure } from "@/errors.js";
+import type { Clock } from "@/time.js";
+import type { CommitEffect } from "@/transaction.js";
+import type { Immutable } from "@/immutable.js";
+import type {
+  ExecutionLease,
+  OperationJournal,
+  OperationRecord,
+  RawTaskContext,
+  RegisteredTask,
+  StartupAuthorization,
+} from "./contracts.js";
+import { validateTaskRecord } from "./task.js";
 
-export interface JournalEntry {
-  id: string;
-  kind: string;
-  status: "running" | "succeeded" | "failed" | "recoveryRequired";
-  phase: string;
-  finishedAt: string | null;
-  error: string | null;
-  taskVersion: number;
-  checkpoint: string | null;
-  recoverOnReconnect: boolean;
-  cleanupComplete: boolean;
-}
-export interface TaskContext<J extends JournalEntry> {
-  operation: J;
-  interrupted: boolean;
-  checkpoint(name: string): Promise<void>;
-  boot<T>(containerId: string, action: () => Promise<T>): Promise<T>;
-}
-export interface TaskHandlers<J extends JournalEntry> {
-  version: number;
-  legacyVersions?: readonly number[];
-  matchesRequest?(previous: J, incoming: J): boolean;
-  prepare?(context: TaskContext<J>): Promise<void>;
-  apply(context: TaskContext<J>): Promise<void>;
-  verify?(context: TaskContext<J>): Promise<void>;
-  recover(context: TaskContext<J>): Promise<void>;
-  hold(context: TaskContext<J>): Promise<void>;
-  cleanup?(context: TaskContext<J>): Promise<void>;
-}
-export type MaintenanceTask<J extends JournalEntry> = TaskHandlers<J> &
-  (
-    | {
-        destructive: true;
-        safetyBackup(context: TaskContext<J>): Promise<void>;
-        safetyBackupVerified(operation: J): boolean;
-      }
-    | { destructive?: false; safetyBackup?: never; safetyBackupVerified?: never }
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, item: unknown) =>
+    item !== null && typeof item === "object" && !Array.isArray(item)
+      ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b)))
+      : item,
   );
-export interface CoordinatorOptions<J extends JournalEntry> {
-  operations(): J[];
-  persist(): Promise<void>;
-  tasks: ReadonlyMap<string, MaintenanceTask<J>>;
-  gate?: StartupAuthorization | undefined;
-  available(): Promise<void>;
-  describe(error: unknown): string;
-  now(): Date;
-  observer?: ((operation: J, event: string) => Promise<void>) | undefined;
 }
 
-// One writer and one reservation cover every task. Persistence remains in the
-// aggregate store so schedule consumption and admission commit atomically.
-export class MaintenanceCoordinator<J extends JournalEntry> {
-  public initialized = false;
-  public closing = false;
-  private reservations = 0;
-  private executing: J | null = null;
-  private work: Promise<void> | undefined;
-  public constructor(private readonly options: CoordinatorOptions<J>) {}
-  public active(): J | null {
+/** Owns admission and terminal decisions, never task-specific data or storage. */
+export class MaintenanceCoordinator {
+  private ready = false;
+  private closing = false;
+  private reservation = false;
+  private executing: string | null = null;
+  private fault: string | null = null;
+  private work: Promise<void> = Promise.resolve();
+  private admission: { record: OperationRecord; accepted: Promise<string> } | null = null;
+  private recovery: Promise<void> | null = null;
+  private shortWork: Promise<unknown> | null = null;
+  public constructor(
+    private readonly journal: OperationJournal,
+    private readonly tasks: ReadonlyMap<string, RegisteredTask>,
+    private readonly gate: StartupAuthorization,
+    private readonly clock: Clock,
+    private readonly environment: { available(): Promise<void>; reconcile(): Promise<void> },
+  ) {}
+  public get failure(): string | null {
+    return this.journal.failure() ?? this.fault;
+  }
+  public active(): Immutable<OperationRecord> | null {
+    const id = this.executing ?? this.admission?.record.id;
+    const records = this.journal.all();
     return (
-      this.executing ??
-      this.options
-        .operations()
-        .find(
-          (o) => o.status === "running" || o.status === "recoveryRequired" || !o.cleanupComplete,
-        ) ??
+      (id ? this.journal.get(id) : undefined) ??
+      records.find((op) => op.status === "running" || op.status === "recoveryRequired") ??
+      records.find((op) => !op.cleanupComplete) ??
       null
     );
   }
-  public operation(id: string): J | undefined {
-    return this.options.operations().find((o) => o.id === id);
+  public operation(id: string): Immutable<OperationRecord> | undefined {
+    return this.journal.get(id);
   }
-  public isExecuting(id: string): boolean {
-    return this.executing?.id === id;
+  public latest(): Immutable<OperationRecord> | null {
+    return this.journal.all().at(-1) ?? null;
   }
-  public status(operation: J): JournalEntry["status"] {
-    if (this.isExecuting(operation.id)) return "running";
-    if (
-      (operation.status === "succeeded" || operation.status === "failed") &&
-      !operation.cleanupComplete
-    )
-      return "recoveryRequired";
-    return operation.status;
+  public status(op: Immutable<OperationRecord>): OperationRecord["status"] {
+    if (this.failure && this.active()?.id === op.id) return "recoveryRequired";
+    if (this.executing === op.id) return "running";
+    return !op.cleanupComplete && (op.status === "succeeded" || op.status === "failed")
+      ? "recoveryRequired"
+      : op.status;
+  }
+  private task(op: Pick<OperationRecord, "kind" | "taskVersion">): RegisteredTask {
+    const task = this.tasks.get(op.kind);
+    if (!task || task.version !== op.taskVersion)
+      throw new ControllerError(
+        "BACKUP_RECOVERY_REQUIRED",
+        "The journal contains an unknown task/version. Inspect it before starting Minecraft.",
+      );
+    return task;
+  }
+  public validate(op: Immutable<OperationRecord>): void {
+    validateTaskRecord(this.tasks, op);
   }
   public assertAvailable(): void {
-    if (!this.initialized || this.closing)
+    if (this.failure || !this.journal.healthy())
+      throw new ControllerError(
+        "BACKUP_RECOVERY_REQUIRED",
+        this.failure ?? "Controller storage needs inspection.",
+      );
+    if (!this.ready || this.closing)
       throw new ControllerError(
         "BACKUP_CONTROLLER_ERROR",
         "The controller is starting or shutting down.",
@@ -95,258 +92,354 @@ export class MaintenanceCoordinator<J extends JournalEntry> {
     if (active && this.status(active) === "recoveryRequired")
       throw new ControllerError(
         "BACKUP_RECOVERY_REQUIRED",
-        "Recovery requires attention. Inspect the controller logs, then run make backup-recover.",
+        active.error ?? "Maintenance recovery needs attention.",
       );
-    if (this.active() || this.reservations)
+    if (active || this.executing || this.reservation || this.admission || this.recovery)
       throw new ControllerError(
         "MINECRAFT_MAINTENANCE",
-        "A Minecraft operation is already in progress. Try again after it finishes.",
+        "A Minecraft operation is already in progress.",
       );
   }
-  public async exclusive<T>(action: () => Promise<T>): Promise<T> {
+  private async holdStorage(error: unknown): Promise<void> {
+    this.fault = this.journal.failure() ?? publicFailure(error);
+    try {
+      await this.gate.block();
+    } catch (gateError) {
+      console.error("Cannot fence startup", gateError);
+    }
+  }
+  public async exclusive<T>(action: (lease: ExecutionLease) => Promise<T>): Promise<T> {
     this.assertAvailable();
-    this.reservations++;
+    this.reservation = true;
+    const id = randomUUID();
+    const lease: ExecutionLease = {
+      id,
+      assertActive: () => {
+        if (!this.reservation || this.shortWork !== work)
+          throw new ControllerError("MINECRAFT_MAINTENANCE", "The command lease has expired.");
+        if (!this.journal.healthy())
+          throw new ControllerError(
+            "BACKUP_RECOVERY_REQUIRED",
+            this.journal.failure() ?? "Storage needs inspection.",
+          );
+      },
+    };
+    const work = Promise.resolve().then(() => action(lease));
+    this.shortWork = work;
     try {
-      return await action();
-    } finally {
-      this.reservations--;
-    }
-  }
-  public async checkpoint(operation: J, name: string): Promise<void> {
-    operation.checkpoint = name;
-    try {
-      await this.options.persist();
+      return await work;
     } catch (error) {
-      throw new ControllerError(
-        "BACKUP_RECOVERY_REQUIRED",
-        "The maintenance checkpoint could not be persisted. Startup remains blocked.",
-        { cause: error },
-      );
-    }
-    await this.options.observer?.(operation, name);
-  }
-  public async boot<T>(operation: J, containerId: string, action: () => Promise<T>): Promise<T> {
-    await this.checkpoint(operation, "boot-safe");
-    return this.options.gate ? this.options.gate.boot(containerId, action) : action();
-  }
-  public async recoverInterrupted(): Promise<void> {
-    for (const operation of this.options.operations()) {
-      this.task(operation);
-    }
-    const interrupted = this.options.operations().find((o) => o.status === "running");
-    if (interrupted) await this.recover(interrupted);
-    for (const operation of this.options.operations()) {
       if (
-        (operation.status === "succeeded" || operation.status === "failed") &&
-        !operation.cleanupComplete
+        !this.journal.healthy() ||
+        (error instanceof ControllerError && error.code === "BACKUP_RECOVERY_REQUIRED")
       )
-        await this.cleanup(operation);
-    }
-  }
-  public async ready(): Promise<void> {
-    this.initialized = true;
-    if (!this.active()) await this.options.gate?.open();
-  }
-  public async submit(operation: J, reserve: () => void): Promise<string> {
-    const previous = this.operation(operation.id);
-    if (previous) {
-      if (
-        previous.kind !== operation.kind ||
-        this.task(operation).matchesRequest?.(previous, operation) === false
-      )
-        throw new ControllerError(
-          "BACKUP_REQUEST_CONFLICT",
-          "This request ID was already used for another operation.",
-        );
-      return previous.id;
-    }
-    this.assertAvailable();
-    this.task(operation);
-    this.executing = operation; // Synchronous reservation precedes the first await.
-    this.options.operations().push(operation);
-    reserve();
-    try {
-      await this.options.gate?.block();
-      await this.options.persist();
-    } catch (error) {
-      operation.status = "recoveryRequired";
-      this.executing = null;
+        await this.holdStorage(error);
       throw error;
+    } finally {
+      this.reservation = false;
+      this.shortWork = null;
     }
-    this.work = this.run(operation).finally(() => this.release());
-    return operation.id;
   }
-  public async wait(): Promise<void> {
-    await this.work;
-  }
-  public async close(): Promise<void> {
-    this.closing = true;
-    await this.options.gate?.block();
-    await this.work;
-  }
-  public async retry(): Promise<void> {
-    const operation = this.active();
-    if (
-      !this.initialized ||
-      this.closing ||
-      this.executing ||
-      this.reservations ||
-      !operation?.recoverOnReconnect
-    )
-      return;
-    try {
-      await this.options.available();
-    } catch {
-      return;
+  public submit(
+    kind: string,
+    request: unknown,
+    id: string = randomUUID(),
+    changes: readonly CommitEffect[] = [],
+  ): Promise<string> {
+    const definition = this.tasks.get(kind);
+    if (!definition)
+      return Promise.reject(new ControllerError("BACKUP_INVALID", "Unknown operation."));
+    const prepared = definition.prepare(request);
+    const previous =
+      this.admission?.record.id === id ? this.admission.record : this.journal.get(id);
+    if (previous) {
+      if (previous.kind !== kind || canonical(previous.request) !== canonical(prepared.request))
+        return Promise.reject(
+          new ControllerError(
+            "BACKUP_REQUEST_CONFLICT",
+            "This request ID belongs to another operation.",
+          ),
+        );
+      return this.admission?.record.id === id ? this.admission.accepted : Promise.resolve(id);
     }
-    await this.recover(operation);
+    this.assertAvailable();
+    const record: OperationRecord = {
+      id,
+      kind,
+      taskVersion: definition.version,
+      ...prepared,
+      status: "running",
+      phase: "Preparing",
+      checkpoint: "admitted",
+      startedAt: this.clock.now().toISOString(),
+      finishedAt: null,
+      error: null,
+      cleanupComplete: false,
+      recoverOnReconnect: false,
+      historyOnly: false,
+    };
+    this.reservation = true;
+    const accepted = Promise.resolve().then(async () => {
+      try {
+        await this.gate.block();
+        await this.journal.admit(record, changes);
+        this.executing = id;
+        this.work = this.run(id).finally(() => this.release());
+        return id;
+      } catch (error) {
+        await this.holdStorage(error);
+        throw error;
+      } finally {
+        this.reservation = false;
+        this.admission = null;
+      }
+    });
+    this.admission = { record, accepted };
+    return accepted;
   }
-  public async recover(operation: J): Promise<void> {
-    if (this.executing || this.reservations)
-      throw new ControllerError("MINECRAFT_MAINTENANCE", "An operation is still running.");
-    this.executing = operation;
-    // A terminal result is irrevocable. Only retry cleanup after its commit.
-    const recovering =
-      operation.status === "succeeded" || operation.status === "failed"
-        ? this.cleanup(operation)
-        : this.recoverTask(operation);
-    this.work = recovering.finally(() => this.release());
-    await this.work;
+  public async wait(id: string): Promise<void> {
+    if (this.admission?.record.id === id) await this.admission.accepted;
+    if (this.executing === id) await this.work;
   }
-  private task(operation: J): MaintenanceTask<J> {
-    const task = this.options.tasks.get(operation.kind);
-    if (
-      !task ||
-      (operation.taskVersion !== task.version &&
-        !task.legacyVersions?.includes(operation.taskVersion))
-    )
-      throw new ControllerError(
-        "BACKUP_RECOVERY_REQUIRED",
-        "The operation journal uses an unsupported task version. Keep Minecraft stopped and inspect it.",
-      );
-    if (task.destructive && (!task.safetyBackup || !task.safetyBackupVerified))
-      throw new Error("Destructive tasks require a verified safety-backup handler.");
-    return task;
+  private record(id: string): Immutable<OperationRecord> {
+    const op = this.journal.get(id);
+    if (!op) throw new Error("The active journal entry is missing.");
+    return op;
   }
-  private context(operation: J, interrupted = false): TaskContext<J> {
+  private context(id: string, interrupted = false): RawTaskContext {
+    const assertCurrent = () => {
+      if (this.executing !== id)
+        throw new ControllerError(
+          "MINECRAFT_MAINTENANCE",
+          "The execution lease is no longer active.",
+        );
+    };
+    const assertActive = () => {
+      assertCurrent();
+      if (!this.journal.healthy())
+        throw new ControllerError(
+          "BACKUP_RECOVERY_REQUIRED",
+          this.journal.failure() ?? "Storage needs inspection.",
+        );
+    };
     return {
-      operation,
+      id,
       interrupted,
-      checkpoint: (name) => this.checkpoint(operation, name),
-      boot: (id, action) => this.boot(operation, id, action),
+      assertActive,
+      assertCurrent,
+      record: () => this.record(id),
+      step: async (checkpoint, data, options = {}) => {
+        assertActive();
+        const current = this.record(id);
+        await this.journal.update(
+          id,
+          {
+            data,
+            checkpoint,
+            phase: options.phase ?? current.phase,
+            result: { ...current.result, ...options.result },
+          },
+          options.changes,
+        );
+      },
+      boot: async (containerId, action) => {
+        assertActive();
+        const op = this.record(id);
+        if (!this.task(op).canBoot(op))
+          throw new ControllerError(
+            "BACKUP_RECOVERY_REQUIRED",
+            "Live server files are not safe to boot.",
+          );
+        await this.journal.update(id, { checkpoint: "boot-safe" });
+        return this.gate.boot(containerId, action);
+      },
     };
   }
-  private async release(): Promise<void> {
-    this.executing = null;
-    if (this.initialized && !this.closing && !this.active()) {
+  private async terminal(
+    id: string,
+    status: "succeeded" | "failed",
+    phase: string,
+    error: string | null,
+  ): Promise<void> {
+    await this.journal.update(id, {
+      status,
+      phase,
+      error,
+      checkpoint: "committed",
+      finishedAt: this.clock.now().toISOString(),
+      recoverOnReconnect: false,
+    });
+  }
+  private async cleanup(id: string): Promise<void> {
+    try {
+      await this.task(this.record(id)).cleanup(this.context(id));
+      await this.journal.update(id, { cleanupComplete: true });
+    } catch (error) {
+      console.error("Committed result retained; cleanup needs attention", id, error);
+      if (!this.journal.healthy()) await this.holdStorage(error);
+    }
+  }
+  private async failed(id: string, error: unknown): Promise<void> {
+    if (!this.journal.healthy()) {
+      await this.holdStorage(error);
       try {
-        await this.options.gate?.open();
-      } catch (error) {
-        console.error("Cannot release startup protection", error);
+        await this.task(this.record(id)).hold(this.context(id));
+      } catch (failure) {
+        console.error("Cannot hold the failed task safe", failure);
       }
+      return;
+    }
+    const transient = dockerUnavailable(error);
+    try {
+      await this.journal.update(id, {
+        status: transient ? "running" : "recoveryRequired",
+        phase: transient ? "Waiting for Docker to recover" : "Recovery needs attention",
+        finishedAt: null,
+        error: publicFailure(error),
+        recoverOnReconnect: transient,
+      });
+      if (!transient) await this.task(this.record(id)).hold(this.context(id));
+    } catch (failure) {
+      await this.holdStorage(failure);
     }
   }
-  private async finish(operation: J, status: "succeeded" | "failed", phase: string): Promise<void> {
-    operation.status = status;
-    operation.phase = phase;
-    operation.finishedAt = this.options.now().toISOString();
-    operation.recoverOnReconnect = false;
+  private async run(id: string): Promise<void> {
     try {
-      operation.checkpoint = "committed";
-      await this.options.persist();
-    } catch (error) {
-      operation.status = "recoveryRequired";
-      throw error;
-    }
-    // Observing a committed result must never send it back through rollback.
-    try {
-      await this.options.observer?.(operation, "committed");
-    } catch (error) {
-      console.error("Committed maintenance observer failed", error);
-    }
-  }
-  private async cleanup(operation: J): Promise<void> {
-    try {
-      await this.options.tasks.get(operation.kind)?.cleanup?.(this.context(operation));
-      operation.cleanupComplete = true;
-      await this.options.persist();
-    } catch (error) {
-      operation.cleanupComplete = false;
-      console.error("Committed maintenance cleanup needs attention", operation.id, error);
-    }
-  }
-  private async failed(operation: J, error: unknown): Promise<void> {
-    operation.error = this.options.describe(error);
-    operation.finishedAt = null;
-    if (dockerUnavailable(error)) {
-      operation.status = "running";
-      operation.phase = "Waiting for Docker to recover";
-      operation.recoverOnReconnect = true;
-    } else {
-      operation.status = "recoveryRequired";
-      operation.phase = "Recovery needs attention";
-      operation.recoverOnReconnect = false;
-      try {
-        await this.options.tasks.get(operation.kind)?.hold(this.context(operation));
-      } catch (holdError) {
-        console.error("Cannot hold Minecraft stopped", holdError);
-      }
-    }
-    try {
-      await this.options.persist();
-    } catch (persistError) {
-      operation.status = "recoveryRequired";
-      operation.recoverOnReconnect = false;
-      console.error("Cannot persist recovery state", persistError);
-    }
-  }
-  private async run(operation: J): Promise<void> {
-    const task = this.task(operation);
-    const context = this.context(operation);
-    let committed = false;
-    try {
-      await this.checkpoint(operation, "admitted");
-      await task.prepare?.(context);
-      if (task.destructive) {
-        await task.safetyBackup(context);
-        if (!task.safetyBackupVerified(operation))
-          throw new Error("The safety backup is not verified.");
-        await this.checkpoint(operation, "safety-ready");
-      }
-      await task.apply(context);
-      await task.verify?.(context);
-      await this.options.observer?.(operation, "before-commit");
-      await this.finish(operation, "succeeded", "Complete");
-      committed = true;
+      await this.task(this.record(id)).run(this.context(id));
+      await this.terminal(id, "succeeded", "Complete", null);
     } catch (error) {
       if (
-        operation.status === "recoveryRequired" ||
+        !this.journal.healthy() ||
         dockerUnavailable(error) ||
         (error instanceof ControllerError && error.code === "BACKUP_RECOVERY_REQUIRED")
       ) {
-        await this.failed(operation, error);
-      } else {
-        operation.error = this.options.describe(error);
-        try {
-          await task.recover(context);
-          await this.finish(operation, "failed", "Failed; previous state preserved");
-          committed = true;
-        } catch (recoveryError) {
-          await this.failed(operation, recoveryError);
-        }
+        await this.failed(id, error);
+        return;
+      }
+      try {
+        await this.task(this.record(id)).recover(this.context(id));
+        await this.terminal(id, "failed", "Failed; previous state preserved", publicFailure(error));
+      } catch (failure) {
+        await this.failed(id, failure);
+        return;
       }
     }
-    if (committed) await this.cleanup(operation);
+    await this.cleanup(id);
   }
-  private async recoverTask(operation: J): Promise<void> {
-    try {
-      await this.options.gate?.block();
-      await this.task(operation).recover(this.context(operation, true));
-      operation.error = "The controller was interrupted. Previous server data was preserved.";
-      await this.finish(operation, "failed", "Interrupted operation recovered");
-      await this.cleanup(operation);
-    } catch (error) {
-      await this.failed(operation, error);
+  private async release(): Promise<void> {
+    this.executing = null;
+    if (this.ready && !this.closing && !this.failure && !this.active()) {
+      try {
+        await this.gate.open();
+      } catch (error) {
+        await this.holdStorage(error);
+      }
     }
+  }
+  public async initialize(): Promise<void> {
+    if (this.closing)
+      throw new ControllerError("BACKUP_CONTROLLER_ERROR", "The controller is shutting down.");
+    await this.gate.block();
+    for (const op of this.journal.all()) this.validate(op);
+    await this.environment.reconcile();
+    let op = this.active();
+    while (op && op.status !== "recoveryRequired") {
+      await this.recoverOperation(op.id);
+      const next = this.active();
+      if (next?.id === op.id) break;
+      op = next;
+    }
+    this.ready = true;
+    if (!this.closing && !this.active() && !this.failure) await this.gate.open();
+  }
+  private async recoverOperation(id: string): Promise<void> {
+    this.executing = id;
+    this.work = (async () => {
+      try {
+        const op = this.record(id);
+        if (op.status !== "succeeded" && op.status !== "failed") {
+          await this.task(op).recover(this.context(id, true));
+          await this.terminal(
+            id,
+            "failed",
+            "Interrupted operation recovered",
+            "The interrupted operation was recovered. Previous server data was preserved.",
+          );
+        }
+        await this.cleanup(id);
+      } catch (error) {
+        await this.failed(id, error);
+      }
+    })().finally(() => this.release());
+    await this.work;
+  }
+  public recover(): Promise<void> {
+    if (this.closing)
+      return Promise.reject(
+        new ControllerError("BACKUP_CONTROLLER_ERROR", "The controller is shutting down."),
+      );
+    if (this.recovery) return this.recovery;
+    if (this.executing || this.reservation || this.admission)
+      return Promise.reject(
+        new ControllerError("MINECRAFT_MAINTENANCE", "An operation is still running."),
+      );
+    const recovering = Promise.resolve()
+      .then(async () => {
+        try {
+          await this.gate.block();
+          await this.environment.reconcile();
+          for (const op of this.journal.all()) this.validate(op);
+        } catch (error) {
+          await this.holdStorage(error);
+          throw error;
+        }
+        this.fault = null;
+        let op = this.active();
+        while (op) {
+          await this.recoverOperation(op.id);
+          const next = this.active();
+          if (next?.id === op.id) break;
+          op = next;
+        }
+        if (this.active() || this.failure)
+          throw new ControllerError(
+            "BACKUP_RECOVERY_REQUIRED",
+            this.failure ?? this.active()?.error ?? "Recovery needs attention.",
+          );
+        if (!this.closing) await this.gate.open();
+      })
+      .finally(() => {
+        this.recovery = null;
+      });
+    this.recovery = recovering;
+    return recovering;
+  }
+  public async retry(): Promise<void> {
+    const op = this.active();
+    if (
+      !this.ready ||
+      this.closing ||
+      this.executing ||
+      this.reservation ||
+      this.admission ||
+      this.recovery ||
+      this.failure ||
+      !op?.recoverOnReconnect
+    )
+      return;
+    try {
+      await this.environment.available();
+    } catch {
+      return;
+    }
+    await this.recover();
+  }
+  public async close(): Promise<void> {
+    this.closing = true;
+    await this.gate.block();
+    if (this.admission) await this.admission.accepted.catch(() => {});
+    if (this.shortWork) await this.shortWork.catch(() => {});
+    await this.work;
+    if (this.recovery) await this.recovery.catch(() => {});
   }
 }

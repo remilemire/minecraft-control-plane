@@ -1,17 +1,13 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { rm, writeFile } from "node:fs/promises";
+import { describe, expect, it } from "vitest";
+import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fixture, storedZip } from "./test-fixtures.js";
-import { compareVersions, readInstallation } from "./versions.js";
+import { installationFixture as fixture } from "@test/support/installation.js";
+import { storedZip } from "@test/support/archive.js";
+import { compareVersions, readInstallation } from "./metadata.js";
 
-const roots: string[] = [];
-afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
 describe("installed versions and startup compatibility", () => {
   it("records a floating Vanilla installation but requires pinning before restore", async () => {
-    const { root, data } = await fixture();
-    roots.push(root);
+    const { data } = await fixture();
     await writeFile(
       join(data, ".vanilla-manifest.json"),
       JSON.stringify({ minecraftVersion: "1.21.1", serverEntry: "minecraft_server.1.21.1.jar" }),
@@ -34,8 +30,7 @@ describe("installed versions and startup compatibility", () => {
     ).toBeNull();
   });
   it("requires a pinned Paper build and rejects custom downloads", async () => {
-    const { root, data } = await fixture();
-    roots.push(root);
+    const { data } = await fixture();
     await writeFile(
       join(data, ".papermc-manifest.json"),
       JSON.stringify({
@@ -62,9 +57,8 @@ describe("installed versions and startup compatibility", () => {
     "modpackId",
     "modpackVersionId",
   ] as const)("rejects a differing %s", async (key) => {
-    const { root, data, runtime } = await fixture();
-    roots.push(root);
-    const current = await readInstallation(data, runtime.state.env);
+    const { data, env } = await fixture();
+    const current = await readInstallation(data, env);
     const record = {
       ...current.version!,
       [key]: key === "serverType" ? ("PAPER" as const) : "different",
@@ -72,9 +66,8 @@ describe("installed versions and startup compatibility", () => {
     expect(compareVersions(record, current).compatible).toBe(false);
   });
   it("rejects startup world settings that would load another world", async () => {
-    const { root, data, runtime } = await fixture();
-    roots.push(root);
-    const current = await readInstallation(data, { ...runtime.state.env, LEVEL: "another-world" });
+    const { data, env } = await fixture();
+    const current = await readInstallation(data, { ...env, LEVEL: "another-world" });
     expect(compareVersions(current.version, current).compatible).toBe(false);
     expect(current.reasons.join(" ")).toContain("world name");
   });

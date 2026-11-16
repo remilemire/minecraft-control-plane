@@ -1,7 +1,7 @@
 import { open, readFile, chmod, chown, lstat, mkdir, realpath } from "node:fs/promises";
 import { join, sep } from "node:path";
 import { ControllerError, isMissing } from "@/errors.js";
-import { atomicText } from "@/state/atomic-files.js";
+import { atomicText } from "@/filesystem/atomic-files.js";
 
 // Restore gameplay settings while retaining current connection credentials and
 // panel access enforcement. Other deployment settings remain in Docker's env.
@@ -40,7 +40,7 @@ export async function preserveCredentials(dataPath: string, stagedPath: string):
 }
 
 // Restoring an older native snapshot must not re-enable the modpack scheduler.
-export async function ftbConfigExists(dataPath: string): Promise<boolean> {
+async function ftbConfigExists(dataPath: string): Promise<boolean> {
   try {
     await lstat(join(dataPath, "config/ftbbackups3-server.snbt"));
     return true;

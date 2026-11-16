@@ -184,9 +184,13 @@ erase initialized state to clear maintenance. Live data and recovery staging mus
 filesystem; stop Minecraft and the controller before moving their parent.
 
 `make backup-recover` retries recovery after inspection. FTB migration commands
-and ZIP archive reading are retired; historical journal recovery remains
+and ZIP archive reading are retired; supported native historical journals remain
 supported, and existing ZIP files are left untouched. Runtime files under `/data/`
-are gitignored in full. Never operate on live Minecraft files or run Compose
+are gitignored in full. Schema 1 native journals upgrade to the typed schema 2
+aggregate. Completed retired migrations remain history; unfinished ones require
+recovery using the previous release before upgrade. No retired migration executor
+is included. Controller cross-module access uses the owning service contract;
+trusted task capabilities stay private to composition. Never operate on live Minecraft files or run Compose
 lifecycle commands during backup/recovery work.
 
 ## Not built yet — don't assume it exists

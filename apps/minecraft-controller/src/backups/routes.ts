@@ -8,10 +8,9 @@ import {
   backupSchedulesInputSchema,
   backupSchedulesResponseSchema,
 } from "@minecraft-control-plane/shared/minecraft";
-import type { BackupService } from "./service.js";
-import type { BackupScheduler } from "./scheduler.js";
+import type { BackupApi } from "./service.js";
 
-export function createBackupRoutes(backups: BackupService, scheduler: BackupScheduler): Router {
+export function createBackupRoutes(backups: BackupApi): Router {
   const router = Router();
   router.get("/", async (_req, res) => {
     res.json(backupListResponseSchema.parse(await backups.list()));
@@ -23,12 +22,12 @@ export function createBackupRoutes(backups: BackupService, scheduler: BackupSche
       .json(backupOperationAcceptedSchema.parse({ operationId: await backups.create(requestId) }));
   });
   router.get("/schedules", (_req, res) => {
-    res.json(backupSchedulesResponseSchema.parse(scheduler.schedules()));
+    res.json(backupSchedulesResponseSchema.parse(backups.schedules()));
   });
   router.put("/schedules", async (req, res) => {
     res.json(
       backupSchedulesResponseSchema.parse(
-        await scheduler.updateSchedules(backupSchedulesInputSchema.parse(req.body)),
+        await backups.updateSchedules(backupSchedulesInputSchema.parse(req.body)),
       ),
     );
   });

@@ -1,63 +1,41 @@
-// apps/minecraft-controller/eslint.config.ts
-
 import { defineConfig } from "eslint/config";
 import globals from "globals";
 import baseConfig from "../../eslint.config.base.js";
+import { boundaryRule } from "./boundaries.config.js";
 
 export default defineConfig([
   ...baseConfig,
   {
-    files: ["src/server/routes.ts", "src/backups/routes.ts", "src/maintenance/routes.ts"],
+    files: ["src/**/*.ts"],
+    plugins: { controller: { rules: { boundaries: boundaryRule } } },
+    rules: {
+      "controller/boundaries": "error",
+      "no-restricted-imports": ["error", { patterns: ["../*"] }],
+    },
+  },
+  {
+    files: [
+      "src/runtime/**/*.ts",
+      "src/maintenance/coordinator.ts",
+      "src/maintenance/task.ts",
+      "src/maintenance/contracts.ts",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
         {
           patterns: [
+            { group: ["../*"] },
             {
               group: [
-                "@/runtime/*",
-                "@/state/*",
-                "@/tasks/*",
-                "@/server/*",
                 "@/backups/*",
-                "@/maintenance/*",
+                "@/server/*",
+                "@/server-data/*",
+                "@/installation/*",
+                "@/state/*",
               ],
               message:
-                "Feature routes depend on their own services; cross-feature coordination belongs in services.",
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    files: ["src/runtime/**/*.ts"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["@/backups/*", "@/maintenance/*", "@/tasks/*", "@/state/*"],
-              message:
-                "Runtime adapters must not depend on controller workflows or backup/state features.",
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    files: ["src/maintenance/coordinator.ts", "src/maintenance/journal.ts"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["@/backups/*", "@/tasks/*", "@/state/*"],
-              message:
-                "The maintenance engine receives task definitions and persistence through its ports.",
+                "Runtime and generic maintenance cannot depend on feature implementations or aggregate state.",
             },
           ],
         },
@@ -68,10 +46,7 @@ export default defineConfig([
     files: ["**/*.ts"],
     languageOptions: {
       globals: { ...globals.node },
-      parserOptions: {
-        projectService: true,
-        tsconfigRootDir: import.meta.dirname,
-      },
+      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
     },
   },
 ]);

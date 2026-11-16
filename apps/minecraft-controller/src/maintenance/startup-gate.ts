@@ -1,13 +1,8 @@
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import type { MinecraftRuntime } from "@/runtime/contracts.js";
-import { atomicText, syncDirectory } from "@/state/atomic-files.js";
-
-export interface StartupAuthorization {
-  block(): Promise<void>;
-  open(): Promise<void>;
-  boot<T>(containerId: string, action: () => Promise<T>): Promise<T>;
-}
+import { atomicText, syncDirectory } from "@/filesystem/atomic-files.js";
+import type { BootIdentityReader, StartupAuthorization } from "./contracts.js";
+export type { StartupAuthorization } from "./contracts.js";
 
 // Fresh per-boot challenges prevent persisted permissions from authorizing a
 // different process after a host/daemon crash. Minecraft cannot write permits.
@@ -20,7 +15,7 @@ export class StartupGate implements StartupAuthorization {
   private lastGrant: string | null = null;
   public constructor(
     private readonly root: string,
-    private readonly runtime: Pick<MinecraftRuntime, "inspect">,
+    private readonly runtime: BootIdentityReader,
   ) {}
 
   public async initialize(): Promise<void> {
@@ -50,6 +45,7 @@ export class StartupGate implements StartupAuthorization {
     this.idle = false;
     await this.pending;
     this.lastGrant = null;
+    await mkdir(join(this.root, "permits"), { recursive: true, mode: 0o755 });
     await rm(join(this.root, "permits/current"), { force: true });
     await syncDirectory(join(this.root, "permits"));
   }
@@ -80,7 +76,12 @@ export class StartupGate implements StartupAuthorization {
       if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
       throw error;
     }
-    if (request.length > 160 || !/^[a-zA-Z0-9_.-]{1,64}\n[0-9a-f-]{36}\n$/.test(request)) return;
+    if (
+      request === this.lastGrant ||
+      request.length > 160 ||
+      !/^[a-zA-Z0-9_.-]{1,64}\n[0-9a-f-]{36}\n$/.test(request)
+    )
+      return;
     const [hostname] = request.split("\n");
     let container;
     try {

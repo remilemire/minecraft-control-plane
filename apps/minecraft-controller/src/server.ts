@@ -7,8 +7,6 @@ import { DockerClient } from "@/runtime/docker-client.js";
 import { createRoutes } from "@/http/routes.js";
 import { createController } from "./composition.js";
 import { DockerMinecraftRuntime } from "@/runtime/minecraft-runtime.js";
-import { StartupGate } from "@/maintenance/startup-gate.js";
-import { join } from "node:path";
 
 const docker = new Dockerode({ socketPath: env.DOCKER_SOCKET });
 const dockerClient = new DockerClient({
@@ -18,8 +16,6 @@ const dockerClient = new DockerClient({
 });
 
 const runtime = new DockerMinecraftRuntime(dockerClient, docker);
-const startupGate = new StartupGate(join(env.MINECRAFT_DATA_ROOT, "startup-gate"), runtime);
-await startupGate.initialize();
 const controller = createController({
   dataRoot: env.MINECRAFT_DATA_ROOT,
   timezone: env.MINECRAFT_BACKUP_TIMEZONE,
@@ -30,7 +26,6 @@ const controller = createController({
     monthly: env.MINECRAFT_BACKUP_KEEP_MONTHLY,
   },
   runtime,
-  startupGate,
 });
 await controller.initialize();
 controller.start();
@@ -53,11 +48,14 @@ function shutdown(): void {
   shuttingDown = true;
   controller.server.closeLogStreams();
 
+  const closing = controller.close();
   server.close(() => {
-    void controller
-      .close()
-      .then(() => startupGate.close())
-      .then(() => process.exit(0));
+    void closing
+      .then(() => process.exit(0))
+      .catch((error: unknown) => {
+        console.error("Controller shutdown failed", error);
+        process.exit(1);
+      });
   });
   // close() only refuses new connections; drop idle keep-alives so it
   // actually settles.

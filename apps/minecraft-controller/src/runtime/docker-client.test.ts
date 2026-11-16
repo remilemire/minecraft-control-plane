@@ -1,203 +1,92 @@
-// apps/minecraft-controller/src/docker.test.ts
-
-import type Dockerode from "dockerode";
-import { Readable } from "node:stream";
-import { describe, expect, it, vi } from "vitest";
-import {
-  ContainerNotFoundError,
-  DockerClient,
-  MultipleContainersFoundError,
-} from "./docker-client.js";
-
-const PROJECT = "minecraft-control-plane";
-const SERVICE = "minecraft";
-const CONTAINER_ID = "abc123";
-
-interface FakeDockerodeInit {
-  readonly containers?: Partial<Dockerode.ContainerInfo>[];
-  readonly start?: () => Promise<unknown>;
-  readonly stop?: () => Promise<unknown>;
-  readonly restart?: () => Promise<unknown>;
-  readonly logs?: () => Promise<Readable>;
-  readonly demuxStream?: (
-    source: Readable,
-    stdout: NodeJS.WritableStream,
-    stderr: NodeJS.WritableStream,
-  ) => void;
-}
-
-function fakeDockerode({
-  containers,
-  start,
-  stop,
-  restart,
-  logs,
-  demuxStream,
-}: FakeDockerodeInit = {}) {
-  const container = {
-    start: vi.fn(start ?? (async () => ({}))),
-    stop: vi.fn(stop ?? (async () => ({}))),
-    restart: vi.fn(restart ?? (async () => ({}))),
-    logs: vi.fn(logs ?? (async () => Readable.from([]))),
-  };
-  const docker = {
-    listContainers: vi.fn(async () => containers ?? [{ Id: CONTAINER_ID, State: "running" }]),
-    getContainer: vi.fn(() => container),
-    modem: {
-      demuxStream: vi.fn(
-        demuxStream ??
-          ((source: Readable, stdout: NodeJS.WritableStream) => {
-            source.pipe(stdout);
-          }),
-      ),
-    },
-  };
-  return { docker, container };
-}
-
-function createClient(docker: ReturnType<typeof fakeDockerode>["docker"]) {
-  return new DockerClient({
-    docker: docker as unknown as Dockerode,
-    projectName: PROJECT,
-    serviceName: SERVICE,
+import { expect, it, vi } from "vitest";
+import { dockerFixture, deferred } from "@test/support/docker-daemon.js";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import supertest from "supertest";
+import { createController } from "@/composition.js";
+import { createApp } from "@/http/app.js";
+import { createRoutes } from "@/http/routes.js";
+it("discovers exactly the configured Compose service through the real Docker transport", async () => {
+  const f = await dockerFixture();
+  expect(await f.client.getStatus()).toBe("RUNNING");
+  const request = f.daemon.requests[0]!;
+  expect(request.query.get("all")).toBe("true");
+  expect(JSON.parse(request.query.get("filters")!)).toEqual({
+    label: ["com.docker.compose.project=test-project", "com.docker.compose.service=minecraft"],
   });
-}
-
-describe("DockerClient", () => {
-  it("looks the container up by both compose project and service labels, including stopped ones", async () => {
-    const { docker } = fakeDockerode();
-
-    await createClient(docker).getManagedContainer();
-
-    expect(docker.listContainers).toHaveBeenCalledWith({
-      all: true,
-      filters: {
-        label: [`com.docker.compose.project=${PROJECT}`, `com.docker.compose.service=${SERVICE}`],
-      },
+  f.daemon.running = false;
+  expect(await f.client.getStatus()).toBe("STOPPED");
+});
+it("reports a missing container instead of pretending it is stopped", async () => {
+  const f = await dockerFixture();
+  f.daemon.missing = true;
+  await expect(f.client.getStatus()).rejects.toThrow("No container found");
+});
+it("preserves the missing-container HTTP response through the actual application", async () => {
+  const f = await dockerFixture(),
+    root = await mkdtemp(join(tmpdir(), "controller-docker-http-")),
+    controller = createController({
+      dataRoot: root,
+      runtime: f.runtime,
+      timezone: "UTC",
+      retention: { hourly: 6, daily: 5, weekly: 3, monthly: 2 },
     });
-    expect(docker.getContainer).toHaveBeenCalledWith(CONTAINER_ID);
-  });
-
-  it("throws ContainerNotFoundError from every method when no container matches", async () => {
-    const { docker } = fakeDockerode({ containers: [] });
-    const client = createClient(docker);
-
-    await expect(client.getManagedContainer()).rejects.toBeInstanceOf(ContainerNotFoundError);
-    await expect(client.getStatus()).rejects.toBeInstanceOf(ContainerNotFoundError);
-    await expect(client.openLogStream(new AbortController().signal)).rejects.toBeInstanceOf(
-      ContainerNotFoundError,
-    );
-  });
-
-  it("rejects an ambiguous container selection instead of choosing one", async () => {
-    const { docker } = fakeDockerode({
-      containers: [
-        { Id: CONTAINER_ID, State: "running" },
-        { Id: "duplicate", State: "exited" },
-      ],
+  try {
+    await controller.initialize();
+    const app = createApp({ token: "test", router: createRoutes(controller) });
+    f.daemon.missing = true;
+    const response = await supertest(app).get("/status").set("authorization", "Bearer test");
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({
+      message: 'No container found for service "minecraft" in project "test-project".',
     });
-
-    await expect(createClient(docker).getManagedContainer()).rejects.toBeInstanceOf(
-      MultipleContainersFoundError,
-    );
-  });
-
-  it("reports RUNNING for a running container", async () => {
-    const { docker } = fakeDockerode({ containers: [{ Id: CONTAINER_ID, State: "running" }] });
-
-    expect(await createClient(docker).getStatus()).toBe("RUNNING");
-  });
-
-  it("reports STOPPED for any non-running state", async () => {
-    const { docker } = fakeDockerode({ containers: [{ Id: CONTAINER_ID, State: "exited" }] });
-
-    expect(await createClient(docker).getStatus()).toBe("STOPPED");
-  });
-
-  it("follows and demultiplexes the last 100 log lines into structured events", async () => {
-    const source = Readable.from([]);
-    const { docker, container } = fakeDockerode({
-      logs: async () => source,
-      demuxStream(raw, stdout, stderr) {
-        stdout.write(Buffer.from("first\npart"));
-        stdout.write(Buffer.from("ial\n"));
-        stderr.write(Buffer.from("warning\n"));
-        raw.resume();
-      },
-    });
-    const events = await createClient(docker).openLogStream(new AbortController().signal);
-    const received = [];
-
-    for await (const event of events) {
-      received.push(event);
-    }
-
-    expect(container.logs).toHaveBeenCalledWith({
-      follow: true,
-      stdout: true,
-      stderr: true,
-      tail: 100,
-    });
-    expect(received).toEqual([
-      { stream: "stdout", line: "first" },
-      { stream: "stdout", line: "partial" },
-      { stream: "stderr", line: "warning" },
-    ]);
-  });
-
-  it("destroys and unregisters the source when log stream setup fails", async () => {
-    const source = new Readable({ read() {} });
-    const destroy = vi.spyOn(source, "destroy");
-    const failure = new Error("demux setup failed");
-    const { docker } = fakeDockerode({
-      logs: async () => source,
-      demuxStream() {
-        throw failure;
-      },
-    });
-    const client = createClient(docker);
-
-    await expect(client.openLogStream(new AbortController().signal)).rejects.toThrow(failure);
-    client.closeLogStreams();
-
-    expect(destroy).toHaveBeenCalledOnce();
-  });
-
-  it("leaves normal stream cleanup to the adapter after ownership transfers", async () => {
-    const source = new Readable({ read() {} });
-    const destroy = vi.spyOn(source, "destroy");
-    const { docker } = fakeDockerode({
-      logs: async () => source,
-      demuxStream(_raw, stdout) {
-        stdout.write(Buffer.from("first\n"));
-      },
-    });
-    const client = createClient(docker);
-    const events = await client.openLogStream(new AbortController().signal);
-
-    for await (const event of events) {
-      expect(event).toEqual({ stream: "stdout", line: "first" });
-      break;
-    }
-
-    client.closeLogStreams();
-    expect(destroy).toHaveBeenCalledOnce();
-  });
-
-  it("uses the active source registry only to close streams during controller shutdown", async () => {
-    const source = new Readable({ read() {} });
-    const destroy = vi.spyOn(source, "destroy");
-    const { docker } = fakeDockerode({ logs: async () => source, demuxStream() {} });
-    const client = createClient(docker);
-    const events = await client.openLogStream(new AbortController().signal);
-
-    client.closeLogStreams();
-    await expect(events[Symbol.asyncIterator]().next()).resolves.toEqual({
-      value: undefined,
-      done: true,
-    });
-    client.closeLogStreams();
-
-    expect(destroy).toHaveBeenCalledOnce();
-  });
+  } finally {
+    await controller.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+it("rejects ambiguous container identity", async () => {
+  const f = await dockerFixture();
+  f.daemon.multiple = true;
+  await expect(f.client.getStatus()).rejects.toThrow("expected exactly one");
+});
+it("reads real Docker-framed stdout and stderr logs", async () => {
+  const f = await dockerFixture(),
+    events = [];
+  for await (const event of await f.client.openLogStream(new AbortController().signal))
+    events.push(event);
+  expect(events).toEqual([
+    { stream: "stdout", line: "line one" },
+    { stream: "stderr", line: "line two" },
+  ]);
+  const request = f.daemon.requests.find((r) => r.path.endsWith("/logs"))!;
+  expect(request.query.get("tail")).toBe("100");
+  expect(request.query.get("follow")).toBe("true");
+});
+it("does not open a Docker connection for an already aborted read", async () => {
+  const f = await dockerFixture(),
+    abort = new AbortController();
+  abort.abort();
+  await expect(f.client.openLogStream(abort.signal)).rejects.toThrow();
+  expect(f.daemon.requests).toEqual([]);
+});
+it("closes the transport if cancellation arrives during discovery", async () => {
+  const f = await dockerFixture(),
+    abort = new AbortController();
+  f.daemon.listHold = deferred();
+  const result = expect(f.client.openLogStream(abort.signal)).rejects.toThrow();
+  await f.daemon.listEntered.promise;
+  abort.abort();
+  f.daemon.listHold.resolve();
+  await result;
+});
+it("controller shutdown closes active log transports", async () => {
+  const f = await dockerFixture();
+  f.daemon.logHold = deferred();
+  const events = await f.client.openLogStream(new AbortController().signal);
+  expect(events).toBeDefined();
+  f.client.closeLogStreams();
+  await vi.waitFor(() => expect(f.daemon.closedLogReads).toBe(1));
+  f.daemon.logHold.resolve();
 });

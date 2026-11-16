@@ -3,8 +3,8 @@ import {
   backupIdSchema,
   maintenanceOperationSchema,
 } from "@minecraft-control-plane/shared/minecraft";
-import type { MaintenanceService } from "./service.js";
-export function createMaintenanceRoutes(service: MaintenanceService): Router {
+import type { MaintenanceApi } from "./service.js";
+export function createMaintenanceRoutes(service: MaintenanceApi): Router {
   const router = Router();
   router.get("/operations/:id", (req, res) => {
     res.json(

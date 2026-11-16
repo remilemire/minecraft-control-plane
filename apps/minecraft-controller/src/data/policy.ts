@@ -9,7 +9,7 @@ const EXCLUDED_ROOTS = new Set([
   "backup-state",
   "backup-recovery",
 ]);
-export const PRESERVED_ROOTS = new Set([
+const PRESERVED_ROOTS = new Set([
   "eula.txt",
   "whitelist.json",
   "ops.json",

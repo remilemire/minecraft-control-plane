@@ -1,4 +1,8 @@
-import { backupRecordSchema, type BackupRecord } from "@minecraft-control-plane/shared/minecraft";
+import {
+  backupIdSchema,
+  backupRecordSchema,
+  type BackupRecord,
+} from "@minecraft-control-plane/shared/minecraft";
 import { createHash } from "node:crypto";
 import { constants, createReadStream, createWriteStream } from "node:fs";
 import {
@@ -20,8 +24,8 @@ import { createGunzip, createGzip } from "node:zlib";
 import tar from "tar-stream";
 import { z } from "zod";
 import { ControllerError } from "@/errors.js";
-import { atomicJson, syncDirectory } from "@/state/atomic-files.js";
-import { excluded, safeArchivePath } from "@/runtime/data-policy.js";
+import { atomicJson, syncDirectory } from "@/filesystem/atomic-files.js";
+import { excluded, preserved, safeArchivePath } from "@/data/policy.js";
 
 const entrySchema = z.object({
   path: z.string(),
@@ -103,11 +107,9 @@ export async function sha256File(path: string): Promise<string> {
 }
 
 export class ArchiveStorage {
-  public constructor(
-    public readonly root: string,
-    private readonly observe?: (event: string) => Promise<void>,
-  ) {}
+  public constructor(public readonly root: string) {}
   public directory(id: string): string {
+    backupIdSchema.parse(id);
     return join(this.root, id);
   }
   public async manifest(id: string): Promise<ArchiveManifest> {
@@ -133,6 +135,7 @@ export class ArchiveStorage {
     source: string,
     metadata: Omit<BackupRecord, "sha256" | "sizeBytes" | "expandedBytes" | "fileCount" | "format">,
   ): Promise<BackupRecord> {
+    backupIdSchema.parse(metadata.id);
     const sourceEntries = await inventory(source);
     const expandedBytes = sourceEntries.reduce((sum, e) => sum + e.size, 0);
     if (
@@ -144,6 +147,7 @@ export class ArchiveStorage {
         "The configured world's level.dat is missing or empty.",
       );
     await mkdir(this.root, { recursive: true, mode: 0o700 });
+    await syncDirectory(dirname(this.root));
     await requireSpace(this.root, Math.ceil(expandedBytes * 1.1) + 64 * 1024 * 1024);
     const temporary = join(this.root, `.partial-${metadata.id}`);
     await mkdir(temporary, { mode: 0o700 });
@@ -172,6 +176,10 @@ export class ArchiveStorage {
           uid: item.uid,
           gid: item.gid,
         });
+        // The pack can destroy this entry while open/stat is still pending,
+        // before the file pipeline has attached its own error listener.
+        // The enclosing output pipeline and catch own that failure.
+        entry.on("error", () => {});
         if (item.type === "directory") entry.end(Buffer.alloc(0));
         else {
           const hash = createHash("sha256");
@@ -198,7 +206,6 @@ export class ArchiveStorage {
           item.sha256 = hash.digest("hex");
         }
         entries.push(entrySchema.parse(item));
-        await this.observe?.(`archive-entry:${item.path}`);
       }
       pack.finalize();
       await output;
@@ -262,6 +269,37 @@ export class ArchiveStorage {
       );
     await this.readTar(path, manifest, destination);
     return manifest;
+  }
+
+  /** Proves rollback restored the snapshot's data before a new process can boot. */
+  public async verifySource(id: string, source: string): Promise<void> {
+    const manifest = await this.verify(id);
+    const retained = (name: string) => !preserved(name.split("/")[0] ?? "");
+    const expected = new Map(
+      manifest.entries.filter((entry) => retained(entry.path)).map((entry) => [entry.path, entry]),
+    );
+    const actual = (await inventory(source)).filter((entry) => retained(entry.path));
+    if (actual.length !== expected.size)
+      throw new ControllerError(
+        "BACKUP_RECOVERY_REQUIRED",
+        "Recovered server data does not match its safety backup. Keep Minecraft stopped.",
+      );
+    for (const entry of actual) {
+      const original = expected.get(entry.path);
+      if (
+        !original ||
+        original.type !== entry.type ||
+        original.size !== entry.size ||
+        original.mode !== entry.mode ||
+        original.uid !== entry.uid ||
+        original.gid !== entry.gid ||
+        (entry.type === "file" && (await sha256File(join(source, entry.path))) !== original.sha256)
+      )
+        throw new ControllerError(
+          "BACKUP_RECOVERY_REQUIRED",
+          "Recovered server data failed its safety-backup verification. Keep Minecraft stopped.",
+        );
+    }
   }
 
   private async readTar(
@@ -329,7 +367,6 @@ export class ArchiveStorage {
             }
           }
         }
-        if (destination) await this.observe?.(`staged-entry:${name}`);
       }
       await input;
       if (seen.size !== expected.size)

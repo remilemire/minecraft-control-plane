@@ -11,6 +11,9 @@ export class ControllerError extends Error {
   }
 }
 
+/** Operator-facing configuration failures retain the controller's existing 500 response. */
+export class ControllerConfigurationError extends Error {}
+
 export function dockerUnavailable(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   if (

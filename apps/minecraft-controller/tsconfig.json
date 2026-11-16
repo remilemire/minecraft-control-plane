@@ -3,7 +3,7 @@
 {
   "extends": ["../../tsconfig.base.json"],
   "compilerOptions": {
-    "paths": { "@/*": ["./src/*"] },
+    "paths": { "@/*": ["./src/*"], "@test/*": ["./test/*"] },
     "types": ["node"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext"

@@ -1,129 +1,135 @@
-import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import type { BackupTier } from "@minecraft-control-plane/shared/minecraft";
-import { publicFailure } from "@/errors.js";
-import type { MinecraftRuntime, MinecraftReader } from "@/runtime/contracts.js";
-import { ControllerStore } from "@/state/store.js";
-import { atomicText } from "@/state/atomic-files.js";
-import { MaintenanceCoordinator, type MaintenanceTask } from "@/maintenance/coordinator.js";
-import { MaintenanceService } from "@/maintenance/service.js";
-import type { StartupAuthorization } from "@/maintenance/startup-gate.js";
-import { ArchiveStorage } from "@/backups/archive.js";
-import { BackupService } from "@/backups/service.js";
-import { BackupScheduler } from "@/backups/scheduler.js";
-import { ServerService } from "@/server/service.js";
-import { ServerTaskLifecycle } from "@/tasks/server-lifecycle.js";
-import { BackupTask } from "@/tasks/backup.js";
-import { RestoreTask } from "@/tasks/restore.js";
-import { RestoreFiles } from "@/tasks/restore-files.js";
-import { PowerTask } from "@/tasks/power.js";
-import { retiredMigration } from "@/tasks/legacy-recovery.js";
-import { createOperation } from "@/tasks/requests.js";
-import { registerTask } from "@/tasks/registry.js";
-import type { OperationJournal } from "@/tasks/operations.js";
+import type { BackupSchedulesInput, BackupTier } from "@minecraft-control-plane/shared/minecraft";
+import type { MinecraftRuntime, MinecraftReader } from "@/runtime/service.js";
+import { systemClock, type Clock } from "@/time.js";
+import { StateService } from "@/state/service.js";
+import { MaintenanceCoordinator } from "@/maintenance/coordinator.js";
+import { MaintenanceService, type MaintenanceApi } from "@/maintenance/service.js";
+import { validateTaskRecord } from "@/maintenance/task.js";
+import type { RegisteredTask } from "@/maintenance/contracts.js";
+import { StartupGate } from "@/maintenance/startup-gate.js";
+import { ServerService, createServerOperations, type ServerApi } from "@/server/service.js";
+import { powerTasks } from "@/server/power.service.js";
+import { createInstallationService } from "@/installation/service.js";
+import { ServerDataService } from "@/server-data/service.js";
+import { SnapshotService } from "@/backups/snapshot.service.js";
+import { ScheduleService } from "@/backups/schedule.service.js";
+import { BackupService, type BackupApi } from "@/backups/service.js";
+import { backupTask } from "@/backups/backup.service.js";
+import { restoreTask } from "@/backups/restore.service.js";
+
 export interface ControllerOptions {
   dataRoot: string;
   timezone: string;
   retention: Record<BackupTier, number>;
   runtime: MinecraftRuntime & MinecraftReader;
-  now?: () => Date;
-  countdown?: () => Promise<void>;
-  startupGate?: StartupAuthorization | undefined;
-  observer?: (operation: OperationJournal, event: string) => Promise<void>;
+  clock?: Clock;
 }
 export function createController(options: ControllerOptions) {
-  const now = options.now ?? (() => new Date());
-  const store = new ControllerStore(join(options.dataRoot, "backup-state"));
-  const tasks = new Map<string, MaintenanceTask<OperationJournal>>();
-  const coordinator = new MaintenanceCoordinator<OperationJournal>({
-    operations: () => store.data.operations,
-    persist: () => store.persist(),
-    tasks,
-    gate: options.startupGate,
+  const clock = options.clock ?? systemClock;
+  const tasks = new Map<string, RegisteredTask>();
+  const gate = new StartupGate(join(options.dataRoot, "startup-gate"), options.runtime);
+  const state = new StateService(
+    join(options.dataRoot, "backup-state"),
+    options.timezone,
+    (record) => validateTaskRecord(tasks, record),
+  );
+  const operations = createServerOperations(options.runtime);
+  const dataPath = join(options.dataRoot, "minecraft");
+  const installation = createInstallationService(dataPath, options.runtime);
+  const files = new ServerDataService(dataPath, join(options.dataRoot, "backup-recovery"));
+  const snapshots = new SnapshotService(
+    join(options.dataRoot, "backups"),
+    dataPath,
+    state.catalogue(),
+    state.schedules(),
+    installation,
+    options.retention,
+  );
+  for (const task of [
+    ...powerTasks(operations),
+    backupTask(snapshots, operations, files, clock),
+    restoreTask(snapshots, operations, files, clock),
+  ]) {
+    if (tasks.has(task.kind)) throw new Error(`Duplicate task: ${task.kind}`);
+    tasks.set(task.kind, task);
+  }
+  const coordinator = new MaintenanceCoordinator(state.journal(), tasks, gate, clock, {
     available: async () => {
       await options.runtime.inspect();
     },
-    describe: publicFailure,
-    now,
-    observer: options.observer,
+    reconcile: async () => {
+      if (!state.journal().healthy()) await state.reopen();
+      await snapshots.reconcile();
+    },
   });
-  const maintenance = new MaintenanceService(coordinator, (request) =>
-    createOperation(request, now),
-  );
-  const storage = new ArchiveStorage(join(options.dataRoot, "backups"), async (event) => {
-    const op = maintenance.activeJournal();
-    if (op) await options.observer?.(op, event);
-  });
-  const backups = new BackupService(
-    storage,
-    join(options.dataRoot, "minecraft"),
-    store,
-    options.runtime,
-    maintenance,
-    options.retention,
-    now,
-  );
-  const scheduler = new BackupScheduler(
-    store,
+  const maintenance = new MaintenanceService(coordinator);
+  const server = new ServerService(options.runtime, maintenance);
+  const schedule = new ScheduleService(
+    state.schedules(),
     maintenance,
     options.timezone,
     options.retention,
-    now,
+    clock,
   );
-  const server = new ServerService(options.runtime, options.runtime, maintenance);
-  const recoveryRoot = join(options.dataRoot, "backup-recovery");
-  const lifecycle = new ServerTaskLifecycle(options.runtime, store, recoveryRoot, options.observer);
-  const files = new RestoreFiles(
-    backups.dataPath,
-    recoveryRoot,
-    backups,
-    options.runtime,
-    store,
-    lifecycle,
-  );
-  registerTask(tasks, "backup", new BackupTask(backups, options.runtime, store, lifecycle));
-  registerTask(
-    tasks,
-    "restore",
-    new RestoreTask(
-      backups.dataPath,
-      recoveryRoot,
-      backups,
-      options.runtime,
-      store,
-      lifecycle,
-      files,
-      options.countdown,
-    ),
-  );
-  const power = new PowerTask(options.runtime, lifecycle);
-  registerTask(tasks, "start", power);
-  registerTask(tasks, "stop", power);
-  registerTask(tasks, "restart", power);
-  registerTask(tasks, "migration", retiredMigration(lifecycle));
-  return {
-    backups,
-    maintenance,
-    scheduler,
-    server,
-    async initialize() {
-      await store.initialize(options.timezone);
-      await mkdir(storage.root, { recursive: true, mode: 0o700 });
-      await mkdir(recoveryRoot, { recursive: true, mode: 0o700 });
-      await scheduler.initialize();
-      await maintenance.initialize();
-      await backups.initialize();
-      await atomicText(join(store.root, "initialized"), "1\n");
-      await maintenance.open();
+  const backups = new BackupService(snapshots, maintenance, operations, schedule);
+  const publicBackups: BackupApi = Object.freeze({
+    list: () => backups.list(),
+    create: (requestId: string) => backups.create(requestId),
+    restore: (backupId: string, requestId: string) => backups.restore(backupId, requestId),
+    preview: (id: string) => backups.preview(id),
+    delete: (id: string) => backups.delete(id),
+    schedules: () => backups.schedules(),
+    updateSchedules: (enabled: BackupSchedulesInput) => backups.updateSchedules(enabled),
+  });
+  const publicMaintenance: MaintenanceApi = Object.freeze({
+    operation: (id: string) => maintenance.operation(id),
+    activeOperation: () => maintenance.activeOperation(),
+    latestOperation: () => maintenance.latestOperation(),
+    recover: () => maintenance.recover(),
+  });
+  const publicServer: ServerApi = Object.freeze({
+    power: (kind: "start" | "stop" | "restart") => server.power(kind),
+    execute: (command: string) => server.execute(command),
+    getStatus: () => server.getStatus(),
+    openLogStream: (signal: AbortSignal) => server.openLogStream(signal),
+    closeLogStreams: () => server.closeLogStreams(),
+  });
+  let closing: Promise<void> | undefined;
+  let initialization: Promise<void> | undefined;
+  let initialized = false;
+  return Object.freeze({
+    server: publicServer,
+    backups: publicBackups,
+    maintenance: publicMaintenance,
+    initialize(): Promise<void> {
+      if (closing) return Promise.reject(new Error("The application is shutting down."));
+      initialization ??= (async () => {
+        await gate.initialize();
+        await state.initialize();
+        await schedule.initialize();
+        await maintenance.initialize();
+        initialized = true;
+      })();
+      return initialization;
     },
     start() {
+      if (!initialized || closing)
+        throw new Error("Initialize the application before starting its workers.");
       maintenance.start();
-      scheduler.start();
+      schedule.start();
     },
-    async close() {
-      scheduler.stop();
-      await maintenance.close();
+    close(): Promise<void> {
+      closing ??= (async () => {
+        schedule.stop();
+        server.closeLogStreams();
+        const draining = maintenance.close();
+        if (initialization) await initialization.catch(() => {});
+        await draining;
+        await gate.close();
+      })();
+      return closing;
     },
-  };
+  });
 }
 export type ControllerApplication = ReturnType<typeof createController>;

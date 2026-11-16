@@ -1,26 +1,19 @@
 import { Router } from "express";
-import type { ServerService } from "@/server/service.js";
+import type { ServerApi } from "@/server/service.js";
 import { createServerRoutes } from "@/server/routes.js";
-import type { MaintenanceService } from "@/maintenance/service.js";
+import type { MaintenanceApi } from "@/maintenance/service.js";
 import { createMaintenanceRoutes } from "@/maintenance/routes.js";
-import type { BackupService } from "@/backups/service.js";
-import type { BackupScheduler } from "@/backups/scheduler.js";
+import type { BackupApi } from "@/backups/service.js";
 import { createBackupRoutes } from "@/backups/routes.js";
 export interface CreateRoutesOptions {
-  readonly server: ServerService;
-  readonly maintenance: MaintenanceService;
-  readonly backups: BackupService;
-  readonly scheduler: BackupScheduler;
+  readonly server: ServerApi;
+  readonly maintenance: MaintenanceApi;
+  readonly backups: BackupApi;
 }
-export function createRoutes({
-  server,
-  maintenance,
-  backups,
-  scheduler,
-}: CreateRoutesOptions): Router {
+export function createRoutes({ server, maintenance, backups }: CreateRoutesOptions): Router {
   const router = Router();
   router.use(createServerRoutes(server));
-  router.use("/backups", createBackupRoutes(backups, scheduler));
+  router.use("/backups", createBackupRoutes(backups));
   router.use("/maintenance", createMaintenanceRoutes(maintenance));
   // Historical clients keep their established operation/recovery URLs.
   router.use("/backups", createMaintenanceRoutes(maintenance));

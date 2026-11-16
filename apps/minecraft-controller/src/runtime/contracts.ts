@@ -18,6 +18,10 @@ export interface RuntimeState {
 export interface MinecraftRuntime {
   inspect(): Promise<RuntimeState>;
   execute(command: string, timeoutSeconds?: number): Promise<string>;
+  players(): Promise<number>;
+  saving(enabled: boolean): Promise<void>;
+  flush(): Promise<void>;
+  announce(message: string): Promise<void>;
   stop(): Promise<void>;
   start(): Promise<void>;
   setRestartPolicy(policy: RestartPolicy): Promise<void>;

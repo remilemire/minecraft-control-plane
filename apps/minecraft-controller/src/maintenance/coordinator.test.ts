@@ -1,235 +1,190 @@
-import { describe, expect, it, vi } from "vitest";
-import { MaintenanceCoordinator, type JournalEntry, type MaintenanceTask } from "./coordinator.js";
-
-function entry(version = 1): JournalEntry {
-  return {
-    id: "synthetic-task",
-    kind: "switch-test",
-    status: "running",
-    phase: "Preparing",
-    finishedAt: null,
-    error: null,
-    taskVersion: version,
-    checkpoint: null,
-    recoverOnReconnect: false,
-    cleanupComplete: false,
+import { randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, readFile, writeFile, rename, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { afterEach, expect, it } from "vitest";
+import { z } from "zod";
+import { StateService } from "@/state/service.js";
+import { systemClock } from "@/time.js";
+import { TestMinecraft, deferred } from "@test/support/controller.js";
+import { MaintenanceCoordinator } from "./coordinator.js";
+import { defineTask, validateTaskRecord } from "./task.js";
+import { StartupGate } from "./startup-gate.js";
+import type { TaskContext } from "./contracts.js";
+const roots: { root: string; engine: MaintenanceCoordinator; gate: StartupGate }[] = [];
+afterEach(async () => {
+  for (const item of roots.splice(0)) {
+    await item.engine.close();
+    await item.gate.close();
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+async function fixture() {
+  const root = await mkdtemp(join(tmpdir(), "maintenance-engine-")),
+    runtime = new TestMinecraft(root),
+    gate = new StartupGate(join(root, "startup-gate"), runtime);
+  const controls = {
+    applyCount: 0,
+    recoverCount: 0,
+    cleanupCount: 0,
+    holdCount: 0,
+    available: true,
+    verified: true,
+    cleanupFailures: 0,
+    recoveryFailures: 0,
+    applyError: null as Error | null,
+    pause: null as ReturnType<typeof deferred> | null,
+    captured: null as TaskContext<Record<string, never>, { safe: boolean }> | null,
   };
-}
-function fixture() {
-  const operations: JournalEntry[] = [];
-  const events: string[] = [];
-  let safety = false;
-  const task: MaintenanceTask<JournalEntry> = {
-    version: 1,
-    legacyVersions: [0],
+  const data = join(root, "resource"),
+    safety = join(root, "safety"),
+    stateRoot = join(root, "backup-state");
+  await writeFile(data, "before");
+  const task = defineTask({
+    kind: "synthetic",
+    version: 2,
+    request: z.record(z.string(), z.never()),
+    state: z.object({ safe: z.boolean().default(false) }),
+    initial: () => ({ safe: false }),
+    canBoot: (state) => state.safe,
     destructive: true,
-    prepare: async () => {
-      events.push("prepare");
+    async safetyBackup(ctx) {
+      await writeFile(safety, await readFile(data));
+      await ctx.step("safety-created", { safe: true });
     },
-    safetyBackup: async () => {
-      events.push("safety");
-      safety = true;
+    verifiedSafety: (state) => state.safe && controls.verified,
+    async apply(ctx) {
+      controls.captured = ctx;
+      controls.applyCount++;
+      const stored = JSON.parse(await readFile(join(stateRoot, "state.json"), "utf8"));
+      expect(stored.operations.at(-1).checkpoint).toBe("safety-ready");
+      if (controls.pause) await controls.pause.promise;
+      if (controls.applyError) throw controls.applyError;
+      await writeFile(data, "after");
     },
-    safetyBackupVerified: () => safety,
-    apply: async () => {
-      events.push("apply");
+    async recover() {
+      controls.recoverCount++;
+      if (controls.recoveryFailures-- > 0)
+        throw Object.assign(new Error("Docker offline during recovery"), { code: "ECONNREFUSED" });
+      await writeFile(data, await readFile(safety));
     },
-    verify: async () => {
-      events.push("verify");
+    async hold() {
+      controls.holdCount++;
     },
-    recover: vi.fn(async () => {
-      events.push("recover");
-    }),
-    hold: vi.fn(async () => {
-      events.push("hold");
-    }),
-    cleanup: vi.fn(async () => {
-      events.push("cleanup");
-    }),
-  };
-  const persist = vi.fn(async () => {
-    events.push(`persist:${operations.at(-1)?.checkpoint}`);
+    async cleanup() {
+      controls.cleanupCount++;
+      if (controls.cleanupFailures-- > 0) throw new Error("Cleanup IO failure");
+    },
   });
-  const gate = {
-    block: vi.fn(async () => {}),
-    open: vi.fn(async () => {}),
-    boot: async <T>(_id: string, action: () => Promise<T>) => action(),
-  };
-  const available = vi.fn(async () => {});
-  const coordinator = new MaintenanceCoordinator({
-    operations: () => operations,
-    persist,
-    tasks: new Map([["switch-test", task]]),
-    gate,
-    available,
-    describe: String,
-    now: () => new Date("2026-11-15T00:00:00Z"),
+  const tasks = new Map([[task.kind, task]]),
+    state = new StateService(stateRoot, "UTC", (record) => validateTaskRecord(tasks, record));
+  await gate.initialize();
+  await state.initialize();
+  const engine = new MaintenanceCoordinator(state.journal(), tasks, gate, systemClock, {
+    available: async () => {
+      if (!controls.available) throw new Error("Unavailable");
+    },
+    reconcile: async () => {
+      if (!state.journal().healthy()) await state.reopen();
+    },
   });
-  return { coordinator, operations, task, persist, events, gate, available };
+  roots.push({ root, engine, gate });
+  await engine.initialize();
+  return { root, engine, state, controls, data };
 }
-describe("task-neutral maintenance coordinator", () => {
-  it("requires a durable verified safety checkpoint before a synthetic destructive task", async () => {
-    const { coordinator, events } = fixture();
-    await coordinator.ready();
-    await coordinator.submit(entry(), () => {});
-    await coordinator.wait();
-    expect(events).toEqual([
-      "persist:null",
-      "persist:admitted",
-      "prepare",
-      "safety",
-      "persist:safety-ready",
-      "apply",
-      "verify",
-      "persist:committed",
-      "cleanup",
-      "persist:committed",
-    ]);
-    expect(coordinator.active()).toBeNull();
+it("executes a new destructive task only after its safety checkpoint is durable", async () => {
+  const f = await fixture(),
+    id = await f.engine.submit("synthetic", {});
+  await f.engine.wait(id);
+  expect(await readFile(f.data, "utf8")).toBe("after");
+  expect(f.engine.operation(id)?.status).toBe("succeeded");
+  expect(f.controls.applyCount).toBe(1);
+  expect(f.controls.cleanupCount).toBe(1);
+});
+it("holds instead of applying a task without verified safety", async () => {
+  const f = await fixture();
+  f.controls.verified = false;
+  const id = await f.engine.submit("synthetic", {});
+  await f.engine.wait(id);
+  expect(f.controls.applyCount).toBe(0);
+  expect(f.controls.holdCount).toBe(1);
+  expect(f.engine.operation(id)?.status).toBe("recoveryRequired");
+  expect(await readFile(f.data, "utf8")).toBe("before");
+});
+it("deduplicates durable admission and rejects overlapping commands", async () => {
+  const f = await fixture(),
+    id = randomUUID();
+  f.controls.pause = deferred();
+  const first = f.engine.submit("synthetic", {}, id),
+    duplicate = f.engine.submit("synthetic", {}, id);
+  expect(await duplicate).toBe(await first);
+  await expect(f.engine.exclusive(async () => {})).rejects.toMatchObject({
+    code: "MINECRAFT_MAINTENANCE",
   });
-  it("refuses application without safety-backup proof", async () => {
-    const { coordinator, task, events } = fixture();
-    task.safetyBackupVerified = () => false;
-    await coordinator.ready();
-    await coordinator.submit(entry(), () => {});
-    await coordinator.wait();
-    expect(events).not.toContain("apply");
-    expect(task.recover).toHaveBeenCalledOnce();
+  f.controls.pause.resolve(undefined);
+  await f.engine.wait(id);
+  expect(f.controls.applyCount).toBe(1);
+  expect(f.state.journal().all()).toHaveLength(1);
+});
+it("retains a committed result and retries cleanup without rollback", async () => {
+  const f = await fixture();
+  f.controls.cleanupFailures = 1;
+  const id = await f.engine.submit("synthetic", {});
+  await f.engine.wait(id);
+  expect(f.engine.operation(id)?.status).toBe("succeeded");
+  expect(f.engine.status(f.engine.operation(id)!)).toBe("recoveryRequired");
+  await f.engine.recover();
+  expect(f.controls.recoverCount).toBe(0);
+  expect(f.controls.cleanupCount).toBe(2);
+  expect(await readFile(f.data, "utf8")).toBe("after");
+  expect(f.engine.active()).toBeNull();
+});
+it("waits for reconnection and recovers without replaying application, including a second outage", async () => {
+  const f = await fixture();
+  f.controls.applyError = Object.assign(new Error("Docker offline"), { code: "ECONNREFUSED" });
+  f.controls.available = false;
+  const id = await f.engine.submit("synthetic", {});
+  await f.engine.wait(id);
+  expect(f.engine.operation(id)?.recoverOnReconnect).toBe(true);
+  await f.engine.retry();
+  expect(f.controls.recoverCount).toBe(0);
+  f.controls.available = true;
+  f.controls.recoveryFailures = 1;
+  await expect(f.engine.retry()).rejects.toMatchObject({ code: "BACKUP_RECOVERY_REQUIRED" });
+  expect(f.engine.failure).toBeNull();
+  expect(f.engine.operation(id)?.recoverOnReconnect).toBe(true);
+  await f.engine.retry();
+  expect(f.controls.applyCount).toBe(1);
+  expect(f.controls.recoverCount).toBe(2);
+  expect(f.engine.active()).toBeNull();
+  expect(await readFile(f.data, "utf8")).toBe("before");
+});
+it("expires execution capabilities after completion and never exposes mutable task state", async () => {
+  const f = await fixture(),
+    id = await f.engine.submit("synthetic", {});
+  await f.engine.wait(id);
+  const lease = f.controls.captured!;
+  expect(Reflect.set(lease.state(), "safe", false)).toBe(false);
+  expect(() => lease.assertActive()).toThrow("lease");
+  await expect(lease.step("late", { safe: false })).rejects.toMatchObject({
+    code: "MINECRAFT_MAINTENANCE",
   });
-  it("reserves admission synchronously and rejects all concurrent requests", async () => {
-    const { coordinator } = fixture();
-    await coordinator.ready();
-    const submit = coordinator.submit(entry(), () => {});
-    await expect(coordinator.exclusive(async () => {})).rejects.toMatchObject({
-      code: "MINECRAFT_MAINTENANCE",
-    });
-    await expect(
-      coordinator.submit({ ...entry(), id: "conflicting-task" }, () => {}),
-    ).rejects.toMatchObject({
-      code: "MINECRAFT_MAINTENANCE",
-    });
-    await submit;
-    await coordinator.wait();
+});
+it("holds a real admission write failure without running task side effects", async () => {
+  const f = await fixture(),
+    path = join(f.root, "backup-state/state.json"),
+    saved = join(f.root, "saved.json");
+  await rename(path, saved);
+  await mkdir(path);
+  await expect(f.engine.submit("synthetic", {})).rejects.toMatchObject({
+    code: "BACKUP_RECOVERY_REQUIRED",
   });
-  it("makes admission idempotent while work is still running", async () => {
-    const { coordinator, operations } = fixture();
-    await coordinator.ready();
-    const first = coordinator.submit(entry(), () => {});
-    expect(await coordinator.submit(entry(), () => {})).toBe("synthetic-task");
-    await first;
-    await coordinator.wait();
-    expect(operations).toHaveLength(1);
+  expect(f.controls.applyCount).toBe(0);
+  await expect(f.engine.exclusive(async () => {})).rejects.toMatchObject({
+    code: "BACKUP_RECOVERY_REQUIRED",
   });
-  it.each(["ENOSPC", "EIO"])("holds startup when a %s checkpoint write fails", async (code) => {
-    const { coordinator, persist, gate, task, events } = fixture();
-    await coordinator.ready();
-    gate.open.mockClear();
-    persist.mockRejectedValueOnce(Object.assign(new Error(code), { code }));
-    await expect(coordinator.submit(entry(), () => {})).rejects.toThrow(code);
-    expect(coordinator.active()?.status).toBe("recoveryRequired");
-    expect(events).not.toContain("apply");
-    expect(task.cleanup).not.toHaveBeenCalled();
-    expect(gate.open).not.toHaveBeenCalled();
-  });
-  it("does not mutate files after an unrecorded safety checkpoint", async () => {
-    const { coordinator, persist, task, events } = fixture();
-    await coordinator.ready();
-    persist.mockImplementation(async () => {
-      if (events.includes("safety"))
-        throw Object.assign(new Error("Disk full"), { code: "ENOSPC" });
-    });
-    await coordinator.submit(entry(), () => {});
-    await coordinator.wait();
-    expect(events).not.toContain("apply");
-    expect(task.recover).not.toHaveBeenCalled();
-    expect(coordinator.active()?.status).toBe("recoveryRequired");
-  });
-  it.each([0, 1])(
-    "recovers supported journal version %i without replaying application",
-    async (version) => {
-      const { coordinator, operations, task, events } = fixture();
-      operations.push(entry(version));
-      await coordinator.recoverInterrupted();
-      await coordinator.ready();
-      expect(events).not.toContain("apply");
-      expect(task.recover).toHaveBeenCalledOnce();
-      expect(operations[0]?.status).toBe("failed");
-      await coordinator.recoverInterrupted();
-      expect(task.recover).toHaveBeenCalledOnce();
-    },
-  );
-  it("holds unknown task versions without running their recovery handlers", async () => {
-    const { coordinator, operations, task, gate } = fixture();
-    operations.push(entry(99));
-    await expect(coordinator.recoverInterrupted()).rejects.toMatchObject({
-      code: "BACKUP_RECOVERY_REQUIRED",
-    });
-    expect(task.recover).not.toHaveBeenCalled();
-    expect(gate.open).not.toHaveBeenCalled();
-  });
-  it("waits for a known Docker outage, then recovers rather than replaying the task", async () => {
-    const { coordinator, task, available, events } = fixture();
-    task.apply = async () => {
-      events.push("apply");
-      throw Object.assign(new Error("Docker unavailable"), { code: "ECONNREFUSED" });
-    };
-    await coordinator.ready();
-    await coordinator.submit(entry(), () => {});
-    await coordinator.wait();
-    expect(coordinator.active()?.recoverOnReconnect).toBe(true);
-    available.mockRejectedValueOnce(new Error("Still offline"));
-    await coordinator.retry();
-    expect(task.recover).not.toHaveBeenCalled();
-    await coordinator.retry();
-    expect(task.recover).toHaveBeenCalledOnce();
-    expect(events.filter((event) => event === "apply")).toHaveLength(1);
-  });
-  it("does not roll back a durably committed task after a cleanup failure", async () => {
-    const { coordinator, task, operations } = fixture();
-    task.cleanup = async () => {
-      throw new Error("Cleanup interrupted");
-    };
-    await coordinator.ready();
-    await coordinator.submit(entry(), () => {});
-    await coordinator.wait();
-    await coordinator.recoverInterrupted();
-    expect(operations[0]?.status).toBe("succeeded");
-    expect(task.recover).not.toHaveBeenCalled();
-  });
-  it("retries only unfinished cleanup for a committed task after restart", async () => {
-    const { coordinator, task, operations } = fixture();
-    const cleanup = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("Cleanup interrupted"))
-      .mockResolvedValue(undefined);
-    task.cleanup = cleanup;
-    await coordinator.ready();
-    await coordinator.submit(entry(), () => {});
-    await coordinator.wait();
-    expect(operations[0]?.cleanupComplete).toBe(false);
-    await coordinator.recoverInterrupted();
-    expect(cleanup).toHaveBeenCalledTimes(2);
-    expect(task.recover).not.toHaveBeenCalled();
-    expect(operations[0]?.cleanupComplete).toBe(true);
-    await coordinator.recoverInterrupted();
-    expect(cleanup).toHaveBeenCalledTimes(2);
-  });
-  it("holds maintenance after cleanup I/O failure and never rolls back the committed result", async () => {
-    const { coordinator, task, gate, operations } = fixture();
-    task.cleanup = async () => {
-      throw new Error("EIO");
-    };
-    await coordinator.ready();
-    gate.open.mockClear();
-    await coordinator.submit(entry(), () => {});
-    await coordinator.wait();
-    expect(gate.open).not.toHaveBeenCalled();
-    expect(coordinator.status(operations[0]!)).toBe("recoveryRequired");
-    expect(() => coordinator.assertAvailable()).toThrow();
-    task.cleanup = async () => {};
-    await coordinator.recover(operations[0]!);
-    expect(task.recover).not.toHaveBeenCalled();
-    expect(operations[0]?.status).toBe("succeeded");
-    expect(coordinator.active()).toBeNull();
-  });
+  await rm(path, { recursive: true });
+  await rename(saved, path);
+  await f.engine.recover();
+  expect(await f.engine.exclusive(async () => "available")).toBe("available");
 });

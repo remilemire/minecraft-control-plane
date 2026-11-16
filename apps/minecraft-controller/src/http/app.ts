@@ -1,7 +1,6 @@
 import express, { type ErrorRequestHandler, type Express, type Router } from "express";
-import { ContainerNotFoundError } from "@/runtime/docker-client.js";
 import { createRequireBearerToken } from "./auth.js";
-import { ControllerError } from "@/errors.js";
+import { ControllerError, ControllerConfigurationError } from "@/errors.js";
 import { minecraftBackupErrorMeta } from "@minecraft-control-plane/shared/minecraft";
 import { ZodError } from "zod";
 
@@ -25,9 +24,10 @@ const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
   }
   console.error(error);
 
-  const message =
-    error instanceof ContainerNotFoundError ? error.message : "Internal server error.";
-  res.status(500).json({ message });
+  res.status(500).json({
+    message:
+      error instanceof ControllerConfigurationError ? error.message : "Internal server error.",
+  });
 };
 
 export interface CreateAppOptions {

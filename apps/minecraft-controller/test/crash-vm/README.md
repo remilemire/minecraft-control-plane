@@ -60,21 +60,31 @@ Test all three failures (`controller`, `docker`, `vm`) at these barriers:
 The controller test worker is mounted separately from the production image.
 Its read-only host-runtime directory mount matches production, so recreated
 Docker sockets become visible to the surviving controller.
-Its injected observers pause in memory; the production server never imports it
-and exposes no fault-control route. The Docker failure kills the guest daemon
+It launches the unchanged production `dist/server.js` as a child with a local V8
+debugger attached. Breakpoints pause at actual archive IO, durable journal
+publication, verification readiness, and completion. The parent reads durable
+state to match the requested task/checkpoint; it never replaces a controller
+module or supplies production test callbacks. The packaged server has no
+fault-control route or environment switch. The Docker failure kills the guest daemon
 and the test controller process to exercise an interrupted transaction with
 lost Docker access. Also test a transient daemon-only outage: release the
 barrier while Docker is unavailable, verify `recoverOnReconnect`, reconnect,
 and confirm the **existing** controller recovers without reapplying restore.
 
 The harness attempts a Minecraft-first Docker start before recovery, checks that
-PID 1 remains in the gate without Java, rejects conflicting APIs, checks readable
-status, confirms original running/stopped state, verifies both canaries, and
+PID 1 remains in the gate without Java, confirms original running/stopped state,
+verifies both canaries, and
 checks retained safety-archive checksums. `--second` crashes the VM again while
 rollback is moving the world back. JSON evidence records the exact checkpoint
-and terminal result. Separately verify fresh challenges/stale permits, read-only
+and terminal result. Add `--second-event moved:mods` to interrupt earlier in
+rollback, while live root entries still mix restored and pre-task contents.
+Separately verify fresh challenges/stale permits, read-only
 permit writes, wrong-container requests, controller unavailability, missing or
 corrupt journals, unknown versions, and direct Compose starts during recovery.
+Debugger pauses suspend the entire production process, including HTTP. The
+default HTTP integration suite independently verifies conflicting request rejection
+and status/log access during running workflows; the debugger worker does not
+invent substitute responses while the process is paused.
 
 After passing, stop only the test containers and this VM. Retain evidence outside
 the checkout; the disposable disk may remain for inspection.
@@ -92,3 +102,12 @@ remains blocked, and restores its saved test state between cases. `transient`
 kills only the guest Docker daemon and releases the test barrier while it is
 unavailable; it verifies recovery by the same controller process after reconnect.
 `happy` completes a normal restore with real block and server-file checks.
+
+For actual disk exhaustion, mount `storage-full.mjs` at
+`/app/test/crash-vm/storage-full.mjs` in the disposable controller image, mount
+the current `dist` read-only at `/app/dist`, and give this separate container
+`--tmpfs /disk-full-drill:rw,size=1m`. Run
+`node test/crash-vm/storage-full.mjs /disk-full-drill`. The script requires tmpfs,
+fills it until the kernel returns `ENOSPC`, verifies that the real state store
+keeps its previous view and fences writes, then frees space and validates reopen.
+It has no Docker socket or game-data mount.

@@ -67,6 +67,11 @@ def controller(barrier=None):
         "127.0.0.1:18999:8999",
         "-e",
         "DRILL_TOKEN=" + config["token"],
+        "-e", "MINECRAFT_COMPOSE_PROJECT=crash-drill",
+        "-e", "MINECRAFT_CONTROLLER_TOKEN=" + config["token"],
+        "-e", "MINECRAFT_DATA_ROOT=/server-data",
+        "-e", "MINECRAFT_BACKUP_TIMEZONE=UTC",
+        "-e", "DOCKER_SOCKET=/docker-host-run/docker.sock",
     ]
     if barrier:
         args += ["-e", "DRILL_BARRIER=" + json.dumps(barrier)]

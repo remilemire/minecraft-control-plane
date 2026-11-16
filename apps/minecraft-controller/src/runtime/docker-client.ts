@@ -5,6 +5,7 @@ import type {
   MinecraftServerStatus,
 } from "@minecraft-control-plane/shared/minecraft";
 import type Dockerode from "dockerode";
+import { ControllerConfigurationError } from "@/errors.js";
 import type { Readable } from "node:stream";
 import { createDockerLogEventStream } from "./docker-log-stream.js";
 
@@ -13,7 +14,7 @@ import type { MinecraftReader } from "./contracts.js";
 
 // A missing container is a misconfiguration (or a torn-down stack), never
 // "STOPPED" — STOPPED strictly means the container exists and is not running.
-export class ContainerNotFoundError extends Error {
+export class ContainerNotFoundError extends ControllerConfigurationError {
   public constructor(projectName: string, serviceName: string) {
     super(`No container found for service "${serviceName}" in project "${projectName}".`);
     this.name = "ContainerNotFoundError";

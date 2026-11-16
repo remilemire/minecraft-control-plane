@@ -8,6 +8,7 @@ import os
 import shlex
 import signal
 import subprocess
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -26,6 +27,7 @@ parser.add_argument("--event", default="moved:world")
 parser.add_argument("--phase")
 parser.add_argument("--stopped", action="store_true")
 parser.add_argument("--second", action="store_true")
+parser.add_argument("--second-event", choices=["moved:world", "moved:mods"], default="moved:world")
 parser.add_argument("--after", action="store_true")
 args = parser.parse_args()
 root = args.root.resolve()
@@ -138,7 +140,7 @@ def fault(kind, kill_controller=True):
 
 def reconnect(kind):
     if kind == "vm":
-        subprocess.run(["python3", str(HERE / "bootstrap.py"), str(root)], check=True)
+        subprocess.run([sys.executable, str(HERE / "bootstrap.py"), str(root)], check=True)
         wait(lambda: remote("echo ready", check=False) == "ready", 120)
     if kind in ["vm", "docker"]:
         remote("sudo systemctl start docker.service docker.socket")
@@ -206,16 +208,25 @@ def trial():
     reached = wait(lambda: api("GET", "/", control=True)["body"]["reached"])
     assert reached["id"] == op, reached
     if args.event == "verification-boot":
+        assert reached["checkpoint"] == "boot-safe", reached
+        assert reached["phase"] == "Starting Minecraft and checking readiness", reached
+        assert reached["replacementComplete"] and reached["liveDataSafe"], reached
         wait(lambda: "java" in remote("docker top crash-drill-game -eo pid,comm"))
-    # API reads remain available; all conflicting writes (including whitelist RCON) reject.
-    conflicts = [
-        api("POST", "/start"),
-        api("POST", "/rcon", {"command": "whitelist add CrashTest"}),
-        api("DELETE", "/backups/" + backup),
-        api("POST", "/backups", {"requestId": str(uuid.uuid4())}),
-    ]
-    assert all(result["status"] == 409 for result in conflicts), conflicts
-    assert api("GET", "/status")["status"] == 200
+    elif args.event.startswith("staged-entry:"):
+        assert reached["checkpoint"] == "staging", reached
+        assert not reached["replacementStarted"], reached
+    elif args.event.startswith("archive-entry:"):
+        assert reached["checkpoint"] == "safety-planned", reached
+        assert reached["stoppedByOperation"] and not reached["safetyVerified"], reached
+    elif args.event.startswith("moved:"):
+        assert reached["checkpoint"] == args.event, reached
+        assert reached["replacementStarted"] and not reached["liveDataSafe"], reached
+    elif args.event in ["before-commit", "committed"]:
+        assert reached["replacementComplete"] and reached["liveDataSafe"], reached
+        assert reached["status"] == ("succeeded" if args.event == "committed" else "running"), reached
+    # The debugger pauses the actual production process. Read/exclusion behavior
+    # is verified by the real HTTP integration suite while the process runs.
+    conflicts = "verified by the default HTTP integration suite"
     log = {
         "fault": args.fault,
         "barrier": reached,
@@ -241,7 +252,7 @@ def trial():
     barrier = (
         {
             "kind": "restore",
-            "event": "moved:world",
+            "event": args.second_event,
             "phase": "Recovering the pre-restore data",
         }
         if args.second
@@ -401,6 +412,7 @@ def transient():
     controller_pid = remote(
         'docker inspect crash-drill-controller --format "{{.State.Pid}}"'
     )
+    production_pid = api("GET", "/", control=True)["body"]["productionPid"]
     api(
         "POST",
         "/",
@@ -413,7 +425,7 @@ def transient():
     wait(lambda: api("GET", "/", control=True)["body"]["reached"])
     fault("docker", False)
     # The daemon's host-port proxy disappears, but the controller survives.
-    # Enter only its network namespace to release the in-memory test barrier.
+    # Enter only its network namespace to release the external debugger pause.
     local_api = (
         "sudo nsenter -t "
         + controller_pid
@@ -443,6 +455,7 @@ def transient():
         remote('docker inspect crash-drill-controller --format "{{.State.Pid}}"')
         == controller_pid
     )
+    assert api("GET", "/", control=True)["body"]["productionPid"] == production_pid
     (evidence / "docker-reconnect.json").write_text(
         json.dumps(
             {"waiting": blocked, "result": result, "sameControllerProcess": True},

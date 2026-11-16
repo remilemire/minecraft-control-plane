@@ -17,12 +17,16 @@ const project = `codex-backup-drill-${randomUUID().slice(0, 8)}`;
 const root = await mkdtemp(join(tmpdir(), "minecraft-docker-drill-"));
 const data = join(root, "minecraft");
 await mkdir(data);
+await mkdir(join(root, "startup-gate/requests"), { recursive: true });
+await mkdir(join(root, "startup-gate/permits"), { recursive: true });
+const wrapper = new URL("../../../docker/minecraft/startup-gate.sh", import.meta.url).pathname;
 let container: Dockerode.Container | undefined;
 let controller: ControllerApplication | undefined;
 try {
   container = await docker.createContainer({
     name: project,
     Image: "itzg/minecraft-server:latest",
+    Entrypoint: ["/bin/sh", "/startup-gate.sh"],
     Labels: {
       "com.docker.compose.project": project,
       "com.docker.compose.service": "minecraft",
@@ -43,22 +47,18 @@ try {
       "MAX_TICK_TIME=-1",
     ],
     HostConfig: {
-      Binds: [`${data}:/data`],
+      Binds: [
+        `${data}:/data`,
+        `${wrapper}:/startup-gate.sh:ro`,
+        `${root}/startup-gate/requests:/startup-requests`,
+        `${root}/startup-gate/permits:/startup-permits:ro`,
+      ],
       RestartPolicy: { Name: "no" },
       Memory: 2 * 1024 * 1024 * 1024,
     },
   });
   const client = new DockerClient({ docker, projectName: project, serviceName: "minecraft" });
   const runtime = new DockerMinecraftRuntime(client, docker);
-  await container.start();
-  console.log("Disposable Minecraft container started; waiting for readiness.");
-  await runtime.waitReady();
-  await runtime.execute("forceload add 0 0");
-  await delay(2000);
-  await runtime.execute("setblock 0 100 0 minecraft:stone");
-  assert.match(await runtime.execute("execute if block 0 100 0 minecraft:stone"), /Test passed/);
-  await mkdir(join(data, "mods"), { recursive: true });
-  await writeFile(join(data, "mods/backup-drill.txt"), "original server file");
   controller = createController({
     dataRoot: root,
     runtime,
@@ -66,6 +66,15 @@ try {
     retention: { hourly: 6, daily: 5, weekly: 3, monthly: 2 },
   });
   await controller.initialize();
+  await controller.server.power("start");
+  console.log("Disposable Minecraft container authorized; checking readiness.");
+  await runtime.waitReady();
+  await runtime.execute("forceload add 0 0");
+  await delay(2000);
+  await runtime.execute("setblock 0 100 0 minecraft:stone");
+  assert.match(await runtime.execute("execute if block 0 100 0 minecraft:stone"), /Test passed/);
+  await mkdir(join(data, "mods"), { recursive: true });
+  await writeFile(join(data, "mods/backup-drill.txt"), "original server file");
   async function finish(id: string) {
     const deadline = Date.now() + 15 * 60_000;
     let phase = "";

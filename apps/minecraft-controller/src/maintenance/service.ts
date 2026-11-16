@@ -3,13 +3,99 @@ import {
   type MaintenanceOperation,
 } from "@minecraft-control-plane/shared/minecraft";
 import { ControllerError } from "@/errors.js";
-import type { OperationJournal } from "@/tasks/operations.js";
-import type { TaskRequest } from "@/tasks/requests.js";
+import type { Immutable } from "@/immutable.js";
+import type { CommitEffect } from "@/transaction.js";
+import type { ExecutionLease, OperationRecord } from "./contracts.js";
 import type { MaintenanceCoordinator } from "./coordinator.js";
-export class MaintenanceService {
+
+export type {
+  TaskContext,
+  TaskFailureContext,
+  ExecutionLease,
+  RegisteredTask,
+  OperationRecord,
+  OperationJournal,
+} from "./contracts.js";
+export { defineTask, validateTaskRecord } from "./task.js";
+export interface OperationQuery {
+  operation(id: string): MaintenanceOperation;
+  activeOperation(): MaintenanceOperation | null;
+  latestOperation(): MaintenanceOperation | null;
+}
+export interface MaintenanceApi extends OperationQuery {
+  recover(): Promise<void>;
+}
+export interface Admission extends MaintenanceApi {
+  submit(
+    kind: string,
+    request: unknown,
+    id?: string,
+    changes?: readonly CommitEffect[],
+  ): Promise<string>;
+  wait(id: string): Promise<void>;
+  exclusive<T>(action: (lease: ExecutionLease) => Promise<T>): Promise<T>;
+}
+
+/** Application-facing maintenance API. All operation projections have one owner. */
+export class MaintenanceService implements Admission {
   private timer: NodeJS.Timeout | undefined;
   private stopped = true;
+  public constructor(private readonly coordinator: MaintenanceCoordinator) {}
+  private present(op: Immutable<OperationRecord>): MaintenanceOperation {
+    const status = this.coordinator.status(op);
+    const cleanup = status === "recoveryRequired" && ["succeeded", "failed"].includes(op.status);
+    return maintenanceOperationSchema.parse({
+      id: op.id,
+      kind: op.kind,
+      status,
+      phase: cleanup ? "Cleanup needs attention" : op.phase,
+      startedAt: op.startedAt,
+      finishedAt: status === "running" || status === "recoveryRequired" ? null : op.finishedAt,
+      backupId: op.result.backupId ?? null,
+      safetyBackupId: op.result.safetyBackupId ?? null,
+      error:
+        (this.coordinator.active()?.id === op.id ? this.coordinator.failure : null) ??
+        (cleanup
+          ? "The result is committed, but cleanup needs attention. Inspect storage and run make backup-recover."
+          : op.error),
+    });
+  }
+  public operation(id: string): MaintenanceOperation {
+    const op = this.coordinator.operation(id);
+    if (!op)
+      throw new ControllerError("BACKUP_NOT_FOUND", "The requested operation was not found.");
+    return this.present(op);
+  }
+  public activeOperation(): MaintenanceOperation | null {
+    const op = this.coordinator.active();
+    return op ? this.present(op) : null;
+  }
+  public latestOperation(): MaintenanceOperation | null {
+    const op = this.coordinator.latest();
+    return op ? this.present(op) : null;
+  }
+  public submit(
+    kind: string,
+    request: unknown,
+    id?: string,
+    changes: readonly CommitEffect[] = [],
+  ): Promise<string> {
+    return this.coordinator.submit(kind, request, id, changes);
+  }
+  public wait(id: string): Promise<void> {
+    return this.coordinator.wait(id);
+  }
+  public exclusive<T>(action: (lease: ExecutionLease) => Promise<T>): Promise<T> {
+    return this.coordinator.exclusive(action);
+  }
+  public recover(): Promise<void> {
+    return this.coordinator.recover();
+  }
+  public initialize(): Promise<void> {
+    return this.coordinator.initialize();
+  }
   public start(): void {
+    if (!this.stopped) return;
     this.stopped = false;
     const tick = async () => {
       try {
@@ -25,72 +111,6 @@ export class MaintenanceService {
     this.timer = setTimeout(() => {
       void tick();
     }, 1000);
-  }
-
-  public constructor(
-    private readonly coordinator: MaintenanceCoordinator<OperationJournal>,
-    private readonly createOperation: (request: TaskRequest) => OperationJournal,
-  ) {}
-  public get ready(): boolean {
-    return this.coordinator.initialized && !this.coordinator.closing;
-  }
-  public activeJournal(): OperationJournal | null {
-    return this.coordinator.active();
-  }
-  public activeOperation(): MaintenanceOperation | null {
-    const op = this.activeJournal();
-    return op ? this.present(op) : null;
-  }
-  public operation(id: string): MaintenanceOperation {
-    const op = this.coordinator.operation(id);
-    if (!op)
-      throw new ControllerError("BACKUP_NOT_FOUND", "The requested operation was not found.");
-    return this.present(op);
-  }
-  private present(op: OperationJournal): MaintenanceOperation {
-    const status = this.coordinator.status(op);
-    const cleanupBlocked = status === "recoveryRequired" && op.status !== "recoveryRequired";
-    return maintenanceOperationSchema.parse({
-      ...op,
-      status,
-      phase: cleanupBlocked ? "Cleanup needs attention" : op.phase,
-      error: cleanupBlocked
-        ? "The result is committed, but cleanup needs attention. Inspect storage and run make backup-recover."
-        : op.error,
-      finishedAt: status === "running" || status === "recoveryRequired" ? null : op.finishedAt,
-    });
-  }
-  public submit(request: TaskRequest, reserve: () => void = () => {}): Promise<string> {
-    const op = this.createOperation(request);
-    return this.coordinator.submit(op, reserve);
-  }
-  public wait(): Promise<void> {
-    return this.coordinator.wait();
-  }
-  public exclusive<T>(action: () => Promise<T>): Promise<T> {
-    return this.coordinator.exclusive(action);
-  }
-  public assertAvailable(): void {
-    this.coordinator.assertAvailable();
-  }
-  public async recover(): Promise<void> {
-    const op = this.coordinator.active();
-    if (!op) return;
-    await this.coordinator.recover(op);
-    if (this.coordinator.active())
-      throw new ControllerError(
-        "BACKUP_RECOVERY_REQUIRED",
-        op.error ?? "Recovery needs attention.",
-      );
-  }
-  public initialize(): Promise<void> {
-    return this.coordinator.recoverInterrupted();
-  }
-  public open(): Promise<void> {
-    return this.coordinator.ready();
-  }
-  public retry(): Promise<void> {
-    return this.coordinator.retry();
   }
   public close(): Promise<void> {
     this.stopped = true;

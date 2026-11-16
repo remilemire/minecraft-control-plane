@@ -6,34 +6,56 @@ Minecraft; container lookup must use both project and service labels.
 `composition.ts` constructs the shared state store, runtime, coordinator, services,
 and typed task registry. It owns initialization/shutdown ordering, not workflows.
 
-- `runtime/`: Docker transport, RCON execution, readiness, and shared server-data
-  path policy. It cannot import backup, task, maintenance, or state modules.
+- `runtime/`: Docker transport, RCON execution, semantic saving/player commands,
+  readiness, and log streams. It cannot import application feature modules,
+  maintenance, or state.
 - `maintenance/`: task-neutral admission/checkpoints/recovery, startup gate,
   operation status, and the independent Docker-reconnect recovery loop.
-- `tasks/`: separate power, backup, and restore handlers; typed task journal
-  variants; request creation; shared server checkpoints; restore file replacement.
-  Each task defines its own recovery. Destructive restore requires verified safety.
-- `backups/`: native archive IO, catalogue/compatibility, capture service, and
-  scheduling/retention. It owns neither the coordinator nor power/RCON commands.
+- `server/`: public admitted power/console API, trusted server lifecycle
+  capabilities, shared server checkpoints, and the power task definitions.
+- `backups/`: public backup API, separate backup/restore task definitions, native
+  archive IO, snapshot catalogue service, and scheduling/retention. It orchestrates
+  server/data capabilities; it never handles Docker directly.
+- `server-data/`: staging, preserved settings, child-entry replacement, rollback,
+  and workspace cleanup. It knows neither Docker nor the journal/catalogue.
+- `installation/`: installation/version discovery, compatibility and pinned
+  startup-selector validation. JAR metadata parsing is unrelated to ZIP backups.
+- `data/` and `filesystem/`: pure snapshot path policy and durable file primitives.
 - `state/`: one atomic aggregate containing catalogue, schedules, and journal.
   Keep admission and schedule consumption in that same transaction. Do not split
-  these into independently committed files. Existing schema-version-1 files and
-  supported task versions remain readable; task-specific fields are discriminated
-  by operation kind. Inconsistent restore checkpoints fail closed.
-- `server/`: admitted power/console service and read-only status/log routes.
+  these into independently committed files. Schema 1 native journals decode once
+  into schema 2 typed task data. Inconsistent checkpoints fail closed. The store
+  clones inside its commit queue, validates, writes/fsyncs, then publishes frozen
+  detached views. Failed writes retain the last published state and fence writes
+  until explicit recovery reopens and validates durable storage.
 - `http/`: authentication, error mapping, and router composition.
 
-External mutations go through the shared maintenance service; task handlers use
-raw runtime adapters only while holding the coordinator's reservation. Reads and
-logs remain available during active maintenance. ESLint enforces dependency
-direction for runtime adapters, feature routes, and the generic maintenance engine.
+External mutations go through the shared maintenance service. Tasks receive
+expiring execution leases and typed checkpoint ports, never a mutable state draft.
+The composition root returns only public server/backup/maintenance APIs; trusted
+capture and lifecycle capabilities remain private. Cross-module imports go through
+the owning module's `service.ts`, from another service. ESLint enforces this and
+the generic engine/runtime dependency direction. Reads and logs remain available
+during active work. Whitelist delivery remains deferred by admission conflicts.
+
+`transaction.ts` defines opaque commit effects. Only the state service can create
+and apply them: catalogue updates and consumed schedule times can join operation
+admission/checkpoints in the same aggregate write without exposing its draft.
 
 Native snapshots use tar/gzip. FTB ZIP import/reading, migration commands, and
 legacy setup gating are retired. Existing ZIP bytes and historical metadata are
-left intact but omitted from the usable backup catalogue. The small historical
-migration journal handler only recovers/cleans up interrupted old operations; it
-never imports. Restore settings retain current credentials/access controls and
+left intact but omitted from the usable backup catalogue. Completed migration
+records remain read-only history. An unfinished retired migration blocks the
+upgrade and must be recovered with the previous release; there is no migration
+executor in this controller. Restore settings retain current credentials/access controls and
 prevent older native snapshots from re-enabling the modpack backup scheduler.
+
+Before a release upgrade, retain a consistent copy of `backup-state` with the
+controller and Minecraft stopped and every operation durably terminal/cleaned.
+Initialization upgrades schema 1 in place to schema 2; older releases cannot read
+the new format. A code downgrade therefore needs a compatible state format and
+proof that no unfinished work or newer catalogue changes will be discarded.
+Never copy a stale journal over an active or uncertain operation.
 
 Canonical operation/recovery routes live under `/maintenance`; existing
 `/backups/operations/:id` and `/backups/recover` URLs remain compatibility aliases.
@@ -63,7 +85,10 @@ Terminal results commit before cleanup; a committed restore must never roll back
 Task definitions are versioned and register preparation, safety, application,
 verification, recovery, hold, and cleanup handlers. Recovery is task-specific.
 Keep catalogue changes, schedules, and admission in the same aggregate state write.
-Legacy journal entries use task version 0. Unknown versions hold startup.
+Supported flat native journal versions 0/1 decode to current task version 2.
+Unknown versions hold startup. Before rollback boots Minecraft, it verifies the
+recovered files against the safety manifest. A committed operation only retries
+cleanup; it never repeats its destructive application or rolls back success.
 
 `startup-gate/` is another data-root sibling. The read-only Minecraft entrypoint
 wrapper sends its hostname and a fresh per-boot UUID; only the controller writes
@@ -89,7 +114,12 @@ safety backups require explicit deletion; retired ZIP files are never deleted
 automatically. Schedule consumption is persisted with operation creation, so
 missed runs collapse without a replay storm.
 
-Use `make test pkg=minecraft-controller` for unit/HTTP tests. The opt-in
+Use `make check pkg=minecraft-controller` for formatting, lint, types, and tests.
+Default tests use the actual HTTP/service/coordinator/task/filesystem assembly.
+Only external Minecraft/container behavior and time are simulated. Docker adapter
+tests use the real Docker SDK against a local protocol server. Tests must not
+replace business modules, expose test-only production controls, or cast invented
+objects into the SDK's classes. The opt-in
 `pnpm --filter @minecraft-control-plane/minecraft-controller test:drill` creates
 a disposable Docker container with a unique project label and temporary data,
 tests actual Minecraft save/backup/restore/readiness, then removes only that
@@ -99,6 +129,8 @@ downloads Minecraft 1.21.1 into its temporary directory.
 
 For crash validation, use [test/crash-vm/README.md](test/crash-vm/README.md).
 It uses its own QEMU/HVF Debian VM and Docker daemon, never Docker Desktop or
-production for failure injection. Test-only observers block in memory at durable
-checkpoints or archive/file progress. They are injected by the separate test
-worker; production has no fault-control endpoint or environment switch.
+production for failure injection. A separate worker launches the unchanged
+`dist/server.js` entrypoint and pauses it with external V8 debugger breakpoints.
+Production has no test callbacks, fault-control endpoint, or fault environment
+switch. A paused process cannot serve HTTP; default integration tests verify
+read/exclusion behavior while workflows are running.

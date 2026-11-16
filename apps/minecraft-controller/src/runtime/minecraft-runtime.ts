@@ -29,6 +29,31 @@ export class DockerMinecraftRuntime implements MinecraftRuntime, MinecraftReader
   public execute(command: string, timeoutSeconds?: number): Promise<string> {
     return this.rcon.execute(command, timeoutSeconds);
   }
+  public async players(): Promise<number> {
+    return parseOnlinePlayerCount(await this.execute("list"));
+  }
+  public async saving(enabled: boolean): Promise<void> {
+    const output = await this.execute(enabled ? "save-on" : "save-off");
+    if (
+      !(
+        enabled ? /enabled|turned on|already turned on/i : /disabled|turned off|already turned off/i
+      ).test(output)
+    )
+      throw new ControllerError(
+        "BACKUP_RECOVERY_REQUIRED",
+        "Minecraft did not confirm its saving state. Inspect RCON before recovering.",
+      );
+  }
+  public async flush(): Promise<void> {
+    if (!/saved the game|saved the world/i.test(await this.execute("save-all flush", 120)))
+      throw new ControllerError(
+        "BACKUP_CONTROLLER_ERROR",
+        "Minecraft did not confirm that the world was flushed.",
+      );
+  }
+  public async announce(message: string): Promise<void> {
+    await this.execute(`say ${message}`);
+  }
   public async inspect(): Promise<RuntimeState> {
     const info = await (await this.client.getManagedContainer()).inspect();
     if (info.State.Paused || info.State.Restarting || info.State.Dead)
