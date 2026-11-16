@@ -168,25 +168,27 @@ export function ConsolePanel({
   const badge = CONNECTION_BADGES[connection];
 
   return (
-    <McPanel title="Console">
-      <div className="mb-4 flex items-center gap-3">
-        <span className="text-muted">Stream:</span>
-        <McBadge variant={badge.variant}>{badge.label}</McBadge>
-        {connection === "disconnected" && (
-          <McButton
-            onClick={() => setStreamEpoch((epoch) => epoch + 1)}
-            className="ml-auto px-2 py-1 text-sm"
-          >
-            Reconnect
-          </McButton>
-        )}
-      </div>
-
+    <McPanel
+      title="Console"
+      actions={
+        <div className="flex flex-wrap items-center gap-3">
+          <McBadge variant={badge.variant}>{badge.label}</McBadge>
+          {connection === "disconnected" && (
+            <McButton
+              onClick={() => setStreamEpoch((epoch) => epoch + 1)}
+              className="ml-auto px-2 py-1 text-sm"
+            >
+              Reconnect
+            </McButton>
+          )}
+        </div>
+      }
+    >
       <div
         ref={scrollRef}
         role="log"
         aria-label="Server logs"
-        className="mc-inset bg-console text-console-text h-80 overflow-y-auto p-3 text-sm [text-shadow:none]"
+        className="mc-inset bg-console text-console-text h-64 overflow-y-auto p-3 text-sm [text-shadow:none] sm:h-88"
       >
         {entries.length === 0 && <p className="text-muted">No console output yet.</p>}
         {entries.map((entry) => (

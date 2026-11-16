@@ -16,9 +16,9 @@ export function McPanel({ title, actions, className = "", children }: McPanelPro
   const hasHeader = title !== undefined || actions !== undefined;
 
   return (
-    <section className={`bg-panel mc-raised p-6 ${className}`}>
+    <section className={`bg-panel mc-raised min-w-0 p-4 sm:p-5 ${className}`}>
       {hasHeader && (
-        <div className="mb-4 flex min-h-8 items-center gap-3">
+        <div className="mb-4 flex min-h-8 flex-wrap items-center gap-3">
           {title !== undefined && <h2 className="text-lg font-bold">{title}</h2>}
           {actions !== undefined && <div className="ml-auto">{actions}</div>}
         </div>

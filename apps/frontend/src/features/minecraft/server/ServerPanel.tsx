@@ -47,31 +47,34 @@ export function ServerPanel({ maintenance = null }: { maintenance?: MaintenanceO
   const running = status?.status === "RUNNING";
 
   return (
-    <McPanel title="Server">
-      <div className="mb-4 flex items-center gap-3">
-        <span className="text-muted">Status:</span>
-        {initialLoad ? (
-          <LoadingText />
-        ) : status !== null ? (
-          <McBadge variant={running ? "success" : "danger"}>{status.status}</McBadge>
-        ) : (
-          <McBadge variant="muted">Unknown</McBadge>
-        )}
-        <McButton onClick={reload} disabled={busy} className="ml-auto px-2 py-1 text-sm">
-          Refresh
-        </McButton>
-      </div>
+    <McPanel>
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
+        <h2 className="text-lg font-bold">Server</h2>
+        <div className="flex items-center gap-3">
+          <span className="text-muted">Status:</span>
+          {initialLoad ? (
+            <LoadingText />
+          ) : status !== null ? (
+            <McBadge variant={running ? "success" : "danger"}>{status.status}</McBadge>
+          ) : (
+            <McBadge variant="muted">Unknown</McBadge>
+          )}
+          <McButton onClick={reload} disabled={busy} className="px-2 py-1 text-sm">
+            Refresh
+          </McButton>
+        </div>
 
-      <div className="flex flex-wrap gap-2">
-        <McButton onClick={() => void run("start", startServer)} disabled={busy || running}>
-          {pending === "start" ? "Starting..." : "Start"}
-        </McButton>
-        <McButton onClick={() => void run("stop", stopServer)} disabled={busy || !running}>
-          {pending === "stop" ? "Stopping..." : "Stop"}
-        </McButton>
-        <McButton onClick={() => void run("restart", restartServer)} disabled={busy || !running}>
-          {pending === "restart" ? "Restarting..." : "Restart"}
-        </McButton>
+        <div className="flex flex-wrap gap-2 sm:ml-auto">
+          <McButton onClick={() => void run("start", startServer)} disabled={busy || running}>
+            {pending === "start" ? "Starting..." : "Start"}
+          </McButton>
+          <McButton onClick={() => void run("stop", stopServer)} disabled={busy || !running}>
+            {pending === "stop" ? "Stopping..." : "Stop"}
+          </McButton>
+          <McButton onClick={() => void run("restart", restartServer)} disabled={busy || !running}>
+            {pending === "restart" ? "Restarting..." : "Restart"}
+          </McButton>
+        </div>
       </div>
 
       <ErrorText error={error ?? actionError} className="mt-4" />

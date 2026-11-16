@@ -88,16 +88,16 @@ export function UsersPanel() {
       {users !== null && users.length === 0 && <p className="text-muted">No users yet.</p>}
 
       {users !== null && users.length > 0 && (
-        <ul className="divide-slot divide-y">
+        <ul className="divide-slot max-h-96 divide-y overflow-y-auto">
           {users.map((user) => (
-            <li key={user.id} className="flex items-center gap-3 py-2">
-              <div className="min-w-0">
+            <li key={user.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
+              <div className="min-w-0 flex-1 basis-48">
                 <p className="truncate font-bold">{user.fullName ?? user.email}</p>
                 <p className="text-muted truncate text-xs">
                   {user.email} · joined {formatDate(user.createdAt)}
                 </p>
               </div>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex flex-wrap items-center gap-2">
                 {user.lastLoginAt === null && <McBadge>Never signed in</McBadge>}
                 {user.isOwner && <McBadge variant="highlight">Owner</McBadge>}
                 {isOwner && user.id !== me?.id && (

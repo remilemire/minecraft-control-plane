@@ -191,7 +191,7 @@ export function BackupsPanel({
           {schedules.data?.timezone ?? "the server timezone"}. Coinciding schedules share one
           snapshot.
         </p>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2">
           {TIERS.map((tier) => (
             <label key={tier} className="mc-inset flex flex-col gap-2 p-3 text-sm">
               <span className="flex items-center gap-2">

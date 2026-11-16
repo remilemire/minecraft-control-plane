@@ -9,16 +9,20 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen">
-      <header className="bg-panel mc-raised flex flex-wrap items-center gap-4 px-6 py-4">
+      <header className="bg-panel mc-raised flex flex-wrap items-center gap-4 px-4 py-4 sm:px-6">
         <h1 className="text-xl font-bold">Minecraft Control Plane</h1>
 
-        <div className="ml-auto flex items-center gap-4">
-          <span className="text-muted">{user?.email}</span>
-          <McButton onClick={() => void logout()}>Log out</McButton>
+        <div className="ml-auto flex min-w-0 items-center gap-4">
+          <span className="text-muted truncate text-sm" title={user?.email}>
+            {user?.email}
+          </span>
+          <McButton className="shrink-0" onClick={() => void logout()}>
+            Log out
+          </McButton>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl p-6">
+      <main className="mx-auto w-full max-w-[96rem] px-4 py-5 sm:px-6">
         <Outlet />
       </main>
     </div>

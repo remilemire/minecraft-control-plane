@@ -163,6 +163,15 @@ export function ProfilesPanel() {
         </McButton>
       }
     >
+      {profiles !== null && (
+        <p className="text-muted mb-4 text-sm">
+          <span className="text-success">
+            {profiles.filter((profile) => profile.online).length} online
+          </span>
+          {" · "}
+          {profiles.length} {profiles.length === 1 ? "profile" : "profiles"}
+        </p>
+      )}
       <AddProfileForm onAdded={reload} />
 
       <div className="mt-4">
@@ -175,16 +184,18 @@ export function ProfilesPanel() {
         )}
 
         {profiles !== null && profiles.length > 0 && (
-          <ul className="divide-slot divide-y">
+          <ul className="divide-slot max-h-72 divide-y overflow-y-auto">
             {profiles.map((profile) => (
-              <li key={profile.id} className="flex items-center gap-3 py-2">
-                <div className="min-w-0">
-                  <p className="font-bold">{profile.username}</p>
+              <li key={profile.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
+                <div className="min-w-0 flex-1 basis-24">
+                  <p className="truncate font-bold" title={profile.username}>
+                    {profile.username}
+                  </p>
                   <p className="text-muted truncate text-xs" title={profile.uuid}>
                     {profile.uuid}
                   </p>
                 </div>
-                <div className="ml-auto flex items-center gap-2">
+                <div className="ml-auto flex flex-wrap items-center gap-2">
                   <WhitelistBadge status={profile.whitelistStatus} />
                   <McBadge variant={profile.online ? "success" : "muted"}>
                     {profile.online ? "Online" : "Offline"}
